@@ -38,6 +38,7 @@ var hit_stop := 0.035
 @onready var mechanical_audio: AudioStreamPlayer = $MechanicalAudio
 @onready var punch_audio: AudioStreamPlayer = $PunchAudio
 @onready var weapon_sprite: Sprite2D = $WeaponPivot/WeaponSprite
+@onready var weapon_shadow: Sprite2D = $WeaponPivot/FakeShadow
 @onready var muzzle: Marker2D = $WeaponPivot/Muzzle
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 
@@ -55,6 +56,7 @@ func _ready() -> void:
 	mechanical_audio.stream = DRY_FIRE_STREAM
 	punch_audio.stream = SHOT_STREAM
 	weapon_sprite.texture = AK_TEXTURE if weapon_id in ["smg", "lmg"] else PISTOL_TEXTURE
+	weapon_shadow.texture = weapon_sprite.texture
 	muzzle.position.x = weapon_sprite.texture.get_width() * 0.5 + 1.0
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)

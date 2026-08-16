@@ -13,6 +13,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Subtle scanline/grain treatment that preserves pixel readability
 - Abrupt combat-to-cleanup silence interface after the final kill
 - Weapon-shaped directional blood, progressively expanding death pools, modular corpse wounds and physics-driven pixel gore chunks
+- Globally visible stage lighting with fixed right-down pixel shadows and window-aware shadow breaks; no hue-cycling background
 
 ## Phase 1 foundation
 

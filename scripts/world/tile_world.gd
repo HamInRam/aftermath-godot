@@ -11,15 +11,18 @@ enum Tile { CONCRETE, WOOD, RED_CARPET, WALL, WINDOW, DARK_TILE, GRASS, STAIRS }
 
 @onready var floor_layer: TileMapLayer = $Floor
 @onready var wall_layer: TileMapLayer = $Walls
+@onready var wall_shadow_layer: TileMapLayer = $WallShadows
 @onready var decoration_layer: TileMapLayer = $Decoration
 var path_grid := AStarGrid2D.new()
 
 func _ready() -> void:
 	floor_layer.tile_set = _create_tile_set(false)
 	wall_layer.tile_set = _create_tile_set(true)
+	wall_shadow_layer.tile_set = wall_layer.tile_set
 	decoration_layer.tile_set = floor_layer.tile_set
 	_build_floor()
 	_build_walls()
+	_build_wall_shadows()
 	_build_decorations()
 	_build_path_grid()
 
@@ -99,6 +102,12 @@ func _build_decorations() -> void:
 	for x in range(19, 23):
 		for y in range(18, 21):
 			_set_tile(decoration_layer, Vector2i(x, y), Tile.STAIRS)
+
+func _build_wall_shadows() -> void:
+	for cell in wall_layer.get_used_cells():
+		var atlas_coordinates := wall_layer.get_cell_atlas_coords(cell)
+		if atlas_coordinates.x == Tile.WINDOW: continue
+		wall_shadow_layer.set_cell(cell, 0, atlas_coordinates, 0)
 
 func _build_path_grid() -> void:
 	path_grid.region = Rect2i(Vector2i.ZERO, MAP_SIZE)

@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource path="res://scripts/effects/shell_casing.gd" type="Script" id="1_casing"]
 [ext_resource path="res://assets/casing/casing_2x1.png" type="Texture2D" id="2_texture"]
+[ext_resource path="res://scripts/effects/fake_sprite_shadow.gd" type="Script" id="3_shadow"]
 
 [node name="ShellCasing" type="Node2D" groups=["shell_casing"]]
 z_index = 1
@@ -10,6 +11,13 @@ script = ExtResource("1_casing")
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture_filter = 1
 texture = ExtResource("2_texture")
+
+[node name="FakeShadow" type="Sprite2D" parent="."]
+z_index = -1
+texture_filter = 1
+modulate = Color(0.035, 0.02, 0.05, 0.42)
+texture = ExtResource("2_texture")
+script = ExtResource("3_shadow")
 
 [node name="ClinkAudio" type="AudioStreamPlayer2D" parent="."]
 max_distance = 220.0

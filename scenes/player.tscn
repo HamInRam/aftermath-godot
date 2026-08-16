@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource path="res://scripts/player.gd" type="Script" id="1_player"]
 [ext_resource path="res://scenes/gun.tscn" type="PackedScene" id="2_gun"]
 [ext_resource path="res://assets/player/player_16x16.png" type="Texture2D" id="3_player_texture"]
+[ext_resource path="res://scripts/effects/fake_sprite_shadow.gd" type="Script" id="4_shadow"]
 
 [sub_resource type="CircleShape2D" id="CircleShape_player"]
 radius = 5.0
@@ -21,6 +22,13 @@ shape = SubResource("CircleShape_player")
 texture_filter = 1
 texture = ExtResource("3_player_texture")
 modulate = Color(1.15, 1.15, 1.22, 1)
+
+[node name="FakeShadow" type="Sprite2D" parent="."]
+z_index = -1
+texture_filter = 1
+modulate = Color(0.04, 0.025, 0.06, 0.48)
+texture = ExtResource("3_player_texture")
+script = ExtResource("4_shadow")
 
 [node name="Gun" parent="." instance=ExtResource("2_gun")]
 automatic = false

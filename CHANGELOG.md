@@ -21,6 +21,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Slowly expanding corpse-centered blood pools that begin small and bloom over roughly 4–8 seconds.
 - Three modular firearm wound overlays for corpses with intensity-scaled blood/tissue pixels.
 - Detachable pixel gore chunks with directional flight, wall collision, spin, settling and existing cleanup compatibility.
+- Fixed-direction pixel fake shadows for walls, players, enemies, weapons, shell casings, corpses and rotating door panels.
+- Window-aware wall-shadow breaks that preserve sightline and architectural light framing.
 
 ### Changed
 
@@ -30,6 +32,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Camera mouse lead remains approximately 30 pixels with whole-pixel smoothing and fast trauma decay.
 - Door force falls off with angular speed and angular velocity is capped, preventing exaggerated late-swing acceleration.
 - Player/enemy/interaction colors were brightened for combat readability without changing the existing identity.
+- Environment lighting now favors a bright global color grade over local PointLight2D pools; combat muzzle lights remain enabled.
+- No background hue cycling was added, keeping the current restrained AFTERMATH palette.
 - Enemy aim requires current line of sight; losing sight transitions to investigation at the last seen position.
 - Player death accepts immediate `R` restart with no fade, confirmation or loading screen.
 
@@ -39,6 +43,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Vision regression verifies walls block sight while unobstructed targets remain detectable.
 - Nightclub completed a 600-physics-frame integration run without runtime errors or leaked time scale.
 - Gore-system regression verifies line/fan/radial patterns, lethal chunks, progressive pools, wound variants and the complete enemy-death wiring.
+- Fake-lighting regression verifies global visibility, window shadow breaks and fixed-offset shadows that follow rotating doors and weapons.
 
 ## [v.0.0.1] - 2026-08-16
 
