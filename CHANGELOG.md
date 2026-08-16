@@ -29,6 +29,9 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Position-driven camera tilt that mirrors across the room center, with a configurable center buffer, maximum angle and exponential smoothing.
 - Static deep-color exterior backdrop beneath the building, revealed by an unpainted perimeter floor band to create a layered architectural cutout.
 - Hold-Shift tactical look-ahead with a longer cursor-directed camera reach, while normal aiming uses a restrained 0.25 positional weight.
+- Enemy visual reaction delay randomized from 0.2–0.4 seconds, requiring continuous exposure before pursuit and firing begin.
+- Separate opaque-vision collision layer: walls and doors block sight while physical glass windows remain transparent to AI raycasts.
+- Optional per-enemy translucent FOV debug cone with range arc for angle and distance tuning.
 
 ### Changed
 
@@ -54,6 +57,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Interior-style regression verifies all seven Nightclub material zones, bright wall trim, furniture placement and synchronized object shadows.
 - Camera-tilt regression verifies a level center dead zone, mirrored left/right angles and the configured maximum rotation.
 - Orthographic-layer regression verifies the exterior underlay, transparent floor perimeter, solid navigation boundary, 0.25 normal look weight and Shift extended view.
+- Enemy-FOV regression verifies continuous reaction timing, exposure reset, distance/angle rejection, wall and door occlusion, and sight through physical windows.
 
 ## [v.0.0.1] - 2026-08-16
 

@@ -8,6 +8,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Semi-automatic high-precision pistol with near-instant 650 px/s projectiles
 - GunData-driven recoil, muzzle light, shake, knockback, hearing and lethal hit stop
 - Vision-cone and line-of-sight enemy detection with sound investigation instead of omniscience
+- Continuous 0.2–0.4 second visual reaction delay, opaque wall/door occlusion and sight through physical glass windows
 - Fast physics doors that can stagger enemies without uncontrolled angular acceleration
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability
@@ -64,6 +65,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Debug title menu loads the Nightclub or Sandwich Shop directly
 - Sandwich Shop has independent layered floors, walls, objects, lighting and spawn configuration
 - Enemy routes use an AStarGrid2D generated from solid wall cells
+- Enemy vision uses distance/angle broad-phase checks followed by an opaque-only 2D raycast; `debug_draw_vision` exposes the tuning cone
 - Enemies outside detection range decelerate to rest instead of jittering toward the player
 - Ammo UI republishes the equipped gun state whenever a level finishes loading
 

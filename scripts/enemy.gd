@@ -7,12 +7,17 @@ signal died_at(world_position: Vector2, facing: float)
 @export var shoot_range := 152.0
 @export var detection_range := 205.0
 @export_range(30.0, 160.0, 1.0) var vision_fov_degrees := 90.0
+@export_range(0.05, 1.0, 0.01) var reaction_time_min := 0.2
+@export_range(0.05, 1.0, 0.01) var reaction_time_max := 0.4
+@export var debug_draw_vision := false
 @onready var gun = $Gun
 
 enum State { IDLE, INVESTIGATE, CHASE, STAGGERED }
 
 var player: CharacterBody2D
 var alertness := 0.0
+var visual_exposure := 0.0
+var reaction_time := 0.3
 var strafe_sign := 1.0
 var path_points := PackedVector2Array()
 var path_refresh := 0.0
@@ -27,6 +32,7 @@ func _ready() -> void:
 	player = get_tree().get_first_node_in_group("player") as CharacterBody2D
 	tile_world = get_tree().get_first_node_in_group("pathfinding_world")
 	strafe_sign = [-1.0, 1.0].pick_random()
+	reaction_time = randf_range(reaction_time_min, maxf(reaction_time_min, reaction_time_max))
 	gun.cooldown = randf_range(0.25, 0.9)
 	gun.fired.connect(_on_gun_fired)
 	actor_died.connect(_on_actor_died)
@@ -50,7 +56,9 @@ func _physics_process(delta: float) -> void:
 			state = State.INVESTIGATE
 			investigation_target = global_position
 		return
-	var sees_player := _can_see_player(distance, to_player)
+	var has_visual_contact := _can_see_player(distance, to_player)
+	var sees_player := _update_visual_reaction(has_visual_contact, delta)
+	if debug_draw_vision: queue_redraw()
 	if sees_player:
 		state = State.CHASE
 		alertness = 1.0
@@ -98,11 +106,20 @@ func _physics_process(delta: float) -> void:
 		if gun.ammo <= 0 and not gun.is_reloading: gun.reload()
 		if gun.try_fire(aim_direction): gun.cooldown += randf_range(0.35, 0.75)
 
+func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
+	if has_visual_contact:
+		visual_exposure = minf(reaction_time, visual_exposure + delta)
+		alertness = maxf(alertness, visual_exposure / reaction_time)
+	else:
+		visual_exposure = 0.0
+		alertness = move_toward(alertness, 0.0, delta * 0.8)
+	return has_visual_contact and visual_exposure >= reaction_time
+
 func _can_see_player(distance: float, to_player: Vector2) -> bool:
 	if distance > detection_range: return false
 	var facing := Vector2.RIGHT.rotated(rotation)
 	if absf(rad_to_deg(facing.angle_to(to_player.normalized()))) > vision_fov_degrees * 0.5: return false
-	var query := PhysicsRayQueryParameters2D.create(global_position, player.global_position, 2)
+	var query := PhysicsRayQueryParameters2D.create(global_position, player.global_position, 8)
 	query.exclude = [get_rid()]
 	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
@@ -141,4 +158,12 @@ func _on_actor_died(source_position: Vector2) -> void:
 	queue_free()
 
 func _draw() -> void:
+	if debug_draw_vision:
+		var half_fov := deg_to_rad(vision_fov_degrees * 0.5)
+		var points := PackedVector2Array([Vector2.ZERO])
+		for index in range(17):
+			var angle := lerpf(-half_fov, half_fov, float(index) / 16.0)
+			points.append(Vector2.RIGHT.rotated(angle) * detection_range)
+		draw_colored_polygon(points, Color(1.0, 0.2, 0.32, 0.09))
+		draw_arc(Vector2.ZERO, detection_range, -half_fov, half_fov, 24, Color(1.0, 0.35, 0.42, 0.32), 1.0)
 	if alertness > 0.65: draw_circle(Vector2(-1, -7), 1.0, Color("ff385f"))

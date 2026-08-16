@@ -42,6 +42,9 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 		tile_set.add_physics_layer()
 		tile_set.set_physics_layer_collision_layer(0, 2)
 		tile_set.set_physics_layer_collision_mask(0, 5)
+		tile_set.add_physics_layer()
+		tile_set.set_physics_layer_collision_layer(1, 8)
+		tile_set.set_physics_layer_collision_mask(1, 0)
 	var atlas := TileSetAtlasSource.new()
 	atlas.texture = ATLAS_TEXTURE
 	atlas.texture_region_size = TILE_SIZE
@@ -56,6 +59,11 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 		tile_data.set_collision_polygon_points(0, 0, PackedVector2Array([
 			Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
 		]))
+		if tile_index != Tile.WINDOW:
+			tile_data.add_collision_polygon(1)
+			tile_data.set_collision_polygon_points(1, 0, PackedVector2Array([
+				Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
+			]))
 	return tile_set
 
 func _set_tile(layer: TileMapLayer, cell: Vector2i, tile: Tile) -> void:
