@@ -27,6 +27,7 @@ var status_label: Label
 var detail_label: Label
 var ammo_label: Label
 var combo_label: Label
+var interaction_label: Label
 var enemies_killed := 0
 var started_enemy_count := 0
 var run_over := false
@@ -59,6 +60,7 @@ func _process(delta: float) -> void:
 	combo_timer -= delta
 	if combo_timer <= 0.0: combo = 0
 	combo_label.text = ("x%d" % combo) if combo > 1 else ""
+	_update_interaction_prompt()
 	if run_over: return
 	if phase == "combat" and not transitioning_cleanup and get_tree().get_nodes_in_group("enemy").is_empty():
 		_begin_cleanup_transition()
@@ -101,8 +103,22 @@ func _create_ui() -> void:
 	detail_label = _make_label(canvas, Vector2(10, 20), 7, Color("e2cedd"))
 	ammo_label = _make_label(canvas, Vector2(270, 158), 8, Color("ffe5a8"))
 	combo_label = _make_label(canvas, Vector2(266, 11), 10, Color("ff3d78"))
+	interaction_label = _make_label(canvas, Vector2(10, 145), 9, Color("fff0a8"))
+	interaction_label.size = Vector2(300, 14)
+	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var controls := _make_label(canvas, Vector2(10, 165), 7, Color("bdaebe"))
-	controls.text = "WASD // SPACE EXECUTE // LMB // R // F3 // ESC"
+	controls.text = "WASD // E DOOR // SPACE EXECUTE // LMB // R // ESC"
+
+func _update_interaction_prompt() -> void:
+	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or run_over or phase != "combat" or player.is_executing:
+		if is_instance_valid(interaction_label): interaction_label.text = ""
+		return
+	if is_instance_valid(player.get_nearby_execution_target()):
+		interaction_label.text = "[ SPACE ] EXECUTE"
+	elif is_instance_valid(player.get_nearby_slam_door()):
+		interaction_label.text = "[ E ] SLAM DOOR"
+	else:
+		interaction_label.text = ""
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)
