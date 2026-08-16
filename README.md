@@ -37,7 +37,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Checkerboard, wood, wallpaper, grass and tiled zones
 - Layered red, green and magenta lighting pools
 - Bullet trails, firing flash and screen shake
-- Corpses and randomized persistent blood pools
+- Corpses, directional persistent blood pools and wall splatter
+- Modular weapon-aware blood mist and animated impact droplets
 - Enemy alert, pursuit, retreat and strafing behavior
 - Ammo, reload, combo, kill and cleanup HUD states
 - Combat-to-cleanup narrative transition

@@ -13,6 +13,10 @@ All notable project changes are recorded here. Version branches remain unrelease
 - WASD movement, mouse aiming, shooting, reload and cleanup controls.
 - Neon multi-room environment, enemy AI, corpses, blood stains and cleanup loop.
 - Custom utility theme, font defaults and imported 16×16 player sprite.
+- Modular BloodSystem with directional impact metadata from projectiles.
+- Short-lived blood mist and animated droplets on actor impact.
+- Persistent directional ground splatter and raycast-driven wall splatter.
+- Weapon, damage, lethality and projectile-distance scaling for blood intensity.
 
 ### Changed
 

@@ -1,6 +1,6 @@
 extends "res://scripts/actor.gd"
 
-signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int)
+signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 signal died_at(world_position: Vector2, facing: float)
 
 @export var preferred_distance := 65.0
@@ -40,8 +40,8 @@ func _physics_process(delta: float) -> void:
 	if distance <= shoot_range and alertness >= 0.8:
 		if gun.try_fire(direction): gun.cooldown += randf_range(0.35, 0.75)
 
-func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int) -> void:
-	projectile_requested.emit(origin, direction, enemy_owned, damage)
+func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
+	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
 
 func _on_actor_died(_source_position: Vector2) -> void:
 	died_at.emit(global_position, rotation)

@@ -1,6 +1,6 @@
 extends "res://scripts/actor.gd"
 
-signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int)
+signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 signal clean_requested(world_position: Vector2)
 signal died
 
@@ -37,8 +37,8 @@ func set_cleanup_mode(enabled: bool) -> void:
 	gun.visible = not enabled
 	queue_redraw()
 
-func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int) -> void:
-	projectile_requested.emit(origin, direction, enemy_owned, damage)
+func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
+	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
 
 func _on_actor_died(source_position: Vector2) -> void:
 	if source_position != Vector2.ZERO:

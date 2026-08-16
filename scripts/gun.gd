@@ -1,7 +1,7 @@
 class_name Gun
 extends Node2D
 
-signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int)
+signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 signal ammo_changed(current: int, maximum: int)
 
 @export var fire_interval := 0.1
@@ -9,6 +9,7 @@ signal ammo_changed(current: int, maximum: int)
 @export var projectile_damage := 1
 @export var enemy_owned := false
 @export var automatic := true
+@export var weapon_id := "pistol"
 
 var ammo := 12
 var cooldown := 0.0
@@ -31,7 +32,7 @@ func try_fire(direction: Vector2) -> bool:
 	ammo -= 1
 	recoil = 2.0
 	var normalized_direction := direction.normalized()
-	fired.emit(global_position + normalized_direction * 8.0, normalized_direction, enemy_owned, projectile_damage)
+	fired.emit(global_position + normalized_direction * 8.0, normalized_direction, enemy_owned, projectile_damage, weapon_id)
 	ammo_changed.emit(ammo, max_ammo)
 	return true
 

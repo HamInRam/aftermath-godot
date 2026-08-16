@@ -3,7 +3,6 @@ extends Node2D
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const BULLET_SCENE := preload("res://scenes/bullet.tscn")
-const BLOOD_SCENE := preload("res://scenes/blood_stain.tscn")
 const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
 const UI_DEFAULTS := preload("res://utility/scripts/ui_defaults.gd")
 
@@ -21,6 +20,7 @@ var combo := 0
 var combo_timer := 0.0
 var shake_strength := 0.0
 var flash_alpha := 0.0
+@onready var blood_system = $BloodSystem
 
 var wall_rects: Array[Rect2] = [
 	Rect2(0, 0, 320, 7), Rect2(0, 173, 320, 7), Rect2(0, 0, 7, 180), Rect2(313, 0, 7, 180),
@@ -145,11 +145,12 @@ func _spawn_enemy(pos: Vector2) -> void:
 	enemy.died_at.connect(_on_enemy_died)
 	add_child(enemy)
 
-func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int) -> void:
+func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = origin
-	bullet.setup(direction, enemy_owned, damage)
+	bullet.blood_impact.connect(_on_blood_impact)
+	bullet.setup(direction, enemy_owned, damage, weapon_id, origin)
 	add_child(bullet)
 	shake_strength = maxf(shake_strength, 0.65 if enemy_owned else 1.0)
 	flash_alpha = 0.22
@@ -160,15 +161,14 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	combo_timer = 2.2
 	shake_strength = 2.2
 	flash_alpha = 0.45
-	var stain = BLOOD_SCENE.instantiate()
-	stain.global_position = pos
-	add_child(stain)
-	move_child(stain, 0)
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.global_position = pos
 	corpse.setup(facing)
 	add_child(corpse)
 	status_label.text = "TARGETS // %02d/%02d" % [enemies_killed, started_enemy_count]
+
+func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
+	blood_system.emit_hit(hit_position, direction, damage, weapon_id, travel_distance, lethal)
 
 func _on_player_died() -> void:
 	run_over = true
