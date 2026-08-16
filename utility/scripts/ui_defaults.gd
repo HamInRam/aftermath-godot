@@ -1,9 +1,9 @@
 class_name UIDefaults
 extends RefCounted
 
-const SMALL_FONT_SIZE := 5
-const BODY_FONT_SIZE := 6
-const HEADING_FONT_SIZE := 8
+const SMALL_FONT_SIZE := 6
+const BODY_FONT_SIZE := 7
+const HEADING_FONT_SIZE := 9
 const TEXT_COLOR := Color("f4edf2")
 const MUTED_COLOR := Color("a697a4")
 const ACCENT_COLOR := Color("ff3d78")

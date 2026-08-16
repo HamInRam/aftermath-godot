@@ -57,6 +57,9 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Replaced the procedural environment renderer with an editable layered TileMap workflow.
 - Enemy placeholder drawing was replaced by imported pixel art; pistol and SMG weapons now use distinct visuals.
 - Weapon rendering moved to an animated pivot shared by sprites and muzzle placement.
+- Viewport scaling now uses integer multiples to prevent full-frame resampling blur.
+- Dynamic camera smoothing and trauma offsets are rounded to whole pixels; rotational shake is disabled for pixel clarity.
+- UI system-font antialiasing is disabled and small/body/heading sizes were increased for legibility at 320×180.
 - Character slide collisions now continuously transfer force to pushable rigid bodies instead of relying only on the initial contact event.
 - Increased door impact response and reduced angular damping so doors open clearly under player and projectile force.
 - Door pushing now preserves pre-slide intended velocity, eliminating lost or sideways force after CharacterBody2D collision resolution.
@@ -76,3 +79,4 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Standalone stability regression verifies a closed door remains motionless for 90 physics frames and opens visibly under actor force.
 - Bidirectional torque regression verifies opposite-side pushes rotate a 90° door in opposite directions.
 - Level-navigation smoke test verifies menu targets, Sandwich Shop layers, A* routes, idle enemies, ammo initialization and spread data.
+- Pixel-clarity regression verifies integer scaling, non-antialiased UI text and whole-pixel camera/shake transforms.

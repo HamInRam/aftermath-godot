@@ -7,6 +7,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Native `320x180` viewport, displayed at `960x540` with 3x viewport scaling
 - Standard framed game window and a solid high-contrast viewport clear color
 - Pixel snapping and nearest-neighbor texture filtering
+- Integer-only viewport scaling and whole-pixel dynamic camera movement for crisp presentation
 - Explicit Input Map actions for WASD, mouse shooting and reload
 - Imported utility folder with reusable UI defaults, a custom Theme and system-font configuration
 - Shared `Actor` base script with HP, movement and `take_damage()`
@@ -58,6 +59,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Bullet trails, firing flash and screen shake
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
 - Smooth bounded camera framing between the player and cursor for forward visibility
+- Pixel-snapped positional screen shake without blur-inducing camera rotation
 - Standalone global-coordinate death particles that remain independent of actor rotation
 - Hinged RigidBody2D doors with static frames, PinJoint2D anchors and actor/projectile push impulses
 - Corpses, directional persistent blood pools and wall splatter
