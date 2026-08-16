@@ -1,6 +1,12 @@
 extends Node2D
 
-const AUDIO_FACTORY := preload("res://utility/scripts/audio_factory.gd")
+const CLINK_STREAMS := [
+	preload("res://assets/audio/sfx/casing_01.wav"),
+	preload("res://assets/audio/sfx/casing_02.wav"),
+	preload("res://assets/audio/sfx/casing_03.wav"),
+	preload("res://assets/audio/sfx/casing_04.wav"),
+	preload("res://assets/audio/sfx/casing_05.wav"),
+]
 
 var velocity := Vector2.ZERO
 var spin := 0.0
@@ -12,7 +18,7 @@ var allow_bounce := false
 @onready var clink_audio: AudioStreamPlayer2D = $ClinkAudio
 
 func _ready() -> void:
-	clink_audio.stream = AUDIO_FACTORY.create_casing_clink()
+	clink_audio.stream = CLINK_STREAMS.pick_random()
 
 func setup(shot_direction: Vector2, enemy_owned: bool) -> void:
 	var side := shot_direction.normalized().rotated(-PI * 0.5)

@@ -10,8 +10,7 @@ ammo_capacity = 12
 damage = 1
 fire_interval = 0.1
 fire_interval_variance = 0.018
-reload_duration = 1.05
+reload_duration = 1.65
 pitch_min = 0.91
 pitch_max = 1.09
 blood_power = 1.0
-

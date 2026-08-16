@@ -44,7 +44,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves
 - Corpses, directional persistent blood pools and wall splatter
 - Modular weapon-aware blood mist and animated impact droplets
-- Runtime-synthesized blood-splat audio on lethal impact stains
+- Field-recorded CC0 blood-splat audio on lethal impact stains
+- Auditable external audio provenance in `AUDIO_LICENSES.md`
 - One-shot GPU death-blood particles that outlive the defeated enemy node
 - Enemy alert, pursuit, retreat and strafing behavior
 - Ammo, reload, combo, kill and cleanup HUD states

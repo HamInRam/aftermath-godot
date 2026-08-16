@@ -3,7 +3,9 @@ extends Node2D
 
 signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 
-const AUDIO_FACTORY := preload("res://utility/scripts/audio_factory.gd")
+const SHOT_STREAM := preload("res://assets/audio/sfx/pistol_shot.wav")
+const RELOAD_STREAM := preload("res://assets/audio/sfx/pistol_reload.wav")
+const DRY_FIRE_STREAM := preload("res://assets/audio/sfx/dry_fire.wav")
 
 @export var gun_data: Resource
 @export var enemy_owned := false
@@ -31,9 +33,9 @@ var is_reloading := false
 func _ready() -> void:
 	_apply_gun_data()
 	ammo = max_ammo
-	shot_audio.stream = AUDIO_FACTORY.create_gunshot()
-	reload_audio.stream = AUDIO_FACTORY.create_reload()
-	dry_fire_audio.stream = AUDIO_FACTORY.create_dry_fire()
+	shot_audio.stream = SHOT_STREAM
+	reload_audio.stream = RELOAD_STREAM
+	dry_fire_audio.stream = DRY_FIRE_STREAM
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	queue_redraw()

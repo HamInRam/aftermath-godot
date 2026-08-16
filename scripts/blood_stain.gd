@@ -1,6 +1,6 @@
 extends Node2D
 
-const AUDIO_FACTORY := preload("res://utility/scripts/audio_factory.gd")
+const SPLAT_STREAM := preload("res://assets/audio/sfx/blood_splat.wav")
 
 var amount := 1.0
 var lobes: Array[Dictionary] = []
@@ -29,7 +29,7 @@ func setup(spray_direction: Vector2, intensity: float, on_wall: bool, play_splat
 		if i % 3 == 0:
 			streaks.append({"start": position * randf_range(0.15, 0.5), "end": position, "width": maxf(0.4, radius * 0.55)})
 	if play_splat:
-		$SplatAudio.stream = AUDIO_FACTORY.create_splat()
+		$SplatAudio.stream = SPLAT_STREAM
 		$SplatAudio.pitch_scale = randf_range(0.88, 1.08)
 		$SplatAudio.volume_db = lerpf(-13.0, -7.0, clampf(base_intensity / 2.8, 0.0, 1.0))
 		$SplatAudio.play()

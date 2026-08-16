@@ -17,7 +17,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Short-lived blood mist and animated droplets on actor impact.
 - Persistent directional ground splatter and raycast-driven wall splatter.
 - Weapon, damage, lethality and projectile-distance scaling for blood intensity.
-- Runtime-synthesized gunshot, reload, dry-fire and blood-splat audio effects.
+- CC0 field-recorded gunshot, reload, dry-fire, shell-casing and blood-splat audio effects.
 - Per-shot pitch variation and randomized fire interval for less robotic weapons.
 - Persistent 2×1 pixel shell casings with ejection motion and settled floor state.
 - Dedicated reload timer with reload state feedback and delayed ammo refill.
@@ -30,6 +30,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Dedicated Enemies scene container and immediate collision-layer shutdown on death.
 - Spatial shell-casing clinks with speed-based volume, pitch variation and occasional secondary bounces.
 - Rebalanced weapon/casing mix with clearer, longer metal transients and wider spatial reach.
+- Replaced synthesized effects with trimmed and normalized real-world CC0 recordings and documented provenance.
 
 ### Changed
 
