@@ -7,12 +7,12 @@ extends RigidBody2D
 
 func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -> void:
 	var impulse := impact_velocity.normalized() * projectile_push_scale
-	apply_impulse(impulse, to_local(world_point))
+	apply_impulse(impulse, world_point - global_position)
 
 func receive_actor_push(push_velocity: Vector2, world_point: Vector2) -> void:
 	if push_velocity.length_squared() < 0.001: return
 	var force := push_velocity.limit_length(100.0) * actor_push_scale
-	apply_force(force, to_local(world_point))
+	apply_force(force, world_point - global_position)
 
 func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 	var angle := wrapf(rotation, -PI, PI)

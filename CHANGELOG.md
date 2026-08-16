@@ -56,6 +56,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Door pushing now preserves pre-slide intended velocity, eliminating lost or sideways force after CharacterBody2D collision resolution.
 - Removed duplicate first-contact impulses and added a stable ±80° hinge limit.
 - Removed unstable door/frame self-collision, corrected the lobby door orientation and widened its wall opening to the full 16-pixel leaf length.
+- Corrected door force and impulse lever arms to use world-space offsets, so rotated doors open in the physical direction of contact.
 
 ### Validation
 
@@ -67,3 +68,4 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Door regression test now simulates sustained CharacterBody2D contact and verifies resulting hinge rotation.
 - Door-limit regression verifies forced over-rotation is clamped back inside the configured opening range.
 - Standalone stability regression verifies a closed door remains motionless for 90 physics frames and opens visibly under actor force.
+- Bidirectional torque regression verifies opposite-side pushes rotate a 90° door in opposite directions.
