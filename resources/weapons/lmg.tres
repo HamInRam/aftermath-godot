@@ -10,6 +10,7 @@ ammo_capacity = 60
 damage = 3
 fire_interval = 0.085
 fire_interval_variance = 0.008
+spread_degrees = 4.5
 reload_duration = 2.8
 pitch_min = 0.84
 pitch_max = 0.96

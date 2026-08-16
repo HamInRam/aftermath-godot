@@ -44,6 +44,12 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Distinct imported pistol and AK weapon sprites plus a high-damage 60-round LMG GunData configuration.
 - Two hinged physics doors built from static frames, RigidBody2D panels and PinJoint2D anchors.
 - Scripted actor and projectile impulses that physically swing doors while preserving collision blocking.
+- AStarGrid2D navigation generated from wall TileMap cells, with periodically refreshed room-to-room enemy paths.
+- Enemy detection range and idle deceleration that prevent off-range movement jitter.
+- Debug title menu with VBoxContainer buttons for direct Nightclub and Sandwich Shop scene loading.
+- A separately configured Sandwich Shop level with its own floor, wall, object-layer layout, lighting grade, spawns and atmosphere.
+- Per-weapon projectile spread values for pistol, SMG and LMG fire patterns.
+- Deferred ammo-state synchronization after every gameplay scene load.
 
 ### Changed
 
@@ -69,3 +75,4 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Door-limit regression verifies forced over-rotation is clamped back inside the configured opening range.
 - Standalone stability regression verifies a closed door remains motionless for 90 physics frames and opens visibly under actor force.
 - Bidirectional torque regression verifies opposite-side pushes rotate a 90° door in opposite directions.
+- Level-navigation smoke test verifies menu targets, Sandwich Shop layers, A* routes, idle enemies, ammo initialization and spread data.

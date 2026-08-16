@@ -16,6 +16,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Randomized fire timing, pitch-varied gunshots, timed reload and dry-fire feedback
 - AnimationPlayer kickback and barrel-tip Marker2D projectile spawning
 - Pistol, SMG and high-damage 60-round LMG GunData configurations
+- Per-weapon trajectory spread for distinct pistol, SMG and LMG handling
 - Autoload event bus keeps gun state, UI and persistent shell casings decoupled
 - Spatial shell-casing landing audio varies by ejection speed, pitch and occasional bounce
 - Bullets are independent `CharacterBody2D` scenes with a 2x2 collision box
@@ -28,6 +29,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Mouse — aim
 - Hold left mouse — fire / scrub during cleanup
 - `R` — reload; restart after death or completion
+- `Esc` — return to the debug room-select menu
 
 ## Game loop
 
@@ -37,6 +39,14 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 4. Survive the one-hit lethality.
 5. When combat ends, switch to cleanup mode.
 6. Remove every procedurally shaped blood pool.
+
+## Levels and AI
+
+- Debug title menu loads the Nightclub or Sandwich Shop directly
+- Sandwich Shop has independent layered floors, walls, objects, lighting and spawn configuration
+- Enemy routes use an AStarGrid2D generated from solid wall cells
+- Enemies outside detection range decelerate to rest instead of jittering toward the player
+- Ammo UI republishes the equipped gun state whenever a level finishes loading
 
 ## Implemented presentation
 

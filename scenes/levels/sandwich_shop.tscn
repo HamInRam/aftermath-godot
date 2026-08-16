@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scenes/main.tscn" type="PackedScene" id="1_main"]
+
+[node name="SandwichShop" instance=ExtResource("1_main")]
+level_title = "SANDWICH SHOP"
+player_spawn = Vector2(52, 188)
+enemy_spawns = PackedVector2Array(70, 42, 145, 92, 222, 42, 278, 104, 340, 55, 118, 184, 220, 184, 332, 184)
+doors_enabled = false
+
+[node name="TileMap" parent="." index="0"]
+layout_id = "sandwich_shop"
+
+[node name="CanvasModulate" parent="." index="1"]
+color = Color(0.32, 0.36, 0.42, 1)
+
+[node name="RedHallLight" parent="Lighting" index="0"]
+position = Vector2(112, 96)
+color = Color(1, 0.38, 0.17, 1)
+
+[node name="GreenRoomLight" parent="Lighting" index="1"]
+position = Vector2(310, 178)
+color = Color(0.2, 0.82, 0.58, 1)

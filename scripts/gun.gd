@@ -15,6 +15,7 @@ const AK_TEXTURE := preload("res://assets/weapons/ak_12x5.png")
 
 var fire_interval := 0.1
 var fire_interval_variance := 0.018
+var spread_degrees := 0.0
 var max_ammo := 12
 var projectile_damage := 1
 var weapon_id := "pistol"
@@ -54,6 +55,7 @@ func _apply_gun_data() -> void:
 	projectile_damage = gun_data.damage
 	fire_interval = gun_data.fire_interval
 	fire_interval_variance = gun_data.fire_interval_variance
+	spread_degrees = gun_data.spread_degrees
 	reload_duration = gun_data.reload_duration
 	pitch_min = gun_data.pitch_min
 	pitch_max = gun_data.pitch_max
@@ -79,7 +81,8 @@ func try_fire(direction: Vector2) -> bool:
 	shot_audio.play()
 	animation_player.stop()
 	animation_player.play("kick")
-	var normalized_direction := direction.normalized()
+	var spread_radians := deg_to_rad(randf_range(-spread_degrees, spread_degrees))
+	var normalized_direction := direction.normalized().rotated(spread_radians)
 	var origin := muzzle.global_position
 	fired.emit(origin, normalized_direction, enemy_owned, projectile_damage, weapon_id)
 	Events.weapon_fired.emit(origin, normalized_direction, enemy_owned)

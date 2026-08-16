@@ -7,6 +7,11 @@ const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
 const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
 const UI_DEFAULTS := preload("res://utility/scripts/ui_defaults.gd")
 
+@export var level_title := "FLOOR 01"
+@export var player_spawn := Vector2(44, 142)
+@export var enemy_spawns := PackedVector2Array([Vector2(45, 47), Vector2(130, 28), Vector2(170, 64), Vector2(230, 38), Vector2(280, 62), Vector2(125, 108), Vector2(180, 147), Vector2(230, 113), Vector2(280, 147)])
+@export var doors_enabled := true
+
 var phase := "combat"
 var player: CharacterBody2D
 var status_label: Label
@@ -29,6 +34,7 @@ func _ready() -> void:
 	_create_ui()
 	_connect_events()
 	_start_run()
+	call_deferred("_sync_ammo_ui")
 
 func _process(delta: float) -> void:
 	elapsed += delta
@@ -47,6 +53,9 @@ func _process(delta: float) -> void:
 		else: status_label.text = "CLEAN // %02d" % stains.size()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
+		return
 	if run_over and event.is_action_pressed("reload"):
 		get_tree().reload_current_scene()
 
@@ -65,7 +74,7 @@ func _create_ui() -> void:
 	ammo_label = _make_label(canvas, Vector2(275, 160), 7, Color("ffe5a8"))
 	combo_label = _make_label(canvas, Vector2(270, 12), 9, Color("ff3d78"))
 	var controls := _make_label(canvas, Vector2(10, 166), 5, Color("86788b"))
-	controls.text = "WASD MOVE // MOUSE AIM // LMB FIRE // R RELOAD"
+	controls.text = "WASD MOVE // LMB FIRE // R RELOAD // ESC MENU"
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)
@@ -92,17 +101,21 @@ func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool) ->
 	casing.setup(direction, enemy_owned)
 
 func _start_run() -> void:
-	status_label.text = "AFTERMATH // FLOOR 01"
+	status_label.text = "AFTERMATH // " + level_title
 	detail_label.text = "NO WITNESSES."
+	if not doors_enabled and has_node("Doors"): $Doors.queue_free()
 	player = PLAYER_SCENE.instantiate()
-	player.global_position = Vector2(44, 142)
+	player.global_position = player_spawn
 	player.projectile_requested.connect(_on_projectile_requested)
 	player.clean_requested.connect(_on_clean_requested)
 	player.died.connect(_on_player_died)
 	add_child(player)
-	var positions := [Vector2(45, 47), Vector2(130, 28), Vector2(170, 64), Vector2(230, 38), Vector2(280, 62), Vector2(125, 108), Vector2(180, 147), Vector2(230, 113), Vector2(280, 147)]
-	for pos in positions: _spawn_enemy(pos)
-	started_enemy_count = positions.size()
+	for pos in enemy_spawns: _spawn_enemy(pos)
+	started_enemy_count = enemy_spawns.size()
+
+func _sync_ammo_ui() -> void:
+	if is_instance_valid(player) and is_instance_valid(player.gun):
+		Events.publish_ammo(player.gun.ammo, player.gun.max_ammo, player.gun.is_reloading)
 
 func _spawn_enemy(pos: Vector2) -> void:
 	var enemy = ENEMY_SCENE.instantiate()
