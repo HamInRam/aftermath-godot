@@ -10,3 +10,8 @@ script = ExtResource("1_casing")
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture_filter = 1
 texture = ExtResource("2_texture")
+
+[node name="ClinkAudio" type="AudioStreamPlayer2D" parent="."]
+max_distance = 150.0
+attenuation = 1.35
+max_polyphony = 2

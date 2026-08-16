@@ -25,6 +25,14 @@ static func create_splat() -> AudioStreamWAV:
 		var wet := sin(TAU * (92.0 - 80.0 * t) * t) * 0.42
 		return (wet + rng.randf_range(-0.7, 0.7)) * envelope * 0.65)
 
+static func create_casing_clink() -> AudioStreamWAV:
+	return _synthesize(0.085, func(t: float, _rng: RandomNumberGenerator) -> float:
+		var envelope := exp(-52.0 * t)
+		var metal := sin(TAU * 2380.0 * t) * 0.42
+		metal += sin(TAU * 3570.0 * t) * 0.24
+		metal += sin(TAU * 5180.0 * t) * 0.12
+		return metal * envelope)
+
 static func _synthesize(duration: float, sampler: Callable) -> AudioStreamWAV:
 	var sample_count := ceili(duration * SAMPLE_RATE)
 	var bytes := PackedByteArray()

@@ -28,6 +28,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - More natural shell-casing scatter through randomized spawn offsets, velocity and rotation.
 - One-shot GPUParticles2D blood spray detached from defeated enemies so it finishes playing.
 - Dedicated Enemies scene container and immediate collision-layer shutdown on death.
+- Spatial shell-casing clinks with speed-based volume, pitch variation and occasional secondary bounces.
 
 ### Changed
 

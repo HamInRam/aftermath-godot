@@ -15,6 +15,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Swappable GunData resources configure pistol and SMG capacity, damage, timing and reload
 - Randomized fire timing, pitch-varied gunshots, timed reload and dry-fire feedback
 - Autoload event bus keeps gun state, UI and persistent shell casings decoupled
+- Spatial shell-casing landing audio varies by ejection speed, pitch and occasional bounce
 - Bullets are independent `CharacterBody2D` scenes with a 2x2 collision box
 - Player art uses an imported transparent 16x16 PNG on a `Sprite2D`, with nearest filtering
 
