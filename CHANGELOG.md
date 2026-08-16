@@ -65,7 +65,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Space-triggered 24px ground executions with nearest-target selection, full movement/fire/reload input lock and three timed impact beats.
 - Execution-specific camera trauma, final-frame hit stop, red flash, radial blood burst, gore chunks, corpse pool and normal combo credit.
 - Context-sensitive center-screen `[ SPACE ] EXECUTE` prompt near a knocked-down enemy.
-- Interaction-free door slams driven entirely by moving CharacterBody2D contact velocity and world-space collision position.
+- Explicit E-key door activation with current CharacterBody2D movement speed mapped continuously to swing force, noise and impact feedback.
+- Passive body contact no longer opens doors; standing interaction is gentle while a full-speed interaction produces a violent slam.
 - Thirty-piece directional pixel splinter burst and stronger opening trauma on the first high-speed body impact.
 
 ### Changed
@@ -105,7 +106,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Neon/shader/camera regression verifies Shader compilation, nearest sampling, post-processing values, light controllers, F4/F5 toggles, HUD isolation and kill flashes.
 - Tactical Lab regressions verify menu access, four-room layout, glass lanes, four doors, fixed sentries, cross-room A*, cast-shape CCD, lethal/knockdown/stagger door tiers and a 600-frame run.
 - Ground-execution regression verifies the Space action, four-second prone state, disabled enemy weapon, input lock, three-hit sequence, normal kill/combo credit, corpse generation and persistent blood output.
-- Context-interaction regression verifies the range-gated Space execution prompt and movement-contact door activation without an interaction key.
+- Context-interaction regression verifies range-gated E/Space prompts, explicit door activation and velocity-scaled swing response.
 
 ## [v.0.0.1] - 2026-08-16
 

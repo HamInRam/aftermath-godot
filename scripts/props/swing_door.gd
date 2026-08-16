@@ -32,16 +32,24 @@ func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -
 	_emit_impact_feedback(1.3, 105.0, 0.12)
 
 func receive_actor_push(push_velocity: Vector2, world_point: Vector2) -> void:
-	if push_velocity.length_squared() < 0.001: return
+	# Passive CharacterBody2D contact stays blocked; E calls slam_door explicitly.
+	return
+
+func slam_door(pusher_position: Vector2, pusher_velocity: Vector2, fallback_direction: Vector2) -> void:
+	if absf(angular_velocity) > 0.65: return
+	var speed_ratio := clampf(pusher_velocity.length() / 115.0, 0.0, 1.0)
+	var side := signf((pusher_position - global_position).dot(Vector2.RIGHT.rotated(global_rotation).orthogonal()))
+	if is_zero_approx(side): side = 1.0
+	var tangent := Vector2.RIGHT.rotated(global_rotation) * -side
+	var push_direction := pusher_velocity.normalized() if pusher_velocity.length_squared() > 1.0 else fallback_direction.normalized()
+	if push_direction.dot(tangent) < 0.2: push_direction = tangent
+	var leaf_point := global_position + Vector2(0, 14).rotated(global_rotation)
 	freeze = false
-	if push_velocity.length() > 90.0 and absf(angular_velocity) < 0.65:
-		kick_door(world_point, push_velocity.normalized(), actor_push_scale)
-		_spawn_splinters(push_velocity.normalized())
-		_emit_impact_feedback(1.55, 120.0, 0.35)
-		return
-	var speed_falloff := 1.0 - clampf(absf(angular_velocity) / max_angular_speed, 0.0, 0.82)
-	var force := push_velocity.limit_length(115.0) * actor_push_scale * speed_falloff
-	apply_force(force, world_point - global_position)
+	var swing_sign := signf((leaf_point - global_position).cross(push_direction))
+	if is_zero_approx(swing_sign): swing_sign = -side
+	angular_velocity = swing_sign * lerpf(0.8, max_angular_speed * 0.9, speed_ratio)
+	if speed_ratio > 0.65: _spawn_splinters(push_direction)
+	_emit_impact_feedback(lerpf(1.05, 1.55, speed_ratio), lerpf(65.0, 120.0, speed_ratio), 0.3)
 
 func kick_door(impact_position: Vector2, impact_direction: Vector2, force_scale := 1.0) -> void:
 	freeze = false
