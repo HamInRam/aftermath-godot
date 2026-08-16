@@ -59,7 +59,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Dedicated four-room Tactical Lab selectable from the debug menu, built around four physical doors, internal glass firing lanes, blind corners and multiple routes.
 - Mixed Tactical Lab encounter with melee patrols, mobile gunners and two anti-bait fixed sentries that ignore sound investigation while retaining vision and attacks.
 - Frozen-until-contact physical doors with cast-shape continuous collision detection and an enlarged enemy-only sweep area.
-- Three-tier door-panel combat: moderate swings stagger, forceful breaches knock enemies down for four seconds, and extreme swings kill.
+- Three-tier door-panel combat: moderate swings stagger, forceful player breaches knock enemies down for four seconds, and only projectile-armed extreme swings kill.
 - Directional door knockback, post-impact angular damping, high-energy white flash feedback and 12-piece pixel wood splinters.
 - Four-second door knockdowns with a sideways prone pose, disabled attacks and an alerted recovery transition.
 - Space-triggered 24px ground executions with nearest-target selection, full movement/fire/reload input lock and three timed impact beats.
@@ -77,6 +77,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Hue cycling is confined to the exterior void and can be disabled independently without altering interior art.
 - STAGGERED enemies ignore the door's own noise event, preventing impact feedback from being overwritten by INVESTIGATE in the same frame.
 - KNOCKED_DOWN enemies also ignore combat-noise state changes until their four-second recovery completes.
+- Player-driven door torque can no longer cross into the lethal tier; lethality requires a fresh 0.22-second projectile-impact authorization and is consumed by the first target.
 - Exterior void cells are excluded from AStar navigation so the visual background cannot become a traversable shortcut.
 - Enemy aim requires current line of sight; losing sight transitions to investigation at the last seen position.
 - Player death accepts immediate `R` restart with no fade, confirmation or loading screen.

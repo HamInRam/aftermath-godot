@@ -12,6 +12,7 @@ const SPLINTER_SCENE := preload("res://scenes/effects/door_splinters.tscn")
 @export_range(1.0, 20.0, 0.5) var swing_impulse := 8.5
 var impact_cooldown := 0.0
 var splinter_cooldown := 0.0
+var projectile_lethal_window := 0.0
 
 func _ready() -> void:
 	contact_monitor = true
@@ -21,9 +22,11 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	impact_cooldown = maxf(0.0, impact_cooldown - delta)
 	splinter_cooldown = maxf(0.0, splinter_cooldown - delta)
+	projectile_lethal_window = maxf(0.0, projectile_lethal_window - delta)
 
 func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -> void:
 	freeze = false
+	projectile_lethal_window = 0.22
 	kick_door(world_point, impact_velocity.normalized(), projectile_push_scale)
 	_spawn_splinters(impact_velocity.normalized())
 	_emit_impact_feedback(1.3, 105.0, 0.12)
@@ -46,8 +49,9 @@ func kick_door(impact_position: Vector2, impact_direction: Vector2, force_scale 
 	apply_torque_impulse(torque)
 
 func _on_body_entered(body: Node) -> void:
-	if body.is_in_group("enemy") and body.has_method("take_damage") and absf(angular_velocity) >= lethal_angular_speed:
+	if body.is_in_group("enemy") and body.has_method("take_damage") and projectile_lethal_window > 0.0 and absf(angular_velocity) >= lethal_angular_speed:
 		body.take_door_hit((body.global_position - global_position).normalized(), "kill")
+		projectile_lethal_window = 0.0
 		_spawn_splinters((body.global_position - global_position).normalized())
 		_emit_impact_feedback(1.5, 110.0, 0.18)
 		angular_velocity *= 0.3

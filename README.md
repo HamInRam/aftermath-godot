@@ -22,7 +22,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Nearest-sampled CRT/vignette/chromatic post-processing, WorldEnvironment glow/contrast/saturation and subtle ambient camera drift
 - HUD renders above post-processing so text remains undistorted
 - Frozen-until-contact physics doors with cast-shape CCD, a widened sweep detector and stable hinged rebound
-- Three impact tiers: stagger, four-second directional knockdown, and lethal high-speed breach, with loud AI alerts and wood splinters
+- Three impact tiers: stagger, four-second directional knockdown from player slams, and projectile-armed lethal breaches, with loud AI alerts and wood splinters
 - Four-second prone knockdowns create a Space-key execution window with three impact beats, locked controls and radial lethal gore
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability
