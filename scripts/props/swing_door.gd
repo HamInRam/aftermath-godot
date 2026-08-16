@@ -36,7 +36,8 @@ func receive_actor_push(push_velocity: Vector2, world_point: Vector2) -> void:
 	freeze = false
 	if push_velocity.length() > 90.0 and absf(angular_velocity) < 0.65:
 		kick_door(world_point, push_velocity.normalized(), actor_push_scale)
-		_emit_impact_feedback(1.3, 120.0, 0.35)
+		_spawn_splinters(push_velocity.normalized())
+		_emit_impact_feedback(1.55, 120.0, 0.35)
 		return
 	var speed_falloff := 1.0 - clampf(absf(angular_velocity) / max_angular_speed, 0.0, 0.82)
 	var force := push_velocity.limit_length(115.0) * actor_push_scale * speed_falloff

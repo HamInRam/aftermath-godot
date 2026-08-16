@@ -32,8 +32,6 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("execute"):
 		attempt_ground_execution()
 		if is_executing: return
-	if Input.is_action_just_pressed("interact"):
-		attempt_door_slam()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = input_direction * move_speed
 	var intended_velocity := velocity
@@ -77,27 +75,6 @@ func get_nearby_execution_target() -> CharacterBody2D:
 				nearest = candidate
 				nearest_distance = distance
 	return nearest
-
-func get_nearby_slam_door() -> RigidBody2D:
-	if is_executing or cleanup_mode or is_dead: return null
-	var nearest: RigidBody2D = null
-	var nearest_distance := 26.0 * 26.0
-	for door_node in get_tree().get_nodes_in_group("swing_door"):
-		if not door_node is RigidBody2D: continue
-		var panel_center: Vector2 = door_node.global_position + Vector2(0, 8).rotated(door_node.global_rotation)
-		var distance := global_position.distance_squared_to(panel_center)
-		if distance <= nearest_distance:
-			nearest = door_node
-			nearest_distance = distance
-	return nearest
-
-func attempt_door_slam() -> bool:
-	var door := get_nearby_slam_door()
-	if not is_instance_valid(door): return false
-	var facing := Vector2.RIGHT.rotated(rotation)
-	var panel_center: Vector2 = door.global_position + Vector2(0, 8).rotated(door.global_rotation)
-	door.receive_actor_push(facing * move_speed, panel_center)
-	return true
 
 func _start_execution_sequence(target: CharacterBody2D) -> void:
 	is_executing = true
