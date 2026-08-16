@@ -1,0 +1,10 @@
+# Godot-generated cache and editor state
+.godot/
+
+# OS metadata
+.DS_Store
+
+# Local exports and build artifacts
+build/
+dist/
+exports/

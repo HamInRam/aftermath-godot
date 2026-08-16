@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scripts/blood_stain.gd" type="Script" id="1_blood"]
+
+[node name="BloodStain" type="Node2D" groups=["blood"]]
+script = ExtResource("1_blood")
