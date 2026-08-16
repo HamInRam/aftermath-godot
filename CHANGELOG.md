@@ -31,12 +31,18 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Spatial shell-casing clinks with speed-based volume, pitch variation and occasional secondary bounces.
 - Rebalanced weapon/casing mix with clearer, longer metal transients and wider spatial reach.
 - Replaced synthesized effects with trimmed and normalized real-world CC0 recordings and documented provenance.
+- Imported an 8×8 pixel-art environment atlas with concrete, wood, red carpet, dark tile, grass, walls, windows and stairs.
+- Grid-authored room layout using separate Floor, Walls and Decoration TileMapLayer nodes.
+- TileSet physics for wall and window tiles so actors and projectiles collide with the environment.
+- Open doorways, window runs and a stairwell marker integrated into the room layout.
 
 ### Changed
 
 - Restored the standard macOS window frame and window controls.
+- Replaced the procedural environment renderer with an editable layered TileMap workflow.
 
 ### Validation
 
 - Phase-one architecture smoke test passed.
 - 300-frame headless runtime test completed without project errors.
+- Environment smoke test verified layer population, wall physics, projectile-blocking collision and shot-only camera trauma.

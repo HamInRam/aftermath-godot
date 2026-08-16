@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="8" viewBox="0 0 64 8" shape-rendering="crispEdges">
+  <!-- 0: gray concrete -->
+  <rect x="0" y="0" width="8" height="8" fill="#3a3740"/>
+  <rect x="1" y="1" width="1" height="1" fill="#48444e"/><rect x="6" y="5" width="1" height="1" fill="#302d36"/>
+  <!-- 1: wood -->
+  <rect x="8" y="0" width="8" height="8" fill="#593728"/>
+  <rect x="8" y="1" width="8" height="1" fill="#76452f"/><rect x="8" y="4" width="8" height="1" fill="#3f291f"/><rect x="12" y="0" width="1" height="4" fill="#4a2d22"/>
+  <!-- 2: red carpet -->
+  <rect x="16" y="0" width="8" height="8" fill="#6f2030"/>
+  <rect x="16" y="0" width="1" height="8" fill="#b54a55"/><rect x="23" y="0" width="1" height="8" fill="#3a1522"/><rect x="19" y="3" width="2" height="2" fill="#8e2c3b"/>
+  <!-- 3: solid wall -->
+  <rect x="24" y="0" width="8" height="8" fill="#17131b"/>
+  <rect x="24" y="0" width="8" height="2" fill="#786777"/><rect x="25" y="2" width="6" height="5" fill="#403443"/><rect x="24" y="7" width="8" height="1" fill="#09080c"/>
+  <!-- 4: window wall -->
+  <rect x="32" y="0" width="8" height="8" fill="#17131b"/>
+  <rect x="32" y="0" width="8" height="1" fill="#786777"/><rect x="33" y="2" width="6" height="4" fill="#4ac2cf"/><rect x="35" y="2" width="1" height="4" fill="#c8f4ef"/><rect x="32" y="7" width="8" height="1" fill="#09080c"/>
+  <!-- 5: dark tile -->
+  <rect x="40" y="0" width="8" height="8" fill="#26212c"/>
+  <rect x="40" y="0" width="8" height="1" fill="#332d39"/><rect x="40" y="4" width="8" height="1" fill="#1e1a24"/><rect x="44" y="0" width="1" height="8" fill="#1f1b25"/>
+  <!-- 6: grass -->
+  <rect x="48" y="0" width="8" height="8" fill="#263b29"/>
+  <rect x="49" y="2" width="1" height="2" fill="#3c6040"/><rect x="54" y="5" width="1" height="2" fill="#17291d"/><rect x="52" y="1" width="1" height="1" fill="#52704c"/>
+  <!-- 7: stairwell -->
+  <rect x="56" y="0" width="8" height="8" fill="#28232d"/>
+  <rect x="56" y="1" width="8" height="1" fill="#8a7180"/><rect x="56" y="3" width="8" height="1" fill="#725b6a"/><rect x="56" y="5" width="8" height="1" fill="#594653"/><rect x="56" y="7" width="8" height="1" fill="#342a34"/>
+</svg>

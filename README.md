@@ -5,7 +5,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 ## Phase 1 foundation
 
 - Native `320x180` viewport, displayed at `960x540` with 3x viewport scaling
-- Borderless game window and a solid high-contrast viewport clear color
+- Standard framed game window and a solid high-contrast viewport clear color
 - Pixel snapping and nearest-neighbor texture filtering
 - Explicit Input Map actions for WASD, mouse shooting and reload
 - Imported utility folder with reusable UI defaults, a custom Theme and system-font configuration
@@ -37,11 +37,12 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 ## Implemented presentation
 
-- Pixel-snapped procedural art and room textures
-- Checkerboard, wood, wallpaper, grass and tiled zones
-- Layered red, green and magenta lighting pools
+- Imported 8×8 pixel-art tile atlas with concrete, wood, red carpet, dark tile and grass floor variants
+- Editable `TileMap` hierarchy with independent `Floor`, `Walls` and `Decoration` TileMapLayer nodes
+- Grid-built rooms with open doorways, window sections and a stairwell marker
+- Wall/window TileSet physics that stops actors and projectiles
 - Bullet trails, firing flash and screen shake
-- Trauma/noise Camera2D shake with configurable decay, offsets and octaves
+- Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
 - Corpses, directional persistent blood pools and wall splatter
 - Modular weapon-aware blood mist and animated impact droplets
 - Field-recorded CC0 blood-splat audio on lethal impact stains
