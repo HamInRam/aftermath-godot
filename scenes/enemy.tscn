@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource path="res://scripts/enemy.gd" type="Script" id="1_enemy"]
 [ext_resource path="res://scenes/gun.tscn" type="PackedScene" id="2_gun"]
 [ext_resource path="res://resources/weapons/smg.tres" type="Resource" id="3_smg"]
 [ext_resource path="res://assets/casing/casing_2x1.png" type="Texture2D" id="4_particle"]
+[ext_resource path="res://assets/player/enemy_16x16.png" type="Texture2D" id="5_enemy_texture"]
 
 [sub_resource type="CircleShape2D" id="CircleShape_enemy"]
 radius = 5.0
@@ -29,6 +30,10 @@ move_speed = 29.0
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape_enemy")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("5_enemy_texture")
 
 [node name="Gun" parent="." instance=ExtResource("2_gun")]
 gun_data = ExtResource("3_smg")

@@ -18,6 +18,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Spatial shell-casing landing audio varies by ejection speed, pitch and occasional bounce
 - Bullets are independent `CharacterBody2D` scenes with a 2x2 collision box
 - Player art uses an imported transparent 16x16 PNG on a `Sprite2D`, with nearest filtering
+- Enemy art uses a distinct imported 16x16 PNG, and SMG enemies carry a dedicated AK-style pixel sprite
 
 ## Controls
 
@@ -41,8 +42,10 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Editable `TileMap` hierarchy with independent `Floor`, `Walls` and `Decoration` TileMapLayer nodes
 - Grid-built rooms with open doorways, window sections and a stairwell marker
 - Wall/window TileSet physics that stops actors and projectiles
+- CanvasModulate night grading with four colored PointLight2D atmosphere pools
 - Bullet trails, firing flash and screen shake
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
+- Smooth bounded camera framing between the player and cursor for forward visibility
 - Corpses, directional persistent blood pools and wall splatter
 - Modular weapon-aware blood mist and animated impact droplets
 - Field-recorded CC0 blood-splat audio on lethal impact stains

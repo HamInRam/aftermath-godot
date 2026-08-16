@@ -60,9 +60,4 @@ func _on_actor_died(source_position: Vector2) -> void:
 	queue_free()
 
 func _draw() -> void:
-	draw_rect(Rect2(-5, -6, 10, 12), Color("241924"))
-	draw_rect(Rect2(-4, -4, 8, 8), Color("b12c76"))
-	draw_rect(Rect2(-5, 4, 4, 4), Color("352035"))
-	draw_rect(Rect2(1, 4, 4, 4), Color("352035"))
-	draw_circle(Vector2(2, 0), 2.0, Color("cb8e73"))
 	if alertness > 0.65: draw_circle(Vector2(-1, -7), 1.0, Color("ff385f"))

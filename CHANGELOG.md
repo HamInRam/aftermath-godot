@@ -35,14 +35,20 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Grid-authored room layout using separate Floor, Walls and Decoration TileMapLayer nodes.
 - TileSet physics for wall and window tiles so actors and projectiles collide with the environment.
 - Open doorways, window runs and a stairwell marker integrated into the room layout.
+- Atmospheric CanvasModulate darkness with red, green, amber and magenta PointLight2D pools.
+- Custom 16×16 enemy pixel-art sprite and a dedicated 12×5 AK-style weapon sprite for SMG enemies.
+- Dynamic camera framing that smoothly follows the midpoint between the player and cursor while retaining trauma shake.
+- Expanded the tile world to 384×224 so the dynamic camera can reveal nearby rooms without exposing the map edge.
 
 ### Changed
 
 - Restored the standard macOS window frame and window controls.
 - Replaced the procedural environment renderer with an editable layered TileMap workflow.
+- Enemy placeholder drawing was replaced by imported pixel art; pistol and SMG weapons now use distinct visuals.
 
 ### Validation
 
 - Phase-one architecture smoke test passed.
 - 300-frame headless runtime test completed without project errors.
 - Environment smoke test verified layer population, wall physics, projectile-blocking collision and shot-only camera trauma.
+- Presentation smoke test verified four colored lights, both 16×16 actor textures, the AK sprite and bounded player/cursor camera targeting.

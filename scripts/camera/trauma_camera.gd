@@ -6,10 +6,14 @@ extends Camera2D
 @export_range(0.0, 0.2, 0.001) var max_rotation := 0.028
 @export_range(0.1, 30.0, 0.1) var noise_speed := 12.0
 @export_range(1, 8, 1) var noise_octaves := 3
+@export_range(0.0, 120.0, 1.0) var max_look_ahead := 58.0
+@export_range(1.0, 20.0, 0.5) var follow_speed := 7.5
+@export var camera_center_bounds := Rect2(160.0, 90.0, 64.0, 44.0)
 
 var trauma := 0.0
 var noise_time := 0.0
 var noise := FastNoiseLite.new()
+var follow_target: Node2D
 
 func _ready() -> void:
 	noise.seed = randi()
@@ -18,11 +22,24 @@ func _ready() -> void:
 	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	noise.fractal_octaves = noise_octaves
 	process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
+	follow_target = get_tree().get_first_node_in_group("player") as Node2D
 
 func add_trauma(amount: float) -> void:
 	trauma = clampf(trauma + amount, 0.0, 1.0)
 
+func get_follow_position(player_position: Vector2, mouse_position: Vector2) -> Vector2:
+	var mouse_delta := mouse_position - player_position
+	var desired := player_position + mouse_delta.limit_length(max_look_ahead) * 0.5
+	desired.x = clampf(desired.x, camera_center_bounds.position.x, camera_center_bounds.end.x)
+	desired.y = clampf(desired.y, camera_center_bounds.position.y, camera_center_bounds.end.y)
+	return desired
+
 func _physics_process(delta: float) -> void:
+	if not is_instance_valid(follow_target):
+		follow_target = get_tree().get_first_node_in_group("player") as Node2D
+	if is_instance_valid(follow_target):
+		var desired := get_follow_position(follow_target.global_position, get_global_mouse_position())
+		global_position = global_position.lerp(desired, 1.0 - exp(-follow_speed * delta))
 	trauma = maxf(0.0, trauma - trauma_decay * delta)
 	noise_time += delta * noise_speed
 	var shake := trauma * trauma

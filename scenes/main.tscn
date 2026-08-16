@@ -1,9 +1,21 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1_main"]
 [ext_resource path="res://scripts/effects/blood_system.gd" type="Script" id="2_blood_system"]
 [ext_resource path="res://scripts/camera/trauma_camera.gd" type="Script" id="3_camera"]
 [ext_resource path="res://scripts/world/tile_world.gd" type="Script" id="4_tile_world"]
+
+[sub_resource type="Gradient" id="Gradient_light"]
+offsets = PackedFloat32Array(0, 0.42, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0.5, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture_light"]
+gradient = SubResource("Gradient_light")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -21,6 +33,39 @@ z_index = 0
 [node name="Decoration" type="TileMapLayer" parent="TileMap"]
 z_index = -5
 collision_enabled = false
+
+[node name="CanvasModulate" type="CanvasModulate" parent="."]
+color = Color(0.38, 0.32, 0.43, 1)
+
+[node name="Lighting" type="Node2D" parent="."]
+
+[node name="RedHallLight" type="PointLight2D" parent="Lighting"]
+position = Vector2(77, 72)
+color = Color(1, 0.12, 0.25, 1)
+energy = 1.35
+texture = SubResource("GradientTexture_light")
+texture_scale = 0.78
+
+[node name="GreenRoomLight" type="PointLight2D" parent="Lighting"]
+position = Vector2(270, 122)
+color = Color(0.16, 1, 0.48, 1)
+energy = 1.15
+texture = SubResource("GradientTexture_light")
+texture_scale = 0.88
+
+[node name="WarmLobbyLight" type="PointLight2D" parent="Lighting"]
+position = Vector2(241, 43)
+color = Color(1, 0.48, 0.17, 1)
+energy = 1.25
+texture = SubResource("GradientTexture_light")
+texture_scale = 0.72
+
+[node name="MagentaStairLight" type="PointLight2D" parent="Lighting"]
+position = Vector2(166, 151)
+color = Color(0.87, 0.18, 1, 1)
+energy = 1.1
+texture = SubResource("GradientTexture_light")
+texture_scale = 0.68
 
 [node name="BloodSystem" type="Node2D" parent="."]
 script = ExtResource("2_blood_system")

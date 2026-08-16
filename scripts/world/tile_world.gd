@@ -2,7 +2,7 @@ class_name TileWorld
 extends Node2D
 
 const TILE_SIZE := Vector2i(8, 8)
-const MAP_SIZE := Vector2i(40, 23)
+const MAP_SIZE := Vector2i(48, 28)
 const ATLAS_TEXTURE := preload("res://assets/tiles/environment_tiles_8x8.png")
 
 enum Tile { CONCRETE, WOOD, RED_CARPET, WALL, WINDOW, DARK_TILE, GRASS, STAIRS }
