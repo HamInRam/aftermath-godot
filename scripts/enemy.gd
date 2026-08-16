@@ -16,6 +16,9 @@ signal died_at(world_position: Vector2, facing: float)
 @export_range(0.1, 3.0, 0.1) var patrol_wait_max := 1.5
 @export_range(5.0, 90.0, 1.0) var sentry_look_degrees := 45.0
 @export_range(0.5, 8.0, 0.1) var sentry_turn_speed := 2.4
+@export_range(1.0, 2.0, 0.05) var chase_speed_multiplier := 1.25
+@export_range(0.5, 5.0, 0.1) var investigation_scan_duration := 2.2
+@export_range(0.05, 1.0, 0.05) var corpse_scan_interval := 0.2
 @onready var gun = $Gun
 
 enum State { IDLE, INVESTIGATE, CHASE, STAGGERED }
@@ -39,6 +42,10 @@ var patrol_wait_time := 0.0
 var sentry_base_rotation := 0.0
 var sentry_target_rotation := 0.0
 var sentry_look_time := 0.0
+var investigation_look_rotation := 0.0
+var investigation_look_time := 0.0
+var corpse_scan_time := 0.0
+var discovered_corpses := {}
 
 func _ready() -> void:
 	super._ready()
@@ -49,6 +56,7 @@ func _ready() -> void:
 	_pick_sentry_angle()
 	reaction_time = randf_range(reaction_time_min, maxf(reaction_time_min, reaction_time_max))
 	if actor_type == "dog": reaction_time *= 0.55
+	corpse_scan_time = randf_range(0.0, corpse_scan_interval)
 	gun.cooldown = randf_range(0.25, 0.9)
 	gun.fired.connect(_on_gun_fired)
 	actor_died.connect(_on_actor_died)
@@ -69,8 +77,7 @@ func _physics_process(delta: float) -> void:
 		push_contact_bodies(stagger_velocity)
 		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
 		if stagger_time <= 0.0:
-			state = State.INVESTIGATE
-			investigation_target = global_position
+			_begin_investigation(global_position, 0.6)
 		return
 	var has_visual_contact := _can_see_player(distance, to_player)
 	var sees_player := _update_visual_reaction(has_visual_contact, delta)
@@ -80,8 +87,8 @@ func _physics_process(delta: float) -> void:
 		alertness = 1.0
 		investigation_target = player.global_position
 	elif state == State.CHASE:
-		state = State.INVESTIGATE
-		investigation_wait = 0.0
+		_begin_investigation(investigation_target, 0.8)
+	if state == State.IDLE: _scan_for_corpses(delta)
 	if state == State.IDLE:
 		_update_patrol(delta)
 		return
@@ -92,7 +99,12 @@ func _physics_process(delta: float) -> void:
 		investigation_wait += delta
 		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
 		move_and_slide()
-		if investigation_wait >= 0.7:
+		investigation_look_time -= delta
+		if investigation_look_time <= 0.0:
+			investigation_look_rotation = rotation + randf_range(-1.05, 1.05)
+			investigation_look_time = randf_range(0.35, 0.7)
+		rotation = lerp_angle(rotation, investigation_look_rotation, 1.0 - exp(-3.2 * delta))
+		if investigation_wait >= investigation_scan_duration:
 			state = State.IDLE
 			alertness = 0.0
 			investigation_wait = 0.0
@@ -112,7 +124,8 @@ func _physics_process(delta: float) -> void:
 			path_points.remove_at(0)
 		if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
 	if state == State.INVESTIGATE or distance > preferred_distance:
-		velocity = direction * move_speed * (1.8 if actor_type == "dog" else 1.0)
+		var speed_multiplier := (1.8 if actor_type == "dog" else chase_speed_multiplier) if state == State.CHASE else 1.0
+		velocity = direction * move_speed * speed_multiplier
 	elif distance < preferred_distance * 0.62:
 		velocity = -direction * move_speed * 0.72
 	else:
@@ -195,6 +208,35 @@ func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
 		alertness = move_toward(alertness, 0.0, delta * 0.8)
 	return has_visual_contact and visual_exposure >= reaction_time
 
+func _scan_for_corpses(delta: float) -> void:
+	corpse_scan_time -= delta
+	if corpse_scan_time > 0.0: return
+	corpse_scan_time = corpse_scan_interval
+	for corpse_node in get_tree().get_nodes_in_group("corpse"):
+		if not is_instance_valid(corpse_node): continue
+		var corpse_id := corpse_node.get_instance_id()
+		if discovered_corpses.has(corpse_id): continue
+		var to_corpse: Vector2 = corpse_node.global_position - global_position
+		if to_corpse.length() > detection_range * 0.8: continue
+		var facing := Vector2.RIGHT.rotated(rotation)
+		if absf(rad_to_deg(facing.angle_to(to_corpse.normalized()))) > vision_fov_degrees * 0.5: continue
+		var query := PhysicsRayQueryParameters2D.create(global_position, corpse_node.global_position, 8)
+		query.exclude = [get_rid()]
+		if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): continue
+		discovered_corpses[corpse_id] = true
+		_begin_investigation(corpse_node.global_position, 0.78)
+		return
+
+func _begin_investigation(target: Vector2, new_alertness: float) -> void:
+	state = State.INVESTIGATE
+	investigation_target = target
+	investigation_wait = 0.0
+	investigation_look_rotation = rotation
+	investigation_look_time = 0.0
+	alertness = maxf(alertness, new_alertness)
+	path_points.clear()
+	path_refresh = 0.0
+
 func _can_see_player(distance: float, to_player: Vector2) -> bool:
 	if distance > detection_range: return false
 	var facing := Vector2.RIGHT.rotated(rotation)
@@ -211,11 +253,7 @@ func _on_combat_noise(world_position: Vector2, radius: float, _source_kind: Stri
 	query.exclude = [get_rid()]
 	if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): effective_distance *= 1.5
 	if effective_distance > radius: return
-	state = State.INVESTIGATE
-	investigation_target = world_position
-	investigation_wait = 0.0
-	alertness = 0.55
-	path_refresh = 0.0
+	_begin_investigation(world_position, 0.55)
 
 func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	if is_dead: return
