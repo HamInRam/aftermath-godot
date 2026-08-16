@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="GunData" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/gun_data.gd" type="Script" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+weapon_id = "pistol"
+display_name = "PISTOL"
+ammo_capacity = 12
+damage = 1
+fire_interval = 0.1
+fire_interval_variance = 0.018
+reload_duration = 1.05
+pitch_min = 0.91
+pitch_max = 1.09
+blood_power = 1.0
+

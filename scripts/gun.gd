@@ -5,14 +5,18 @@ signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int
 
 const AUDIO_FACTORY := preload("res://utility/scripts/audio_factory.gd")
 
-@export var fire_interval := 0.1
-@export var fire_interval_variance := 0.018
-@export var max_ammo := 12
-@export var projectile_damage := 1
+@export var gun_data: Resource
 @export var enemy_owned := false
 @export var automatic := true
-@export var weapon_id := "pistol"
-@export var reload_duration := 1.05
+
+var fire_interval := 0.1
+var fire_interval_variance := 0.018
+var max_ammo := 12
+var projectile_damage := 1
+var weapon_id := "pistol"
+var reload_duration := 1.05
+var pitch_min := 0.91
+var pitch_max := 1.09
 
 @onready var reload_timer: Timer = $ReloadTimer
 @onready var shot_audio: AudioStreamPlayer = $ShotAudio
@@ -25,6 +29,7 @@ var recoil := 0.0
 var is_reloading := false
 
 func _ready() -> void:
+	_apply_gun_data()
 	ammo = max_ammo
 	shot_audio.stream = AUDIO_FACTORY.create_gunshot()
 	reload_audio.stream = AUDIO_FACTORY.create_reload()
@@ -32,6 +37,17 @@ func _ready() -> void:
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	queue_redraw()
+
+func _apply_gun_data() -> void:
+	if gun_data == null: return
+	weapon_id = gun_data.weapon_id
+	max_ammo = gun_data.ammo_capacity
+	projectile_damage = gun_data.damage
+	fire_interval = gun_data.fire_interval
+	fire_interval_variance = gun_data.fire_interval_variance
+	reload_duration = gun_data.reload_duration
+	pitch_min = gun_data.pitch_min
+	pitch_max = gun_data.pitch_max
 
 func _process(delta: float) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
@@ -50,7 +66,7 @@ func try_fire(direction: Vector2) -> bool:
 	cooldown = maxf(0.035, fire_interval + randf_range(-fire_interval_variance, fire_interval_variance))
 	ammo -= 1
 	recoil = 2.0
-	shot_audio.pitch_scale = randf_range(0.91, 1.09)
+	shot_audio.pitch_scale = randf_range(pitch_min, pitch_max)
 	shot_audio.play()
 	var normalized_direction := direction.normalized()
 	var origin := global_position + normalized_direction * 8.0

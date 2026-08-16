@@ -23,6 +23,11 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Dedicated reload timer with reload state feedback and delayed ammo refill.
 - Autoload Events signal bus for decoupled ammo, reload and weapon-fire updates.
 - Explicit Z-index layering for stains, shell casings, corpses, actors and blood mist.
+- Trauma-based Camera2D shake using layered FastNoiseLite octaves and nonlinear decay.
+- Reusable GunData Resource class with separate Pistol and SMG configurations.
+- More natural shell-casing scatter through randomized spawn offsets, velocity and rotation.
+- One-shot GPUParticles2D blood spray detached from defeated enemies so it finishes playing.
+- Dedicated Enemies scene container and immediate collision-layer shutdown on death.
 
 ### Changed
 

@@ -38,12 +38,24 @@ func _physics_process(delta: float) -> void:
 		velocity = direction.rotated(PI * 0.5) * move_speed * 0.32 * strafe_sign
 	move_and_slide()
 	if distance <= shoot_range and alertness >= 0.8:
+		if gun.ammo <= 0 and not gun.is_reloading: gun.reload()
 		if gun.try_fire(direction): gun.cooldown += randf_range(0.35, 0.75)
 
 func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
 
-func _on_actor_died(_source_position: Vector2) -> void:
+func _on_actor_died(source_position: Vector2) -> void:
+	collision_layer = 0
+	collision_mask = 0
+	set_physics_process(false)
+	var death_particles: GPUParticles2D = $DeathBloodParticles
+	var spray_direction := (global_position - source_position).normalized()
+	if spray_direction.length_squared() < 0.001: spray_direction = Vector2.RIGHT.rotated(rotation)
+	death_particles.rotation = spray_direction.angle()
+	death_particles.reparent(get_tree().current_scene, true)
+	death_particles.restart()
+	death_particles.emitting = true
+	get_tree().create_timer(death_particles.lifetime + 0.4).timeout.connect(death_particles.queue_free)
 	died_at.emit(global_position, rotation)
 	queue_free()
 

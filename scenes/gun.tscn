@@ -1,9 +1,11 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource path="res://scripts/gun.gd" type="Script" id="1_gun"]
+[ext_resource path="res://resources/weapons/pistol.tres" type="Resource" id="2_pistol"]
 
 [node name="Gun" type="Node2D"]
 script = ExtResource("1_gun")
+gun_data = ExtResource("2_pistol")
 
 [node name="ReloadTimer" type="Timer" parent="."]
 one_shot = true

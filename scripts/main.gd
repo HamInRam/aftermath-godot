@@ -19,9 +19,10 @@ var run_over := false
 var elapsed := 0.0
 var combo := 0
 var combo_timer := 0.0
-var shake_strength := 0.0
 var flash_alpha := 0.0
 @onready var blood_system = $BloodSystem
+@onready var enemies_container: Node2D = $Enemies
+@onready var trauma_camera = $TraumaCamera
 
 var wall_rects: Array[Rect2] = [
 	Rect2(0, 0, 320, 7), Rect2(0, 173, 320, 7), Rect2(0, 0, 7, 180), Rect2(313, 0, 7, 180),
@@ -40,8 +41,6 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	elapsed += delta
-	shake_strength = move_toward(shake_strength, 0.0, 5.0 * delta)
-	position = Vector2(randf_range(-shake_strength, shake_strength), randf_range(-shake_strength, shake_strength))
 	flash_alpha = move_toward(flash_alpha, 0.0, 5.5 * delta)
 	combo_timer -= delta
 	if combo_timer <= 0.0: combo = 0
@@ -144,7 +143,9 @@ func _on_reload_finished(_current: int, _maximum: int) -> void:
 func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool) -> void:
 	var casing = SHELL_CASING_SCENE.instantiate()
 	add_child(casing)
-	casing.global_position = origin - direction * 6.0
+	var perpendicular := direction.rotated(PI * 0.5)
+	casing.global_position = origin - direction * randf_range(4.5, 7.5) + perpendicular * randf_range(-1.8, 1.8)
+	casing.rotation = randf_range(-PI, PI)
 	casing.setup(direction, enemy_owned)
 
 func _start_run() -> void:
@@ -162,10 +163,10 @@ func _start_run() -> void:
 
 func _spawn_enemy(pos: Vector2) -> void:
 	var enemy = ENEMY_SCENE.instantiate()
-	enemy.global_position = pos
 	enemy.projectile_requested.connect(_on_projectile_requested)
 	enemy.died_at.connect(_on_enemy_died)
-	add_child(enemy)
+	enemies_container.add_child(enemy)
+	enemy.global_position = pos
 
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return
@@ -174,14 +175,14 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	bullet.blood_impact.connect(_on_blood_impact)
 	bullet.setup(direction, enemy_owned, damage, weapon_id, origin)
 	add_child(bullet)
-	shake_strength = maxf(shake_strength, 0.65 if enemy_owned else 1.0)
+	trauma_camera.add_trauma(0.07 if enemy_owned else 0.11)
 	flash_alpha = 0.22
 
 func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	enemies_killed += 1
 	combo += 1
 	combo_timer = 2.2
-	shake_strength = 2.2
+	trauma_camera.add_trauma(0.42)
 	flash_alpha = 0.45
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.global_position = pos
@@ -194,7 +195,7 @@ func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, we
 
 func _on_player_died() -> void:
 	run_over = true
-	shake_strength = 3.5
+	trauma_camera.add_trauma(0.78)
 	status_label.text = "YOU ARE DEAD"
 	detail_label.text = "R TO RESTART"
 

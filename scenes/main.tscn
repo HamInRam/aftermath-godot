@@ -1,10 +1,18 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1_main"]
 [ext_resource path="res://scripts/effects/blood_system.gd" type="Script" id="2_blood_system"]
+[ext_resource path="res://scripts/camera/trauma_camera.gd" type="Script" id="3_camera"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
 [node name="BloodSystem" type="Node2D" parent="."]
 script = ExtResource("2_blood_system")
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="TraumaCamera" type="Camera2D" parent="."]
+position = Vector2(160, 90)
+enabled = true
+script = ExtResource("3_camera")
