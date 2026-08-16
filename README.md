@@ -19,15 +19,17 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Gunner and melee enemy roles share the same perception/state network but use ranged or one-hit close combat
 - Clear CHASE sightlines produce an aggressive 1.25x direct rush; walls switch movement back to A* for a 1.5-second pursuit-memory window
 - Enemy gunfire reuses GunData, muzzle, spread, ammo/reload, audio-bus and projectile systems; melee guards hide firearms and display a swing arc
+- Nearest-sampled CRT/vignette/chromatic post-processing, WorldEnvironment glow/contrast/saturation and subtle ambient camera drift
+- HUD renders above post-processing so text remains undistorted
 - Fast physics doors that can stagger enemies without uncontrolled angular acceleration
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability
 - Abrupt combat-to-cleanup silence interface after the final kill
 - Weapon-shaped directional blood, progressively expanding death pools, modular corpse wounds and physics-driven pixel gore chunks
-- Globally visible stage lighting with fixed right-down pixel shadows and window-aware shadow breaks; no hue-cycling background
+- Globally visible stage lighting with fixed right-down pixel shadows, window-aware breaks and restrained breathing neon accents
 - Original high-contrast Nightclub interior with room-specific floors, bright wall trim, dense furnishings and matching fake shadows
 - Subtle position-driven camera tilt with mirrored directions, a stable center dead zone and smoothed transitions
-- Layered architectural cutout over a static dark exterior underlay, without psychedelic hue cycling
+- Layered architectural cutout over an exterior-only, independently toggleable HSV hue cycle
 - Mouse-directed 0.25-weight camera lead and hold-Shift tactical look-ahead
 
 ## Phase 1 foundation
@@ -60,6 +62,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - `R` — reload; restart after death or completion
 - Hold `Shift` — extend the camera toward the cursor
 - `F3` — toggle enemy vision debug cones
+- `F4` — toggle CRT/screen post-processing
+- `F5` — toggle exterior hue cycling
 - `Esc` — return to the debug room-select menu
 
 ## Game loop

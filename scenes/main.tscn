@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1_main"]
 [ext_resource path="res://scripts/effects/blood_system.gd" type="Script" id="2_blood_system"]
@@ -6,6 +6,9 @@
 [ext_resource path="res://scripts/world/tile_world.gd" type="Script" id="4_tile_world"]
 [ext_resource path="res://scenes/props/swing_door.tscn" type="PackedScene" id="5_door"]
 [ext_resource path="res://scripts/audio/combat_audio_director.gd" type="Script" id="6_audio_director"]
+[ext_resource path="res://shaders/screen_effect.gdshader" type="Shader" id="7_screen_shader"]
+[ext_resource path="res://shaders/hue_cycle.gdshader" type="Shader" id="8_hue_shader"]
+[ext_resource path="res://scripts/effects/neon_light.gd" type="Script" id="9_neon_light"]
 
 [sub_resource type="Gradient" id="Gradient_light"]
 offsets = PackedFloat32Array(0, 0.42, 1)
@@ -19,11 +22,19 @@ fill = 1
 fill_from = Vector2(0.5, 0.5)
 fill_to = Vector2(1, 0.5)
 
-[sub_resource type="Shader" id="Shader_scanlines"]
-code = "shader_type canvas_item;\nvoid fragment() {\n\tfloat scan = step(0.5, fract(FRAGCOORD.y * 0.5));\n\tfloat grain = fract(sin(dot(floor(FRAGCOORD.xy), vec2(12.9898, 78.233))) * 43758.5453);\n\tCOLOR = vec4(vec3(0.0), scan * 0.028 + grain * 0.008);\n}\n"
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_screen"]
+shader = ExtResource("7_screen_shader")
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_scanlines"]
-shader = SubResource("Shader_scanlines")
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hue"]
+shader = ExtResource("8_hue_shader")
+
+[sub_resource type="Environment" id="Environment_post"]
+glow_enabled = true
+glow_intensity = 0.8
+glow_blend_mode = 0
+adjustment_enabled = true
+adjustment_contrast = 1.3
+adjustment_saturation = 1.5
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -32,6 +43,7 @@ script = ExtResource("1_main")
 script = ExtResource("4_tile_world")
 
 [node name="ExteriorBackdrop" type="TileMapLayer" parent="TileMap"]
+material = SubResource("ShaderMaterial_hue")
 z_index = -20
 collision_enabled = false
 modulate = Color(0.32, 0.2, 0.42, 1)
@@ -66,8 +78,10 @@ collision_enabled = false
 [node name="CanvasModulate" type="CanvasModulate" parent="."]
 color = Color(0.72, 0.67, 0.76, 1)
 
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_post")
+
 [node name="Lighting" type="Node2D" parent="."]
-visible = false
 
 [node name="RedHallLight" type="PointLight2D" parent="Lighting"]
 position = Vector2(77, 72)
@@ -75,6 +89,9 @@ color = Color(1, 0.12, 0.25, 1)
 energy = 1.35
 texture = SubResource("GradientTexture_light")
 texture_scale = 0.78
+script = ExtResource("9_neon_light")
+base_energy = 0.62
+wave_amplitude = 0.1
 
 [node name="GreenRoomLight" type="PointLight2D" parent="Lighting"]
 position = Vector2(270, 122)
@@ -82,6 +99,9 @@ color = Color(0.16, 1, 0.48, 1)
 energy = 1.15
 texture = SubResource("GradientTexture_light")
 texture_scale = 0.88
+script = ExtResource("9_neon_light")
+base_energy = 0.54
+wave_amplitude = 0.08
 
 [node name="WarmLobbyLight" type="PointLight2D" parent="Lighting"]
 position = Vector2(241, 43)
@@ -89,6 +109,10 @@ color = Color(1, 0.48, 0.17, 1)
 energy = 1.25
 texture = SubResource("GradientTexture_light")
 texture_scale = 0.72
+script = ExtResource("9_neon_light")
+base_energy = 0.58
+wave_amplitude = 0.1
+is_flickering = true
 
 [node name="MagentaStairLight" type="PointLight2D" parent="Lighting"]
 position = Vector2(166, 151)
@@ -96,6 +120,9 @@ color = Color(0.87, 0.18, 1, 1)
 energy = 1.1
 texture = SubResource("GradientTexture_light")
 texture_scale = 0.68
+script = ExtResource("9_neon_light")
+base_energy = 0.52
+wave_amplitude = 0.09
 
 [node name="Doors" type="Node2D" parent="."]
 
@@ -123,7 +150,7 @@ script = ExtResource("3_camera")
 layer = 20
 
 [node name="Scanlines" type="ColorRect" parent="RetroTreatment"]
-material = SubResource("ShaderMaterial_scanlines")
+material = SubResource("ShaderMaterial_screen")
 offset_right = 320.0
 offset_bottom = 180.0
 mouse_filter = 2

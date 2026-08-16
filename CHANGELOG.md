@@ -51,6 +51,11 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Direct 1.25x-speed CHASE rush whenever the opaque line to the player is clear, falling back to A* only while geometry blocks pursuit.
 - 1.5-second chase memory before last-known-position investigation, preventing instant disengagement when the player cuts a corner.
 - Short-range one-hit melee attacks with hidden firearms, independent cooldown and a brief visible swing arc.
+- Nearest-sampled full-screen CRT shader with restrained scanlines, vignette, curvature and chromatic separation, toggleable with `F4`.
+- Exterior-only HSV hue cycling over the architectural void, independently toggleable with `F5`.
+- Four low-energy scripted neon lights with sine-wave breathing and optional broken-tube flicker.
+- WorldEnvironment glow plus 1.3 contrast and 1.5 saturation grading, with the HUD rendered above screen distortion.
+- Ambient 0.005-radian camera drift and a reusable kill-effect interface combining trauma shake with short red/white flashes.
 
 ### Changed
 
@@ -60,8 +65,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Camera mouse lead remains approximately 30 pixels with whole-pixel smoothing and fast trauma decay.
 - Door force falls off with angular speed and angular velocity is capped, preventing exaggerated late-swing acceleration.
 - Player/enemy/interaction colors were brightened for combat readability without changing the existing identity.
-- Environment lighting now favors a bright global color grade over local PointLight2D pools; combat muzzle lights remain enabled.
-- No background hue cycling was added, keeping the current restrained AFTERMATH palette.
+- Environment lighting combines a readable global grade with restrained breathing PointLight2D accents; combat muzzle lights remain enabled.
+- Hue cycling is confined to the exterior void and can be disabled independently without altering interior art.
 - Exterior void cells are excluded from AStar navigation so the visual background cannot become a traversable shortcut.
 - Enemy aim requires current line of sight; losing sight transitions to investigation at the last seen position.
 - Player death accepts immediate `R` restart with no fade, confirmation or loading screen.
@@ -83,6 +88,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Physics-layer/glass regression fires real projectiles through a window and into an adjacent solid wall while verifying every named layer and mask.
 - Debug/UI regression verifies global F3 cone toggling, red/green-capable enemy flags and minimum readable HUD/theme font sizes.
 - Chase-combat regression verifies role configuration, direct-path rushing, wall-triggered A*, chase-memory expiration, shared gunfire and melee lethality.
+- Neon/shader/camera regression verifies Shader compilation, nearest sampling, post-processing values, light controllers, F4/F5 toggles, HUD isolation and kill flashes.
 
 ## [v.0.0.1] - 2026-08-16
 

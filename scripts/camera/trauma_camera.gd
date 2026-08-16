@@ -1,6 +1,8 @@
 class_name TraumaCamera
 extends Camera2D
 
+signal impact_flash_requested(color: Color)
+
 @export_range(0.1, 5.0, 0.05) var trauma_decay := 1.65
 @export_range(0.0, 12.0, 0.1) var max_offset := 3.6
 @export_range(0.0, 0.2, 0.001) var max_rotation := 0.0
@@ -18,6 +20,10 @@ extends Camera2D
 @export_range(32.0, 256.0, 1.0) var tilt_full_distance := 160.0
 @export_range(1.0, 20.0, 0.5) var tilt_smoothing := 6.5
 @export var tilt_room_center_x := 192.0
+@export_group("Ambient Drift")
+@export var ambient_drift_enabled := true
+@export_range(0.0, 3.0, 0.05) var drift_speed := 1.1
+@export_range(0.0, 0.02, 0.0005) var max_drift_angle := 0.005
 
 var trauma := 0.0
 var noise_time := 0.0
@@ -26,6 +32,7 @@ var follow_target: Node2D
 var smooth_follow_position := Vector2.ZERO
 var smooth_shake_offset := Vector2.ZERO
 var smooth_tilt := 0.0
+var drift_time := 0.0
 
 func _ready() -> void:
 	noise.seed = randi()
@@ -39,6 +46,11 @@ func _ready() -> void:
 
 func add_trauma(amount: float) -> void:
 	trauma = clampf(trauma + amount, 0.0, 1.0)
+
+func trigger_kill_effect(shake_power := 0.42, flash_type := "red") -> void:
+	add_trauma(shake_power)
+	var flash_color := Color(0.8, 0.0, 0.2, 0.24) if flash_type == "red" else Color(1.0, 1.0, 1.0, 0.34)
+	impact_flash_requested.emit(flash_color)
 
 func get_follow_position(player_position: Vector2, mouse_position: Vector2) -> Vector2:
 	return get_follow_position_for_mode(player_position, mouse_position, Input.is_action_pressed("look_ahead"))
@@ -61,6 +73,7 @@ func get_tilt_target(player_x: float) -> float:
 	return deg_to_rad(tilt_max_degrees) * -signf(signed_distance) * percentage
 
 func _physics_process(delta: float) -> void:
+	drift_time += delta
 	if not is_instance_valid(follow_target):
 		follow_target = get_tree().get_first_node_in_group("player") as Node2D
 	if is_instance_valid(follow_target):
@@ -77,8 +90,8 @@ func _physics_process(delta: float) -> void:
 	if shake <= 0.0001:
 		smooth_shake_offset = smooth_shake_offset.lerp(Vector2.ZERO, 1.0 - exp(-18.0 * delta))
 		offset = smooth_shake_offset.round()
-		rotation = smooth_tilt
+		rotation = smooth_tilt + (sin(drift_time * drift_speed) * max_drift_angle if ambient_drift_enabled else 0.0)
 		return
 	smooth_shake_offset = Vector2(noise.get_noise_1d(noise_time), noise.get_noise_1d(noise_time + 71.7)) * max_offset * shake
 	offset = smooth_shake_offset.round()
-	rotation = smooth_tilt
+	rotation = smooth_tilt + (sin(drift_time * drift_speed) * max_drift_angle if ambient_drift_enabled else 0.0)

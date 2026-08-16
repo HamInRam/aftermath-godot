@@ -38,6 +38,8 @@ var pending_death_blood_power := 1.0
 var hit_stop_generation := 0
 var transitioning_cleanup := false
 var vision_debug_enabled := false
+var screen_effects_enabled := true
+var hue_cycle_enabled := true
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -47,6 +49,7 @@ func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color("0e0c10"))
 	_create_ui()
 	_connect_events()
+	trauma_camera.impact_flash_requested.connect(_on_impact_flash_requested)
 	_start_run()
 	call_deferred("_sync_ammo_ui")
 
@@ -70,6 +73,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
 		_toggle_vision_debug()
 		return
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F4:
+		_toggle_screen_effects()
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F5:
+		_toggle_hue_cycle()
+		return
 	if event.is_action_pressed("ui_cancel"):
 		get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 		return
@@ -85,6 +94,7 @@ func _make_label(canvas: CanvasLayer, pos: Vector2, size: int, color: Color) -> 
 
 func _create_ui() -> void:
 	var canvas := CanvasLayer.new()
+	canvas.layer = 30
 	add_child(canvas)
 	status_label = _make_label(canvas, Vector2(10, 7), 9, Color("fff1f7"))
 	detail_label = _make_label(canvas, Vector2(10, 20), 7, Color("e2cedd"))
@@ -161,6 +171,18 @@ func _toggle_vision_debug() -> void:
 		enemy_node.queue_redraw()
 	detail_label.text = "VISION DEBUG: %s" % ("ON" if vision_debug_enabled else "OFF")
 
+func _toggle_screen_effects() -> void:
+	screen_effects_enabled = not screen_effects_enabled
+	var material := $RetroTreatment/Scanlines.material as ShaderMaterial
+	material.set_shader_parameter("enable_effect", screen_effects_enabled)
+	detail_label.text = "SCREEN FX: %s" % ("ON" if screen_effects_enabled else "OFF")
+
+func _toggle_hue_cycle() -> void:
+	hue_cycle_enabled = not hue_cycle_enabled
+	var material := $TileMap/ExteriorBackdrop.material as ShaderMaterial
+	material.set_shader_parameter("enable_cycle", hue_cycle_enabled)
+	detail_label.text = "HUE CYCLE: %s" % ("ON" if hue_cycle_enabled else "OFF")
+
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return
 	var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
@@ -175,7 +197,7 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	enemies_killed += 1
 	combo += 1
 	combo_timer = 2.2
-	trauma_camera.add_trauma(0.42)
+	trauma_camera.trigger_kill_effect(0.42, "red")
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.global_position = pos
 	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power)
@@ -208,10 +230,16 @@ func _on_player_died() -> void:
 	detail_label.text = "R TO RESTART"
 
 func _trigger_death_flash() -> void:
+	_show_flash(Color(0.85, 0.03, 0.08, 0.48), 0.22)
+
+func _on_impact_flash_requested(color: Color) -> void:
+	_show_flash(color, 0.12)
+
+func _show_flash(color: Color, duration: float) -> void:
 	var flash := $DeathPresentation/Flash as ColorRect
-	flash.color = Color(0.85, 0.03, 0.08, 0.48)
+	flash.color = color
 	var tween := create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS).set_ignore_time_scale(true)
-	tween.tween_property(flash, "color", Color(0.18, 0.18, 0.2, 0.0), 0.22)
+	tween.tween_property(flash, "color", Color(color.r, color.g, color.b, 0.0), duration)
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
