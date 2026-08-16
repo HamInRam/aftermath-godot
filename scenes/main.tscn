@@ -1,10 +1,11 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1_main"]
 [ext_resource path="res://scripts/effects/blood_system.gd" type="Script" id="2_blood_system"]
 [ext_resource path="res://scripts/camera/trauma_camera.gd" type="Script" id="3_camera"]
 [ext_resource path="res://scripts/world/tile_world.gd" type="Script" id="4_tile_world"]
 [ext_resource path="res://scenes/props/swing_door.tscn" type="PackedScene" id="5_door"]
+[ext_resource path="res://scripts/audio/combat_audio_director.gd" type="Script" id="6_audio_director"]
 
 [sub_resource type="Gradient" id="Gradient_light"]
 offsets = PackedFloat32Array(0, 0.42, 1)
@@ -17,6 +18,12 @@ height = 128
 fill = 1
 fill_from = Vector2(0.5, 0.5)
 fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Shader" id="Shader_scanlines"]
+code = "shader_type canvas_item;\nvoid fragment() {\n\tfloat scan = step(0.5, fract(FRAGCOORD.y * 0.5));\n\tfloat grain = fract(sin(dot(floor(FRAGCOORD.xy), vec2(12.9898, 78.233))) * 43758.5453);\n\tCOLOR = vec4(vec3(0.0), scan * 0.028 + grain * 0.008);\n}\n"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_scanlines"]
+shader = SubResource("Shader_scanlines")
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -80,9 +87,31 @@ rotation = -1.5708
 [node name="BloodSystem" type="Node2D" parent="."]
 script = ExtResource("2_blood_system")
 
+[node name="CombatAudioDirector" type="Node" parent="."]
+script = ExtResource("6_audio_director")
+
 [node name="Enemies" type="Node2D" parent="."]
 
 [node name="TraumaCamera" type="Camera2D" parent="."]
 position = Vector2(160, 90)
 enabled = true
 script = ExtResource("3_camera")
+
+[node name="RetroTreatment" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="Scanlines" type="ColorRect" parent="RetroTreatment"]
+material = SubResource("ShaderMaterial_scanlines")
+offset_right = 320.0
+offset_bottom = 180.0
+mouse_filter = 2
+color = Color(1, 1, 1, 1)
+
+[node name="DeathPresentation" type="CanvasLayer" parent="."]
+layer = 19
+
+[node name="Flash" type="ColorRect" parent="DeathPresentation"]
+offset_right = 320.0
+offset_bottom = 180.0
+mouse_filter = 2
+color = Color(0, 0, 0, 0)

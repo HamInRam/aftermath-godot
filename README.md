@@ -2,6 +2,17 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.2 combat feel
+
+- Immediate 115 px/s movement and instant stopping
+- Semi-automatic high-precision pistol with near-instant 650 px/s projectiles
+- GunData-driven recoil, muzzle light, shake, knockback, hearing and lethal hit stop
+- Vision-cone and line-of-sight enemy detection with sound investigation instead of omniscience
+- Fast physics doors that can stagger enemies without uncontrolled angular acceleration
+- Directional corpse impact, strong death feedback and immediate restart
+- Subtle scanline/grain treatment that preserves pixel readability
+- Abrupt combat-to-cleanup silence interface after the final kill
+
 ## Phase 1 foundation
 
 - Native `320x180` viewport, displayed at `960x540` with 3x viewport scaling

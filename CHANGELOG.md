@@ -2,7 +2,40 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
-## [v.0.0.1] - Unreleased
+## [v.0.0.2] - Unreleased
+
+### Added
+
+- GunData-driven recoil, camera shake, muzzle-flash size/duration, bullet speed, knockback, hearing radius and lethal hit-stop tuning.
+- One-to-two-frame muzzle flash geometry with a short-lived PointLight2D for dark-room illumination.
+- Layered gunshot audio using transient, mechanical and low-pitched punch components with restrained pitch variation.
+- 35 ms lethal hit stop, directional corpse knockback and simple wall-aware corpse settling.
+- Predictable enemy IDLE, INVESTIGATE, CHASE and STAGGERED states.
+- 90-degree enemy vision with distance checks and wall/closed-door line-of-sight occlusion.
+- Gunshot and door-impact hearing events that send enemies to the sound position without revealing the player's live position.
+- Physics-door enemy stagger, impact noise and impact-tier camera feedback.
+- Lightweight non-blurring scanline/grain overlay and brief player-death red flash.
+- CombatAudioDirector interface for future copyright-safe combat music and cleanup ambience.
+- Delayed 0.42-second Violence-to-Silence transition event before `CLEANUP REQUIRED`.
+
+### Changed
+
+- Player movement is now immediate at 115 px/s with no acceleration or release inertia.
+- Projectile speed increased from 295 to a 650–720 px/s weapon-specific range.
+- Pistol is semi-automatic with 12 rounds, 0.15-second interval and 0.75-degree spread; SMG and LMG remain automatic.
+- Camera mouse lead remains approximately 30 pixels with whole-pixel smoothing and fast trauma decay.
+- Door force falls off with angular speed and angular velocity is capped, preventing exaggerated late-swing acceleration.
+- Player/enemy/interaction colors were brightened for combat readability without changing the existing identity.
+- Enemy aim requires current line of sight; losing sight transitions to investigation at the last seen position.
+- Player death accepts immediate `R` restart with no fade, confirmation or loading screen.
+
+### Validation
+
+- v0.0.2 combat smoke test verifies movement, pistol tuning, projectile speed, muzzle flash, recoil, layered audio, hit stop, hearing, stagger and corpse knockback.
+- Vision regression verifies walls block sight while unobstructed targets remain detectable.
+- Nightclub completed a 600-physics-frame integration run without runtime errors or leaked time scale.
+
+## [v.0.0.1] - 2026-08-16
 
 ### Added
 

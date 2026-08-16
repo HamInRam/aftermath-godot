@@ -1,7 +1,15 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource path="res://scripts/corpse.gd" type="Script" id="1_corpse"]
 
-[node name="Corpse" type="Node2D" groups=["corpse"]]
+[sub_resource type="RectangleShape2D" id="RectangleShape_corpse"]
+size = Vector2(9, 5)
+
+[node name="Corpse" type="CharacterBody2D" groups=["corpse"]]
 z_index = 2
+collision_layer = 0
+collision_mask = 2
 script = ExtResource("1_corpse")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape_corpse")

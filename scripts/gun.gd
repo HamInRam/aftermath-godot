@@ -22,11 +22,21 @@ var weapon_id := "pistol"
 var reload_duration := 1.05
 var pitch_min := 0.91
 var pitch_max := 1.09
+var recoil_strength := 0.7
+var camera_shake := 0.7
+var muzzle_flash_size := 26.0
+var muzzle_flash_duration := 0.045
+var bullet_speed := 650.0
+var knockback := 24.0
+var hearing_radius := 190.0
+var hit_stop := 0.035
 
 @onready var reload_timer: Timer = $ReloadTimer
 @onready var shot_audio: AudioStreamPlayer = $ShotAudio
 @onready var reload_audio: AudioStreamPlayer = $ReloadAudio
 @onready var dry_fire_audio: AudioStreamPlayer = $DryFireAudio
+@onready var mechanical_audio: AudioStreamPlayer = $MechanicalAudio
+@onready var punch_audio: AudioStreamPlayer = $PunchAudio
 @onready var weapon_sprite: Sprite2D = $WeaponPivot/WeaponSprite
 @onready var muzzle: Marker2D = $WeaponPivot/Muzzle
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
@@ -42,6 +52,8 @@ func _ready() -> void:
 	shot_audio.stream = SHOT_STREAM
 	reload_audio.stream = RELOAD_STREAM
 	dry_fire_audio.stream = DRY_FIRE_STREAM
+	mechanical_audio.stream = DRY_FIRE_STREAM
+	punch_audio.stream = SHOT_STREAM
 	weapon_sprite.texture = AK_TEXTURE if weapon_id in ["smg", "lmg"] else PISTOL_TEXTURE
 	muzzle.position.x = weapon_sprite.texture.get_width() * 0.5 + 1.0
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
@@ -59,6 +71,14 @@ func _apply_gun_data() -> void:
 	reload_duration = gun_data.reload_duration
 	pitch_min = gun_data.pitch_min
 	pitch_max = gun_data.pitch_max
+	recoil_strength = gun_data.recoil_strength
+	camera_shake = gun_data.camera_shake
+	muzzle_flash_size = gun_data.muzzle_flash_size
+	muzzle_flash_duration = gun_data.muzzle_flash_duration
+	bullet_speed = gun_data.bullet_speed
+	knockback = gun_data.knockback
+	hearing_radius = gun_data.hearing_radius
+	hit_stop = gun_data.hit_stop
 
 func _process(delta: float) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
@@ -79,13 +99,18 @@ func try_fire(direction: Vector2) -> bool:
 	recoil = 2.0
 	shot_audio.pitch_scale = randf_range(pitch_min, pitch_max)
 	shot_audio.play()
+	mechanical_audio.pitch_scale = randf_range(0.98, 1.03)
+	mechanical_audio.play()
+	punch_audio.pitch_scale = randf_range(0.70, 0.76)
+	punch_audio.play()
 	animation_player.stop()
-	animation_player.play("kick")
+	animation_player.play("kick", -1.0, 0.85 + recoil_strength * 0.45)
 	var spread_radians := deg_to_rad(randf_range(-spread_degrees, spread_degrees))
 	var normalized_direction := direction.normalized().rotated(spread_radians)
 	var origin := muzzle.global_position
 	fired.emit(origin, normalized_direction, enemy_owned, projectile_damage, weapon_id)
-	Events.weapon_fired.emit(origin, normalized_direction, enemy_owned)
+	Events.weapon_fired.emit(origin, normalized_direction, enemy_owned, weapon_id)
+	Events.combat_noise.emit(origin, hearing_radius, "gunshot")
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	return true
 

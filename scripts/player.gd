@@ -21,14 +21,15 @@ func _physics_process(delta: float) -> void:
 		push_contact_bodies(death_velocity)
 		return
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	velocity = velocity.lerp(input_direction * move_speed, 1.0 - exp(-18.0 * delta))
+	velocity = input_direction * move_speed
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
 	var aim := get_global_mouse_position() - global_position
 	if aim.length_squared() > 0.001:
 		rotation = aim.angle()
-	if Input.is_action_pressed("shoot"):
+	var wants_to_fire := Input.is_action_pressed("shoot") if gun.automatic else Input.is_action_just_pressed("shoot")
+	if wants_to_fire:
 		if cleanup_mode:
 			clean_requested.emit(get_global_mouse_position())
 		else:

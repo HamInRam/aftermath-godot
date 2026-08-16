@@ -2,7 +2,7 @@ extends CharacterBody2D
 
 signal blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool)
 
-@export var speed := 295.0
+@export var speed := 650.0
 var direction := Vector2.RIGHT
 var enemy_owned := false
 var damage := 1
@@ -11,12 +11,13 @@ var weapon_id := "pistol"
 var spawn_position := Vector2.ZERO
 var travel_distance := 0.0
 
-func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO) -> void:
+func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0) -> void:
 	direction = dir.normalized()
 	enemy_owned = is_enemy_bullet
 	damage = hit_damage
 	weapon_id = source_weapon
 	spawn_position = origin
+	speed = projectile_speed
 	rotation = direction.angle()
 	velocity = direction * speed
 

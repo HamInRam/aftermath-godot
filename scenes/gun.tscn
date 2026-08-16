@@ -52,3 +52,11 @@ volume_db = -10.0
 
 [node name="DryFireAudio" type="AudioStreamPlayer" parent="."]
 volume_db = -8.0
+
+[node name="MechanicalAudio" type="AudioStreamPlayer" parent="."]
+volume_db = -21.0
+max_polyphony = 8
+
+[node name="PunchAudio" type="AudioStreamPlayer" parent="."]
+volume_db = -17.0
+max_polyphony = 8

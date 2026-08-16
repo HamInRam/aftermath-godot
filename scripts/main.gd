@@ -5,7 +5,13 @@ const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const BULLET_SCENE := preload("res://scenes/bullet.tscn")
 const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
 const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
+const MUZZLE_FLASH_SCENE := preload("res://scenes/effects/muzzle_flash.tscn")
 const UI_DEFAULTS := preload("res://utility/scripts/ui_defaults.gd")
+const WEAPON_DATA := {
+	"pistol": preload("res://resources/weapons/pistol.tres"),
+	"smg": preload("res://resources/weapons/smg.tres"),
+	"lmg": preload("res://resources/weapons/lmg.tres")
+}
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 142)
@@ -24,6 +30,10 @@ var run_over := false
 var elapsed := 0.0
 var combo := 0
 var combo_timer := 0.0
+var pending_death_direction := Vector2.RIGHT
+var pending_death_knockback := 20.0
+var hit_stop_generation := 0
+var transitioning_cleanup := false
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -42,8 +52,8 @@ func _process(delta: float) -> void:
 	if combo_timer <= 0.0: combo = 0
 	combo_label.text = ("x%d" % combo) if combo > 1 else ""
 	if run_over: return
-	if phase == "combat" and get_tree().get_nodes_in_group("enemy").is_empty():
-		_enter_cleanup_phase()
+	if phase == "combat" and not transitioning_cleanup and get_tree().get_nodes_in_group("enemy").is_empty():
+		_begin_cleanup_transition()
 	elif phase == "cleanup":
 		var stains := get_tree().get_nodes_in_group("blood")
 		if stains.is_empty():
@@ -81,6 +91,10 @@ func _connect_events() -> void:
 	Events.reload_started.connect(_on_reload_started)
 	Events.reload_finished.connect(_on_reload_finished)
 	Events.weapon_fired.connect(_on_weapon_fired)
+	Events.door_impact.connect(_on_door_impact)
+
+func _on_door_impact(_world_position: Vector2, intensity: float) -> void:
+	trauma_camera.add_trauma(clampf(intensity * 0.13, 0.04, 0.24))
 
 func _on_ammo_updated(current: int, maximum: int, is_reloading: bool) -> void:
 	if phase == "cleanup": return
@@ -92,13 +106,18 @@ func _on_reload_started(_duration: float) -> void:
 func _on_reload_finished(_current: int, _maximum: int) -> void:
 	if phase != "cleanup": detail_label.text = "NO WITNESSES."
 
-func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool) -> void:
+func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, weapon_id: String) -> void:
+	var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
 	var casing = SHELL_CASING_SCENE.instantiate()
 	add_child(casing)
 	var perpendicular := direction.rotated(PI * 0.5)
 	casing.global_position = origin - direction * randf_range(4.5, 7.5) + perpendicular * randf_range(-1.8, 1.8)
 	casing.rotation = randf_range(-PI, PI)
 	casing.setup(direction, enemy_owned)
+	var flash = MUZZLE_FLASH_SCENE.instantiate()
+	flash.global_position = origin
+	flash.setup(direction, data.muzzle_flash_size, data.muzzle_flash_duration)
+	add_child(flash)
 
 func _start_run() -> void:
 	status_label.text = "AFTERMATH // " + level_title
@@ -126,12 +145,13 @@ func _spawn_enemy(pos: Vector2) -> void:
 
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return
+	var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = origin
 	bullet.blood_impact.connect(_on_blood_impact)
-	bullet.setup(direction, enemy_owned, damage, weapon_id, origin)
+	bullet.setup(direction, enemy_owned, damage, weapon_id, origin, data.bullet_speed)
 	add_child(bullet)
-	trauma_camera.add_trauma(0.07 if enemy_owned else 0.11)
+	trauma_camera.add_trauma(data.camera_shake * (0.1 if enemy_owned else 0.14))
 
 func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	enemies_killed += 1
@@ -140,18 +160,41 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	trauma_camera.add_trauma(0.42)
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.global_position = pos
-	corpse.setup(facing)
+	corpse.setup(facing, pending_death_direction, pending_death_knockback)
 	add_child(corpse)
 	status_label.text = "TARGETS // %02d/%02d" % [enemies_killed, started_enemy_count]
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
 	blood_system.emit_hit(hit_position, direction, damage, weapon_id, travel_distance, lethal)
+	if lethal:
+		var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
+		pending_death_direction = direction
+		pending_death_knockback = data.knockback
+		_trigger_hit_stop(data.hit_stop)
+
+func _trigger_hit_stop(duration: float) -> void:
+	if duration <= 0.0: return
+	hit_stop_generation += 1
+	var generation := hit_stop_generation
+	Engine.time_scale = 0.05
+	await get_tree().create_timer(duration, true, false, true).timeout
+	if generation == hit_stop_generation: Engine.time_scale = 1.0
 
 func _on_player_died() -> void:
 	run_over = true
-	trauma_camera.add_trauma(0.78)
+	trauma_camera.add_trauma(1.0)
+	_trigger_death_flash()
 	status_label.text = "YOU ARE DEAD"
 	detail_label.text = "R TO RESTART"
+
+func _trigger_death_flash() -> void:
+	var flash := $DeathPresentation/Flash as ColorRect
+	flash.color = Color(0.85, 0.03, 0.08, 0.48)
+	var tween := create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS).set_ignore_time_scale(true)
+	tween.tween_property(flash, "color", Color(0.18, 0.18, 0.2, 0.0), 0.22)
+
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 
 func _enter_cleanup_phase() -> void:
 	phase = "cleanup"
@@ -160,6 +203,13 @@ func _enter_cleanup_phase() -> void:
 	status_label.text = "CLEANUP REQUIRED"
 	detail_label.text = "GET CLOSE // HOLD LMB"
 	ammo_label.text = "MOP"
+
+func _begin_cleanup_transition() -> void:
+	transitioning_cleanup = true
+	await get_tree().create_timer(0.42, true, false, true).timeout
+	if not is_inside_tree() or run_over: return
+	Events.combat_ended.emit()
+	_enter_cleanup_phase()
 
 func _on_clean_requested(world_position: Vector2) -> void:
 	if phase != "cleanup" or run_over: return
