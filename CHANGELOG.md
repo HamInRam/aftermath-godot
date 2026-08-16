@@ -67,6 +67,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Context-sensitive center-screen `[ SPACE ] EXECUTE` prompt near a knocked-down enemy.
 - Explicit E-key door activation with current CharacterBody2D movement speed mapped continuously to swing force, noise and impact feedback.
 - Passive body contact no longer opens doors; standing interaction is gentle while a full-speed interaction produces a violent slam.
+- Corrected door-side math to use the panel normal, ensuring every E interaction swings away from the player instead of becoming body-blocked.
+- Door damage now requires at least 0.035 radians of measured physical rotation; commanded angular velocity alone can no longer knock down an enemy behind a stationary door.
 - Thirty-piece directional pixel splinter burst and stronger opening trauma on the first high-speed body impact.
 
 ### Changed

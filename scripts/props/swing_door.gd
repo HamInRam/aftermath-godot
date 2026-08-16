@@ -13,19 +13,33 @@ const SPLINTER_SCENE := preload("res://scenes/effects/door_splinters.tscn")
 var impact_cooldown := 0.0
 var splinter_cooldown := 0.0
 var projectile_lethal_window := 0.0
+var measured_angular_speed := 0.0
+var swing_travel := 0.0
+var last_rotation := 0.0
+var hit_bodies := {}
 
 func _ready() -> void:
 	contact_monitor = true
 	max_contacts_reported = 8
-	$HitArea.body_entered.connect(_on_body_entered)
+	last_rotation = rotation
 
 func _physics_process(delta: float) -> void:
 	impact_cooldown = maxf(0.0, impact_cooldown - delta)
 	splinter_cooldown = maxf(0.0, splinter_cooldown - delta)
 	projectile_lethal_window = maxf(0.0, projectile_lethal_window - delta)
+	var rotation_step := absf(angle_difference(last_rotation, rotation))
+	measured_angular_speed = rotation_step / maxf(delta, 0.0001)
+	swing_travel += rotation_step
+	last_rotation = rotation
+	if swing_travel >= 0.035 and measured_angular_speed >= 0.45:
+		for body in $HitArea.get_overlapping_bodies():
+			if body.is_in_group("enemy") and not hit_bodies.has(body.get_instance_id()):
+				hit_bodies[body.get_instance_id()] = true
+				_apply_door_hit(body, measured_angular_speed)
 
 func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -> void:
 	freeze = false
+	_begin_swing_tracking()
 	projectile_lethal_window = 0.22
 	kick_door(world_point, impact_velocity.normalized(), projectile_push_scale)
 	_spawn_splinters(impact_velocity.normalized())
@@ -38,37 +52,41 @@ func receive_actor_push(push_velocity: Vector2, world_point: Vector2) -> void:
 func slam_door(pusher_position: Vector2, pusher_velocity: Vector2, fallback_direction: Vector2) -> void:
 	if absf(angular_velocity) > 0.65: return
 	var speed_ratio := clampf(pusher_velocity.length() / 115.0, 0.0, 1.0)
-	var side := signf((pusher_position - global_position).dot(Vector2.RIGHT.rotated(global_rotation).orthogonal()))
+	var side_normal := Vector2.RIGHT.rotated(global_rotation)
+	var side := signf((pusher_position - global_position).dot(side_normal))
 	if is_zero_approx(side): side = 1.0
-	var tangent := Vector2.RIGHT.rotated(global_rotation) * -side
-	var push_direction := pusher_velocity.normalized() if pusher_velocity.length_squared() > 1.0 else fallback_direction.normalized()
-	if push_direction.dot(tangent) < 0.2: push_direction = tangent
-	var leaf_point := global_position + Vector2(0, 14).rotated(global_rotation)
+	var push_direction := -side_normal * side
 	freeze = false
-	var swing_sign := signf((leaf_point - global_position).cross(push_direction))
-	if is_zero_approx(swing_sign): swing_sign = -side
-	angular_velocity = swing_sign * lerpf(0.8, max_angular_speed * 0.9, speed_ratio)
+	_begin_swing_tracking()
+	angular_velocity = side * lerpf(0.8, max_angular_speed * 0.9, speed_ratio)
 	if speed_ratio > 0.65: _spawn_splinters(push_direction)
 	_emit_impact_feedback(lerpf(1.05, 1.55, speed_ratio), lerpf(65.0, 120.0, speed_ratio), 0.3)
 
 func kick_door(impact_position: Vector2, impact_direction: Vector2, force_scale := 1.0) -> void:
 	freeze = false
+	_begin_swing_tracking()
 	var lever := impact_position - global_position
 	var torque := lever.cross(impact_direction.normalized() * swing_impulse * force_scale)
 	apply_torque_impulse(torque)
 
-func _on_body_entered(body: Node) -> void:
-	if body.is_in_group("enemy") and body.has_method("take_damage") and projectile_lethal_window > 0.0 and absf(angular_velocity) >= lethal_angular_speed:
+func _begin_swing_tracking() -> void:
+	swing_travel = 0.0
+	measured_angular_speed = 0.0
+	last_rotation = rotation
+	hit_bodies.clear()
+
+func _apply_door_hit(body: Node, actual_speed: float) -> void:
+	if body.has_method("take_damage") and projectile_lethal_window > 0.0 and actual_speed >= lethal_angular_speed:
 		body.take_door_hit((body.global_position - global_position).normalized(), "kill")
 		projectile_lethal_window = 0.0
 		_spawn_splinters((body.global_position - global_position).normalized())
 		_emit_impact_feedback(1.5, 110.0, 0.18)
 		angular_velocity *= 0.3
-	elif body.is_in_group("enemy") and body.has_method("take_door_hit") and absf(angular_velocity) >= knockdown_angular_speed:
+	elif body.has_method("take_door_hit") and actual_speed >= knockdown_angular_speed:
 		body.take_door_hit((body.global_position - global_position).normalized(), "knockdown")
 		_emit_impact_feedback(1.35, 105.0, 0.18)
 		angular_velocity *= 0.35
-	elif body.is_in_group("enemy") and body.has_method("apply_stagger") and absf(angular_velocity) >= 0.45:
+	elif body.has_method("apply_stagger") and actual_speed >= 0.45:
 		var push_direction := Vector2.RIGHT.rotated(global_rotation) * signf(angular_velocity)
 		body.apply_stagger(push_direction, 0.55)
 		_emit_impact_feedback(1.2, 85.0, 0.2)
