@@ -15,6 +15,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Weapon-shaped directional blood, progressively expanding death pools, modular corpse wounds and physics-driven pixel gore chunks
 - Globally visible stage lighting with fixed right-down pixel shadows and window-aware shadow breaks; no hue-cycling background
 - Original high-contrast Nightclub interior with room-specific floors, bright wall trim, dense furnishings and matching fake shadows
+- Subtle position-driven camera tilt with mirrored directions, a stable center dead zone and smoothed transitions
 
 ## Phase 1 foundation
 
@@ -73,7 +74,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Bullet trails, firing flash and screen shake
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
 - Smooth bounded camera framing between the player and cursor for forward visibility
-- Pixel-snapped positional screen shake without blur-inducing camera rotation
+- Pixel-snapped positional screen shake plus a separate restrained 1.4-degree location-driven camera tilt
 - Standalone global-coordinate death particles that remain independent of actor rotation
 - Hinged RigidBody2D doors with static frames, PinJoint2D anchors and actor/projectile push impulses
 - Corpses, directional persistent blood pools and wall splatter
