@@ -12,6 +12,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Shared `Actor` base script with HP, movement and `take_damage()`
 - Player and enemy scenes inherit the Actor framework
 - Reusable child `Gun` scene owns the 0.1-second fire rate, ammo and projectile emission
+- Randomized fire timing, pitch-varied gunshots, timed reload and dry-fire feedback
+- Autoload event bus keeps gun state, UI and persistent shell casings decoupled
 - Bullets are independent `CharacterBody2D` scenes with a 2x2 collision box
 - Player art uses an imported transparent 16x16 PNG on a `Sprite2D`, with nearest filtering
 
@@ -39,6 +41,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Bullet trails, firing flash and screen shake
 - Corpses, directional persistent blood pools and wall splatter
 - Modular weapon-aware blood mist and animated impact droplets
+- Runtime-synthesized blood-splat audio on lethal impact stains
 - Enemy alert, pursuit, retreat and strafing behavior
 - Ammo, reload, combo, kill and cleanup HUD states
 - Combat-to-cleanup narrative transition

@@ -4,3 +4,16 @@
 
 [node name="Gun" type="Node2D"]
 script = ExtResource("1_gun")
+
+[node name="ReloadTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="ShotAudio" type="AudioStreamPlayer" parent="."]
+max_polyphony = 8
+volume_db = -7.0
+
+[node name="ReloadAudio" type="AudioStreamPlayer" parent="."]
+volume_db = -10.0
+
+[node name="DryFireAudio" type="AudioStreamPlayer" parent="."]
+volume_db = -8.0

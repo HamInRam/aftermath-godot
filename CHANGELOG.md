@@ -17,6 +17,12 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Short-lived blood mist and animated droplets on actor impact.
 - Persistent directional ground splatter and raycast-driven wall splatter.
 - Weapon, damage, lethality and projectile-distance scaling for blood intensity.
+- Runtime-synthesized gunshot, reload, dry-fire and blood-splat audio effects.
+- Per-shot pitch variation and randomized fire interval for less robotic weapons.
+- Persistent 2×1 pixel shell casings with ejection motion and settled floor state.
+- Dedicated reload timer with reload state feedback and delayed ammo refill.
+- Autoload Events signal bus for decoupled ammo, reload and weapon-fire updates.
+- Explicit Z-index layering for stains, shell casings, corpses, actors and blood mist.
 
 ### Changed
 

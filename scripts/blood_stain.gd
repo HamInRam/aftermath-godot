@@ -1,5 +1,7 @@
 extends Node2D
 
+const AUDIO_FACTORY := preload("res://utility/scripts/audio_factory.gd")
+
 var amount := 1.0
 var lobes: Array[Dictionary] = []
 var streaks: Array[Dictionary] = []
@@ -9,9 +11,9 @@ var base_intensity := 1.0
 
 func _ready() -> void:
 	if not configured:
-		setup(Vector2.RIGHT.rotated(randf_range(0.0, TAU)), 1.0, false)
+		setup(Vector2.RIGHT.rotated(randf_range(0.0, TAU)), 1.0, false, false)
 
-func setup(spray_direction: Vector2, intensity: float, on_wall: bool) -> void:
+func setup(spray_direction: Vector2, intensity: float, on_wall: bool, play_splat := false) -> void:
 	configured = true
 	wall_stain = on_wall
 	base_intensity = clampf(intensity, 0.5, 2.8)
@@ -26,6 +28,11 @@ func setup(spray_direction: Vector2, intensity: float, on_wall: bool) -> void:
 		lobes.append({"position": position, "radius": radius, "dark": i % 5 == 0})
 		if i % 3 == 0:
 			streaks.append({"start": position * randf_range(0.15, 0.5), "end": position, "width": maxf(0.4, radius * 0.55)})
+	if play_splat:
+		$SplatAudio.stream = AUDIO_FACTORY.create_splat()
+		$SplatAudio.pitch_scale = randf_range(0.88, 1.08)
+		$SplatAudio.volume_db = lerpf(-13.0, -7.0, clampf(base_intensity / 2.8, 0.0, 1.0))
+		$SplatAudio.play()
 	queue_redraw()
 
 func clean_step() -> void:

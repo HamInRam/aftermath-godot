@@ -4,6 +4,7 @@ const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const BULLET_SCENE := preload("res://scenes/bullet.tscn")
 const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
+const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
 const UI_DEFAULTS := preload("res://utility/scripts/ui_defaults.gd")
 
 var phase := "combat"
@@ -33,6 +34,7 @@ func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color("0e0c10"))
 	_create_world()
 	_create_ui()
+	_connect_events()
 	_start_run()
 	queue_redraw()
 
@@ -44,8 +46,6 @@ func _process(delta: float) -> void:
 	combo_timer -= delta
 	if combo_timer <= 0.0: combo = 0
 	queue_redraw()
-	if is_instance_valid(player) and not player.is_dead:
-		ammo_label.text = "%02d/%02d" % [player.gun.ammo, player.gun.max_ammo]
 	combo_label.text = ("x%d" % combo) if combo > 1 else ""
 	if run_over: return
 	if phase == "combat" and get_tree().get_nodes_in_group("enemy").is_empty():
@@ -124,6 +124,28 @@ func _create_ui() -> void:
 	combo_label = _make_label(canvas, Vector2(270, 12), 9, Color("ff3d78"))
 	var controls := _make_label(canvas, Vector2(10, 166), 5, Color("86788b"))
 	controls.text = "WASD MOVE // MOUSE AIM // LMB FIRE // R RELOAD"
+
+func _connect_events() -> void:
+	Events.ammo_updated.connect(_on_ammo_updated)
+	Events.reload_started.connect(_on_reload_started)
+	Events.reload_finished.connect(_on_reload_finished)
+	Events.weapon_fired.connect(_on_weapon_fired)
+
+func _on_ammo_updated(current: int, maximum: int, is_reloading: bool) -> void:
+	if phase == "cleanup": return
+	ammo_label.text = "RELOAD" if is_reloading else "%02d/%02d" % [current, maximum]
+
+func _on_reload_started(_duration: float) -> void:
+	if phase != "cleanup": detail_label.text = "RELOADING..."
+
+func _on_reload_finished(_current: int, _maximum: int) -> void:
+	if phase != "cleanup": detail_label.text = "NO WITNESSES."
+
+func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool) -> void:
+	var casing = SHELL_CASING_SCENE.instantiate()
+	add_child(casing)
+	casing.global_position = origin - direction * 6.0
+	casing.setup(direction, enemy_owned)
 
 func _start_run() -> void:
 	status_label.text = "AFTERMATH // FLOOR 01"

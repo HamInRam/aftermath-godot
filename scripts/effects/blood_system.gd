@@ -31,7 +31,7 @@ func _spawn_ground_splatter(hit_position: Vector2, direction: Vector2, intensity
 	var stain = BLOOD_STAIN_SCENE.instantiate()
 	add_child(stain)
 	stain.global_position = hit_position + direction * randf_range(1.5, 3.0)
-	stain.setup(direction, intensity, false)
+	stain.setup(direction, intensity, false, true)
 
 func _spawn_wall_splatter(hit_position: Vector2, direction: Vector2, intensity: float, reach: float) -> void:
 	var query := PhysicsRayQueryParameters2D.create(hit_position, hit_position + direction * reach, 2)
@@ -40,4 +40,4 @@ func _spawn_wall_splatter(hit_position: Vector2, direction: Vector2, intensity: 
 	var stain = BLOOD_STAIN_SCENE.instantiate()
 	add_child(stain)
 	stain.global_position = result.position - direction * 0.8
-	stain.setup(direction, intensity * 0.82, true)
+	stain.setup(direction, intensity * 0.82, true, false)
