@@ -5,6 +5,7 @@ extends RigidBody2D
 @export_range(0.1, 12.0, 0.1) var projectile_push_scale := 7.5
 @export_range(0.25, 1.55, 0.05) var max_open_angle := 1.4
 @export_range(1.0, 10.0, 0.25) var max_angular_speed := 5.0
+@export_range(0.5, 5.0, 0.1) var lethal_angular_speed := 2.2
 var impact_cooldown := 0.0
 
 func _ready() -> void:
@@ -29,7 +30,10 @@ func receive_actor_push(push_velocity: Vector2, world_point: Vector2) -> void:
 		_emit_impact_feedback(1.2, 65.0, 0.4)
 
 func _on_body_entered(body: Node) -> void:
-	if body.is_in_group("enemy") and body.has_method("apply_stagger") and absf(angular_velocity) >= 0.45:
+	if body.is_in_group("enemy") and body.has_method("take_damage") and absf(angular_velocity) >= lethal_angular_speed:
+		body.take_damage(1, global_position)
+		_emit_impact_feedback(1.5, 110.0, 0.18)
+	elif body.is_in_group("enemy") and body.has_method("apply_stagger") and absf(angular_velocity) >= 0.45:
 		var push_direction := Vector2.RIGHT.rotated(global_rotation) * signf(angular_velocity)
 		body.apply_stagger(push_direction, 0.55)
 		_emit_impact_feedback(1.2, 85.0, 0.2)

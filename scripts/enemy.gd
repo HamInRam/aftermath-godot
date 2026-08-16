@@ -55,6 +55,7 @@ var player_in_sight := false
 var chase_lost_time := 0.0
 var melee_cooldown := 0.0
 var melee_swing_time := 0.0
+var is_fixed_sentry := false
 
 func _ready() -> void:
 	super._ready()
@@ -219,6 +220,10 @@ func configure_combat(type_name: String) -> void:
 	gun.visible = uses_gun
 	gun.set_process(uses_gun)
 
+func configure_fixed_sentry() -> void:
+	is_fixed_sentry = true
+	configure_patrol(PackedVector2Array())
+
 func _execute_melee_attack() -> void:
 	if melee_cooldown > 0.0 or not is_instance_valid(player) or player.is_dead: return
 	melee_cooldown = melee_interval
@@ -291,7 +296,7 @@ func _has_direct_line_to_player() -> bool:
 	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
 func _on_combat_noise(world_position: Vector2, radius: float, _source_kind: String) -> void:
-	if is_dead or state == State.CHASE: return
+	if is_dead or state in [State.CHASE, State.STAGGERED] or is_fixed_sentry: return
 	var effective_distance := global_position.distance_to(world_position)
 	if effective_distance > radius: return
 	var query := PhysicsRayQueryParameters2D.create(global_position, world_position, 32)

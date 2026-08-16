@@ -77,7 +77,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 ## Levels and AI
 
-- Debug title menu loads the Nightclub or Sandwich Shop directly
+- Debug title menu loads the Nightclub, Sandwich Shop or Tactical Lab directly
+- Tactical Lab menu entry provides a focused four-room combat puzzle for door breaches, glass crossfire, blind corners, patrol baiting and fixed-sentry counterplay
 - Sandwich Shop has independent layered floors, walls, objects, lighting and spawn configuration
 - Enemy routes use an AStarGrid2D generated from solid wall cells
 - Enemy vision uses distance/angle broad-phase checks followed by an opaque-only 2D raycast; `debug_draw_vision` exposes the tuning cone
@@ -86,6 +87,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Patrol routes span 48–64px, use A* instead of blind straight-line motion, and pause 0.5–1.5 seconds at each waypoint
 - Unroutable guards become stationary sentries that smoothly scan ±45 degrees; soft obstacle costs reduce furniture and corner rubbing
 - Human/dog AI profiles support faster dog reaction and direct open-room pursuit when dedicated dog content is added
+- Fixed sentries ignore sound bait but still acquire and attack visible players; fast door panels kill while slower impacts stagger
 - Enemies outside detection range decelerate to rest instead of jittering toward the player
 - Ammo UI republishes the equipped gun state whenever a level finishes loading
 

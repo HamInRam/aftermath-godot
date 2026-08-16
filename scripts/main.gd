@@ -18,6 +18,7 @@ const WEAPON_DATA := {
 @export var enemy_spawns := PackedVector2Array([Vector2(45, 47), Vector2(130, 28), Vector2(170, 64), Vector2(230, 38), Vector2(280, 62), Vector2(125, 108), Vector2(180, 147), Vector2(230, 113), Vector2(280, 147)])
 @export var enemy_patrol_offsets := PackedVector2Array([Vector2(0, 48), Vector2(56, 0), Vector2(0, 48), Vector2(64, 0), Vector2(-48, 0), Vector2(48, 0), Vector2(56, 0), Vector2(0, 56), Vector2(56, 0)])
 @export var enemy_types := PackedStringArray(["melee", "gunner", "gunner", "gunner", "gunner", "melee", "gunner", "gunner", "gunner"])
+@export var fixed_sentry_indices := PackedInt32Array()
 @export var doors_enabled := true
 
 var phase := "combat"
@@ -161,7 +162,9 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	enemy.global_position = pos
 	enemy.debug_draw_vision = vision_debug_enabled
 	if patrol_index >= 0 and patrol_index < enemy_types.size(): enemy.configure_combat(enemy_types[patrol_index])
-	if patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size():
+	if patrol_index in fixed_sentry_indices:
+		enemy.configure_fixed_sentry()
+	elif patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size():
 		enemy.configure_patrol(PackedVector2Array([pos, pos + enemy_patrol_offsets[patrol_index]]))
 
 func _toggle_vision_debug() -> void:
