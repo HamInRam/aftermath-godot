@@ -1,6 +1,6 @@
 extends "res://scripts/actor.gd"
 
-signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int)
+signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 signal clean_requested(world_position: Vector2)
 signal died
 
@@ -16,11 +16,15 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if is_dead:
 		velocity = velocity.move_toward(Vector2.ZERO, 220.0 * delta)
+		var death_velocity := velocity
 		move_and_slide()
+		push_contact_bodies(death_velocity)
 		return
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = velocity.lerp(input_direction * move_speed, 1.0 - exp(-18.0 * delta))
+	var intended_velocity := velocity
 	move_and_slide()
+	push_contact_bodies(intended_velocity)
 	var aim := get_global_mouse_position() - global_position
 	if aim.length_squared() > 0.001:
 		rotation = aim.angle()
@@ -37,8 +41,8 @@ func set_cleanup_mode(enabled: bool) -> void:
 	gun.visible = not enabled
 	queue_redraw()
 
-func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int) -> void:
-	projectile_requested.emit(origin, direction, enemy_owned, damage)
+func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
+	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
 
 func _on_actor_died(source_position: Vector2) -> void:
 	if source_position != Vector2.ZERO:

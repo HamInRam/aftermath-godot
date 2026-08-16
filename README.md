@@ -5,15 +5,24 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 ## Phase 1 foundation
 
 - Native `320x180` viewport, displayed at `960x540` with 3x viewport scaling
-- Borderless game window and a solid high-contrast viewport clear color
+- Standard framed game window and a solid high-contrast viewport clear color
 - Pixel snapping and nearest-neighbor texture filtering
+- Integer-only viewport scaling and whole-pixel dynamic camera movement for crisp presentation
 - Explicit Input Map actions for WASD, mouse shooting and reload
 - Imported utility folder with reusable UI defaults, a custom Theme and system-font configuration
 - Shared `Actor` base script with HP, movement and `take_damage()`
 - Player and enemy scenes inherit the Actor framework
 - Reusable child `Gun` scene owns the 0.1-second fire rate, ammo and projectile emission
+- Swappable GunData resources configure pistol and SMG capacity, damage, timing and reload
+- Randomized fire timing, pitch-varied gunshots, timed reload and dry-fire feedback
+- AnimationPlayer kickback and barrel-tip Marker2D projectile spawning
+- Pistol, SMG and high-damage 60-round LMG GunData configurations
+- Per-weapon trajectory spread for distinct pistol, SMG and LMG handling
+- Autoload event bus keeps gun state, UI and persistent shell casings decoupled
+- Spatial shell-casing landing audio varies by ejection speed, pitch and occasional bounce
 - Bullets are independent `CharacterBody2D` scenes with a 2x2 collision box
 - Player art uses an imported transparent 16x16 PNG on a `Sprite2D`, with nearest filtering
+- Enemy art uses a distinct imported 16x16 PNG, and SMG enemies carry a dedicated AK-style pixel sprite
 
 ## Controls
 
@@ -21,6 +30,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Mouse — aim
 - Hold left mouse — fire / scrub during cleanup
 - `R` — reload; restart after death or completion
+- `Esc` — return to the debug room-select menu
 
 ## Game loop
 
@@ -31,13 +41,32 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 5. When combat ends, switch to cleanup mode.
 6. Remove every procedurally shaped blood pool.
 
+## Levels and AI
+
+- Debug title menu loads the Nightclub or Sandwich Shop directly
+- Sandwich Shop has independent layered floors, walls, objects, lighting and spawn configuration
+- Enemy routes use an AStarGrid2D generated from solid wall cells
+- Enemies outside detection range decelerate to rest instead of jittering toward the player
+- Ammo UI republishes the equipped gun state whenever a level finishes loading
+
 ## Implemented presentation
 
-- Pixel-snapped procedural art and room textures
-- Checkerboard, wood, wallpaper, grass and tiled zones
-- Layered red, green and magenta lighting pools
+- Imported 8×8 pixel-art tile atlas with concrete, wood, red carpet, dark tile and grass floor variants
+- Editable `TileMap` hierarchy with independent `Floor`, `Walls` and `Decoration` TileMapLayer nodes
+- Grid-built rooms with open doorways, window sections and a stairwell marker
+- Wall/window TileSet physics that stops actors and projectiles
+- CanvasModulate night grading with four colored PointLight2D atmosphere pools
 - Bullet trails, firing flash and screen shake
-- Corpses and randomized persistent blood pools
+- Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
+- Smooth bounded camera framing between the player and cursor for forward visibility
+- Pixel-snapped positional screen shake without blur-inducing camera rotation
+- Standalone global-coordinate death particles that remain independent of actor rotation
+- Hinged RigidBody2D doors with static frames, PinJoint2D anchors and actor/projectile push impulses
+- Corpses, directional persistent blood pools and wall splatter
+- Modular weapon-aware blood mist and animated impact droplets
+- Field-recorded CC0 blood-splat audio on lethal impact stains
+- Auditable external audio provenance in `AUDIO_LICENSES.md`
+- One-shot GPU death-blood particles that outlive the defeated enemy node
 - Enemy alert, pursuit, retreat and strafing behavior
 - Ammo, reload, combo, kill and cleanup HUD states
 - Combat-to-cleanup narrative transition

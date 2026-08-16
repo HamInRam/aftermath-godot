@@ -4,3 +4,6 @@
 
 [node name="BloodStain" type="Node2D" groups=["blood"]]
 script = ExtResource("1_blood")
+
+[node name="SplatAudio" type="AudioStreamPlayer" parent="."]
+max_polyphony = 3

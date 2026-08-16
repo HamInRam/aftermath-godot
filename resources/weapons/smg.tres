@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="GunData" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/gun_data.gd" type="Script" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+weapon_id = "smg"
+display_name = "SMG"
+ammo_capacity = 30
+damage = 1
+fire_interval = 0.065
+fire_interval_variance = 0.012
+spread_degrees = 3.0
+reload_duration = 1.65
+pitch_min = 0.96
+pitch_max = 1.14
+blood_power = 0.72
