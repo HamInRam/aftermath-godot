@@ -51,6 +51,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Replaced the procedural environment renderer with an editable layered TileMap workflow.
 - Enemy placeholder drawing was replaced by imported pixel art; pistol and SMG weapons now use distinct visuals.
 - Weapon rendering moved to an animated pivot shared by sprites and muzzle placement.
+- Character slide collisions now continuously transfer force to pushable rigid bodies instead of relying only on the initial contact event.
+- Increased door impact response and reduced angular damping so doors open clearly under player and projectile force.
 
 ### Validation
 
@@ -59,3 +61,4 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Environment smoke test verified layer population, wall physics, projectile-blocking collision and shot-only camera trauma.
 - Presentation smoke test verified four colored lights, both 16×16 actor textures, the AK sprite and bounded player/cursor camera targeting.
 - Mechanics smoke test verified LMG data, standalone particles, muzzle-origin shooting, kick animation and projectile-driven door torque.
+- Door regression test now simulates sustained CharacterBody2D contact and verifies resulting hinge rotation.

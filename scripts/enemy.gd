@@ -37,6 +37,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity = direction.rotated(PI * 0.5) * move_speed * 0.32 * strafe_sign
 	move_and_slide()
+	push_contact_bodies()
 	if distance <= shoot_range and alertness >= 0.8:
 		if gun.ammo <= 0 and not gun.is_reloading: gun.reload()
 		if gun.try_fire(direction): gun.cooldown += randf_range(0.35, 0.75)

@@ -17,10 +17,12 @@ func _physics_process(delta: float) -> void:
 	if is_dead:
 		velocity = velocity.move_toward(Vector2.ZERO, 220.0 * delta)
 		move_and_slide()
+		push_contact_bodies()
 		return
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = velocity.lerp(input_direction * move_speed, 1.0 - exp(-18.0 * delta))
 	move_and_slide()
+	push_contact_bodies()
 	var aim := get_global_mouse_position() - global_position
 	if aim.length_squared() > 0.001:
 		rotation = aim.angle()
