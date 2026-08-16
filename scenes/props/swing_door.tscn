@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource path="res://scripts/props/swing_door.gd" type="Script" id="1_door"]
 [ext_resource path="res://scripts/effects/fake_polygon_shadow.gd" type="Script" id="2_shadow"]
@@ -9,9 +9,12 @@ size = Vector2(4, 16)
 [sub_resource type="RectangleShape2D" id="RectangleShape_frame"]
 size = Vector2(6, 3)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape_hit"]
+size = Vector2(6, 18)
+
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_door"]
 friction = 0.65
-bounce = 0.08
+bounce = 0.22
 
 [node name="SwingDoor" type="Node2D"]
 
@@ -43,6 +46,8 @@ color = Color(0.18, 0.13, 0.2, 1)
 collision_layer = 36
 collision_mask = 19
 mass = 0.7
+freeze = true
+continuous_cd = 2
 physics_material_override = SubResource("PhysicsMaterial_door")
 gravity_scale = 0.0
 linear_damp = 5.0
@@ -52,6 +57,15 @@ script = ExtResource("1_door")
 [node name="PanelCollision" type="CollisionShape2D" parent="Door"]
 position = Vector2(0, 8)
 shape = SubResource("RectangleShape_panel")
+
+[node name="HitArea" type="Area2D" parent="Door"]
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="HitCollision" type="CollisionShape2D" parent="Door/HitArea"]
+position = Vector2(0, 8)
+shape = SubResource("RectangleShape_hit")
 
 [node name="FakeShadow" type="Polygon2D" parent="Door"]
 z_index = -1

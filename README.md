@@ -21,7 +21,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Enemy gunfire reuses GunData, muzzle, spread, ammo/reload, audio-bus and projectile systems; melee guards hide firearms and display a swing arc
 - Nearest-sampled CRT/vignette/chromatic post-processing, WorldEnvironment glow/contrast/saturation and subtle ambient camera drift
 - HUD renders above post-processing so text remains undistorted
-- Fast physics doors that can stagger enemies without uncontrolled angular acceleration
+- Frozen-until-contact physics doors with cast-shape CCD, a widened sweep detector and stable hinged rebound
+- Three impact tiers: stagger, three-second directional knockdown, and lethal high-speed breach, with loud AI alerts and wood splinters
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability
 - Abrupt combat-to-cleanup silence interface after the final kill
@@ -87,7 +88,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Patrol routes span 48–64px, use A* instead of blind straight-line motion, and pause 0.5–1.5 seconds at each waypoint
 - Unroutable guards become stationary sentries that smoothly scan ±45 degrees; soft obstacle costs reduce furniture and corner rubbing
 - Human/dog AI profiles support faster dog reaction and direct open-room pursuit when dedicated dog content is added
-- Fixed sentries ignore sound bait but still acquire and attack visible players; fast door panels kill while slower impacts stagger
+- Fixed sentries ignore sound bait but still acquire and attack visible players; door panels stagger, knock down or kill according to angular speed
 - Enemies outside detection range decelerate to rest instead of jittering toward the player
 - Ammo UI republishes the equipped gun state whenever a level finishes loading
 
@@ -104,7 +105,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Static deep-color exterior backdrop visible through unpainted space around the room structure
 - Pixel-snapped positional screen shake plus a separate restrained 1.4-degree location-driven camera tilt
 - Standalone global-coordinate death particles that remain independent of actor rotation
-- Hinged RigidBody2D doors with static frames, PinJoint2D anchors and actor/projectile push impulses
+- Hinged RigidBody2D doors with static frames, PinJoint2D anchors, actor/projectile torque, CCD and enlarged enemy sweep areas
 - Corpses, directional persistent blood pools and wall splatter
 - Modular weapon-aware blood mist and animated impact droplets
 - Field-recorded CC0 blood-splat audio on lethal impact stains

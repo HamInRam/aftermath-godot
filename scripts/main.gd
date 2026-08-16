@@ -113,6 +113,7 @@ func _connect_events() -> void:
 
 func _on_door_impact(_world_position: Vector2, intensity: float) -> void:
 	trauma_camera.add_trauma(clampf(intensity * 0.13, 0.04, 0.24))
+	if intensity >= 1.4: _on_impact_flash_requested(Color(1.0, 0.92, 0.8, 0.18))
 
 func _on_ammo_updated(current: int, maximum: int, is_reloading: bool) -> void:
 	if phase == "cleanup": return

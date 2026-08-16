@@ -26,7 +26,7 @@ signal died_at(world_position: Vector2, facing: float)
 @export_range(0.2, 4.0, 0.1) var chase_memory_duration := 1.5
 @onready var gun = $Gun
 
-enum State { IDLE, INVESTIGATE, CHASE, STAGGERED }
+enum State { IDLE, INVESTIGATE, CHASE, STAGGERED, KNOCKED_DOWN }
 enum PatrolMode { MOVING, WAITING, SENTRY }
 
 var player: CharacterBody2D
@@ -56,6 +56,7 @@ var chase_lost_time := 0.0
 var melee_cooldown := 0.0
 var melee_swing_time := 0.0
 var is_fixed_sentry := false
+var knockdown_time := 0.0
 
 func _ready() -> void:
 	super._ready()
@@ -91,6 +92,17 @@ func _physics_process(delta: float) -> void:
 		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
 		if stagger_time <= 0.0:
 			_begin_investigation(global_position, 0.6)
+		return
+	if state == State.KNOCKED_DOWN:
+		knockdown_time -= delta
+		var knockdown_velocity := velocity
+		move_and_slide()
+		push_contact_bodies(knockdown_velocity)
+		velocity = velocity.move_toward(Vector2.ZERO, 260.0 * delta)
+		if knockdown_time <= 0.0:
+			state = State.IDLE
+			alertness = 0.0
+			path_points.clear()
 		return
 	var has_visual_contact := _can_see_player(distance, to_player)
 	var has_direct_line := _has_direct_line_to_player()
@@ -296,7 +308,7 @@ func _has_direct_line_to_player() -> bool:
 	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
 func _on_combat_noise(world_position: Vector2, radius: float, _source_kind: String) -> void:
-	if is_dead or state in [State.CHASE, State.STAGGERED] or is_fixed_sentry: return
+	if is_dead or state in [State.CHASE, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry: return
 	var effective_distance := global_position.distance_to(world_position)
 	if effective_distance > radius: return
 	var query := PhysicsRayQueryParameters2D.create(global_position, world_position, 32)
@@ -311,6 +323,16 @@ func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	stagger_time = duration
 	velocity = push_direction.normalized() * 62.0
 	gun.cooldown = maxf(gun.cooldown, duration)
+
+func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
+	if is_dead: return
+	if hit_type == "kill":
+		take_damage(1, global_position - hit_direction)
+		return
+	state = State.KNOCKED_DOWN
+	knockdown_time = 3.0
+	velocity = hit_direction.normalized() * 120.0
+	gun.cooldown = maxf(gun.cooldown, knockdown_time)
 
 func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
