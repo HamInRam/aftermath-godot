@@ -67,6 +67,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Context-sensitive center-screen `[ SPACE ] EXECUTE` prompt near a knocked-down enemy.
 - Zero-input door activation: any moving player or enemy slide collision instantly starts the same fixed-speed slam.
 - One-way CLOSED → SLAM_OPENING → OPEN state machine; opened doors remain open and cannot fight with a close transition.
+- Door records its initiating actor and excludes that pusher from sweep damage, preventing enemies from knocking themselves down.
+- Contact speed splits opening into a quiet 8 rad/s non-damaging push below 81 px/s and a dangerous 25 rad/s slam at or above the threshold.
 - Corrected door-side math to use the panel normal, ensuring every E interaction swings away from the player instead of becoming body-blocked.
 - Door damage is evaluated only during real deterministic SLAM_OPENING rotation, so a stationary or fully open panel cannot knock down an enemy.
 - Door-panel collision is temporarily suppressed during the initial swing and restored only after the player leaves the sweep area, preventing depenetration jitter and body pinning.

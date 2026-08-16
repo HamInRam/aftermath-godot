@@ -23,7 +23,7 @@ func push_contact_bodies(intended_velocity: Vector2) -> void:
 		var collision := get_slide_collision(collision_index)
 		var collider := collision.get_collider()
 		if collider is Node and collider.has_method("push_door_open") and intended_velocity.length_squared() > 0.01:
-			collider.push_door_open(global_position)
+			collider.push_door_open(self, intended_velocity)
 		elif collider is Node and collider.has_method("receive_actor_push"):
 			collider.receive_actor_push(intended_velocity, collision.get_position())
 
