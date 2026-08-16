@@ -32,6 +32,7 @@ var combo := 0
 var combo_timer := 0.0
 var pending_death_direction := Vector2.RIGHT
 var pending_death_knockback := 20.0
+var pending_death_blood_power := 1.0
 var hit_stop_generation := 0
 var transitioning_cleanup := false
 @onready var blood_system = $BloodSystem
@@ -160,8 +161,9 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	trauma_camera.add_trauma(0.42)
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.global_position = pos
-	corpse.setup(facing, pending_death_direction, pending_death_knockback)
+	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power)
 	add_child(corpse)
+	blood_system.spawn_death_pool(pos, pending_death_blood_power)
 	status_label.text = "TARGETS // %02d/%02d" % [enemies_killed, started_enemy_count]
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
@@ -170,6 +172,7 @@ func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, we
 		var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
 		pending_death_direction = direction
 		pending_death_knockback = data.knockback
+		pending_death_blood_power = data.blood_power
 		_trigger_hit_stop(data.hit_stop)
 
 func _trigger_hit_stop(duration: float) -> void:

@@ -17,6 +17,10 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Lightweight non-blurring scanline/grain overlay and brief player-death red flash.
 - CombatAudioDirector interface for future copyright-safe combat music and cleanup ambience.
 - Delayed 0.42-second Violence-to-Silence transition event before `CLEANUP REQUIRED`.
+- Weapon-profiled blood geometry: long line splashes for pistol, directional fans for SMG/LMG and a reusable radial profile for future shotgun attacks.
+- Slowly expanding corpse-centered blood pools that begin small and bloom over roughly 4–8 seconds.
+- Three modular firearm wound overlays for corpses with intensity-scaled blood/tissue pixels.
+- Detachable pixel gore chunks with directional flight, wall collision, spin, settling and existing cleanup compatibility.
 
 ### Changed
 
@@ -34,6 +38,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - v0.0.2 combat smoke test verifies movement, pistol tuning, projectile speed, muzzle flash, recoil, layered audio, hit stop, hearing, stagger and corpse knockback.
 - Vision regression verifies walls block sight while unobstructed targets remain detectable.
 - Nightclub completed a 600-physics-frame integration run without runtime errors or leaked time scale.
+- Gore-system regression verifies line/fan/radial patterns, lethal chunks, progressive pools, wound variants and the complete enemy-death wiring.
 
 ## [v.0.0.1] - 2026-08-16
 
