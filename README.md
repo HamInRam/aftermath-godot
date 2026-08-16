@@ -16,6 +16,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Globally visible stage lighting with fixed right-down pixel shadows and window-aware shadow breaks; no hue-cycling background
 - Original high-contrast Nightclub interior with room-specific floors, bright wall trim, dense furnishings and matching fake shadows
 - Subtle position-driven camera tilt with mirrored directions, a stable center dead zone and smoothed transitions
+- Layered architectural cutout over a static dark exterior underlay, without psychedelic hue cycling
+- Mouse-directed 0.25-weight camera lead and hold-Shift tactical look-ahead
 
 ## Phase 1 foundation
 
@@ -45,6 +47,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Mouse — aim
 - Hold left mouse — fire / scrub during cleanup
 - `R` — reload; restart after death or completion
+- Hold `Shift` — extend the camera toward the cursor
 - `Esc` — return to the debug room-select menu
 
 ## Game loop
@@ -74,6 +77,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Bullet trails, firing flash and screen shake
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
 - Smooth bounded camera framing between the player and cursor for forward visibility
+- Static deep-color exterior backdrop visible through unpainted space around the room structure
 - Pixel-snapped positional screen shake plus a separate restrained 1.4-degree location-driven camera tilt
 - Standalone global-coordinate death particles that remain independent of actor rotation
 - Hinged RigidBody2D doors with static frames, PinJoint2D anchors and actor/projectile push impulses

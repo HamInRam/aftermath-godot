@@ -31,6 +31,11 @@ script = ExtResource("1_main")
 [node name="TileMap" type="Node2D" parent="." groups=["pathfinding_world"]]
 script = ExtResource("4_tile_world")
 
+[node name="ExteriorBackdrop" type="TileMapLayer" parent="TileMap"]
+z_index = -20
+collision_enabled = false
+modulate = Color(0.32, 0.2, 0.42, 1)
+
 [node name="Floor" type="TileMapLayer" parent="TileMap"]
 z_index = -10
 collision_enabled = false

@@ -9,6 +9,7 @@ enum Tile { CONCRETE, WOOD, RED_CARPET, WALL, WINDOW, DARK_TILE, GRASS, STAIRS, 
 
 @export_enum("nightclub", "sandwich_shop") var layout_id := "nightclub"
 
+@onready var exterior_layer: TileMapLayer = $ExteriorBackdrop
 @onready var floor_layer: TileMapLayer = $Floor
 @onready var wall_layer: TileMapLayer = $Walls
 @onready var wall_shadow_layer: TileMapLayer = $WallShadows
@@ -19,11 +20,13 @@ var path_grid := AStarGrid2D.new()
 
 func _ready() -> void:
 	floor_layer.tile_set = _create_tile_set(false)
+	exterior_layer.tile_set = floor_layer.tile_set
 	wall_layer.tile_set = _create_tile_set(true)
 	wall_shadow_layer.tile_set = wall_layer.tile_set
 	decoration_layer.tile_set = floor_layer.tile_set
 	object_shadow_layer.tile_set = floor_layer.tile_set
 	object_layer.tile_set = floor_layer.tile_set
+	_build_exterior()
 	_build_floor()
 	_build_walls()
 	_build_wall_shadows()
@@ -58,9 +61,15 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 func _set_tile(layer: TileMapLayer, cell: Vector2i, tile: Tile) -> void:
 	layer.set_cell(cell, 0, Vector2i(int(tile), 0), 0)
 
-func _build_floor() -> void:
+func _build_exterior() -> void:
 	for y in range(MAP_SIZE.y):
 		for x in range(MAP_SIZE.x):
+			var tile := Tile.DARK_TILE if (x + y) % 2 == 0 else Tile.BLACK_PLANK
+			_set_tile(exterior_layer, Vector2i(x, y), tile)
+
+func _build_floor() -> void:
+	for y in range(1, MAP_SIZE.y - 1):
+		for x in range(1, MAP_SIZE.x - 1):
 			var tile := Tile.CONCRETE
 			if layout_id == "sandwich_shop":
 				if y >= 15: tile = Tile.WOOD
@@ -78,12 +87,12 @@ func _build_floor() -> void:
 
 func _build_walls() -> void:
 	var edge_wall := Tile.BRIGHT_WALL if layout_id == "nightclub" else Tile.WALL
-	for x in range(MAP_SIZE.x):
-		_set_tile(wall_layer, Vector2i(x, 0), Tile.WINDOW if x in range(26, 31) else edge_wall)
-		_set_tile(wall_layer, Vector2i(x, MAP_SIZE.y - 1), edge_wall)
-	for y in range(1, MAP_SIZE.y - 1):
-		_set_tile(wall_layer, Vector2i(0, y), edge_wall)
-		_set_tile(wall_layer, Vector2i(MAP_SIZE.x - 1, y), Tile.WINDOW if y in range(12, 16) else edge_wall)
+	for x in range(1, MAP_SIZE.x - 1):
+		_set_tile(wall_layer, Vector2i(x, 1), Tile.WINDOW if x in range(26, 31) else edge_wall)
+		_set_tile(wall_layer, Vector2i(x, MAP_SIZE.y - 2), edge_wall)
+	for y in range(2, MAP_SIZE.y - 2):
+		_set_tile(wall_layer, Vector2i(1, y), edge_wall)
+		_set_tile(wall_layer, Vector2i(MAP_SIZE.x - 2, y), Tile.WINDOW if y in range(12, 16) else edge_wall)
 	if layout_id == "sandwich_shop":
 		for x in range(6, 31):
 			if x not in [17, 18]: _set_tile(wall_layer, Vector2i(x, 7), Tile.WALL)
@@ -145,6 +154,10 @@ func _build_path_grid() -> void:
 	path_grid.cell_size = Vector2(TILE_SIZE)
 	path_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
 	path_grid.update()
+	for y in range(MAP_SIZE.y):
+		for x in range(MAP_SIZE.x):
+			var cell := Vector2i(x, y)
+			if floor_layer.get_cell_source_id(cell) < 0: path_grid.set_point_solid(cell, true)
 	for cell in wall_layer.get_used_cells(): path_grid.set_point_solid(cell, true)
 
 func get_navigation_path(from_world: Vector2, to_world: Vector2) -> PackedVector2Array:

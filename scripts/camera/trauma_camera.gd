@@ -7,6 +7,9 @@ extends Camera2D
 @export_range(0.1, 30.0, 0.1) var noise_speed := 12.0
 @export_range(1, 8, 1) var noise_octaves := 3
 @export_range(0.0, 120.0, 1.0) var max_look_ahead := 58.0
+@export_range(0.0, 200.0, 1.0) var extended_look_ahead := 125.0
+@export_range(0.0, 1.0, 0.05) var normal_look_weight := 0.25
+@export_range(0.0, 1.0, 0.05) var extended_look_weight := 0.55
 @export_range(1.0, 20.0, 0.5) var follow_speed := 7.5
 @export var camera_center_bounds := Rect2(160.0, 90.0, 64.0, 44.0)
 @export_group("Position Tilt")
@@ -38,8 +41,13 @@ func add_trauma(amount: float) -> void:
 	trauma = clampf(trauma + amount, 0.0, 1.0)
 
 func get_follow_position(player_position: Vector2, mouse_position: Vector2) -> Vector2:
+	return get_follow_position_for_mode(player_position, mouse_position, Input.is_action_pressed("look_ahead"))
+
+func get_follow_position_for_mode(player_position: Vector2, mouse_position: Vector2, peeking: bool) -> Vector2:
 	var mouse_delta := mouse_position - player_position
-	var desired := player_position + mouse_delta.limit_length(max_look_ahead) * 0.5
+	var distance_limit := extended_look_ahead if peeking else max_look_ahead
+	var weight := extended_look_weight if peeking else normal_look_weight
+	var desired := player_position + mouse_delta.limit_length(distance_limit) * weight
 	desired.x = clampf(desired.x, camera_center_bounds.position.x, camera_center_bounds.end.x)
 	desired.y = clampf(desired.y, camera_center_bounds.position.y, camera_center_bounds.end.y)
 	return desired

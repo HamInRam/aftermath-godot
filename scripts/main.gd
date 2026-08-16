@@ -85,7 +85,7 @@ func _create_ui() -> void:
 	ammo_label = _make_label(canvas, Vector2(275, 160), 7, Color("ffe5a8"))
 	combo_label = _make_label(canvas, Vector2(270, 12), 9, Color("ff3d78"))
 	var controls := _make_label(canvas, Vector2(10, 166), 5, Color("86788b"))
-	controls.text = "WASD MOVE // LMB FIRE // R RELOAD // ESC MENU"
+	controls.text = "WASD MOVE // SHIFT LOOK // LMB FIRE // R RELOAD // ESC MENU"
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)

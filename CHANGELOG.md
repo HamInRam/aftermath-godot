@@ -27,6 +27,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - High-contrast Nightclub room zoning with bright architectural trim, distinct room identities and a dedicated furniture layer.
 - Fixed-offset object shadows for furniture and fixtures, matching the existing actor, weapon, casing and door shadow language.
 - Position-driven camera tilt that mirrors across the room center, with a configurable center buffer, maximum angle and exponential smoothing.
+- Static deep-color exterior backdrop beneath the building, revealed by an unpainted perimeter floor band to create a layered architectural cutout.
+- Hold-Shift tactical look-ahead with a longer cursor-directed camera reach, while normal aiming uses a restrained 0.25 positional weight.
 
 ### Changed
 
@@ -38,6 +40,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Player/enemy/interaction colors were brightened for combat readability without changing the existing identity.
 - Environment lighting now favors a bright global color grade over local PointLight2D pools; combat muzzle lights remain enabled.
 - No background hue cycling was added, keeping the current restrained AFTERMATH palette.
+- Exterior void cells are excluded from AStar navigation so the visual background cannot become a traversable shortcut.
 - Enemy aim requires current line of sight; losing sight transitions to investigation at the last seen position.
 - Player death accepts immediate `R` restart with no fade, confirmation or loading screen.
 
@@ -50,6 +53,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Fake-lighting regression verifies global visibility, window shadow breaks and fixed-offset shadows that follow rotating doors and weapons.
 - Interior-style regression verifies all seven Nightclub material zones, bright wall trim, furniture placement and synchronized object shadows.
 - Camera-tilt regression verifies a level center dead zone, mirrored left/right angles and the configured maximum rotation.
+- Orthographic-layer regression verifies the exterior underlay, transparent floor perimeter, solid navigation boundary, 0.25 normal look weight and Shift extended view.
 
 ## [v.0.0.1] - 2026-08-16
 
