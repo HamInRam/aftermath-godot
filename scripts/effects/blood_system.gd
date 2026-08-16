@@ -40,7 +40,7 @@ func _spawn_ground_splatter(hit_position: Vector2, direction: Vector2, intensity
 	stain.setup(direction, intensity, false, true, pattern, cone)
 
 func _spawn_wall_splatter(hit_position: Vector2, direction: Vector2, intensity: float, reach: float, pattern: String, cone: float) -> void:
-	var query := PhysicsRayQueryParameters2D.create(hit_position, hit_position + direction * reach, 2)
+	var query := PhysicsRayQueryParameters2D.create(hit_position, hit_position + direction * reach, 4)
 	var result := get_world_2d().direct_space_state.intersect_ray(query)
 	if result.is_empty(): return
 	var stain = BLOOD_STAIN_SCENE.instantiate()

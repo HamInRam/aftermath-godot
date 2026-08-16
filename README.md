@@ -11,6 +11,9 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Continuous 0.2–0.4 second visual reaction delay, opaque wall/door occlusion and sight through physical glass windows
 - Corpse discovery interrupts idle duty, drives A* incident investigation and produces a timed multi-direction search at the scene
 - Confirmed sightings enter a faster 1.25x chase; lost targets are searched at their last known position before patrol resumes
+- Named physics layers separate players, enemies, solid walls, glass, projectiles and opaque vision blockers
+- Glass blocks movement but passes bullets, vision and full-strength sound; solid walls and doors block and attenuate the appropriate systems
+- Optional FOV debug cones switch from red to green on raw visual contact
 - Fast physics doors that can stagger enemies without uncontrolled angular acceleration
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability

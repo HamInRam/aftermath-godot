@@ -46,6 +46,7 @@ var investigation_look_rotation := 0.0
 var investigation_look_time := 0.0
 var corpse_scan_time := 0.0
 var discovered_corpses := {}
+var player_in_sight := false
 
 func _ready() -> void:
 	super._ready()
@@ -80,6 +81,7 @@ func _physics_process(delta: float) -> void:
 			_begin_investigation(global_position, 0.6)
 		return
 	var has_visual_contact := _can_see_player(distance, to_player)
+	player_in_sight = has_visual_contact
 	var sees_player := _update_visual_reaction(has_visual_contact, delta)
 	if debug_draw_vision: queue_redraw()
 	if sees_player:
@@ -220,7 +222,7 @@ func _scan_for_corpses(delta: float) -> void:
 		if to_corpse.length() > detection_range * 0.8: continue
 		var facing := Vector2.RIGHT.rotated(rotation)
 		if absf(rad_to_deg(facing.angle_to(to_corpse.normalized()))) > vision_fov_degrees * 0.5: continue
-		var query := PhysicsRayQueryParameters2D.create(global_position, corpse_node.global_position, 8)
+		var query := PhysicsRayQueryParameters2D.create(global_position, corpse_node.global_position, 32)
 		query.exclude = [get_rid()]
 		if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): continue
 		discovered_corpses[corpse_id] = true
@@ -241,7 +243,7 @@ func _can_see_player(distance: float, to_player: Vector2) -> bool:
 	if distance > detection_range: return false
 	var facing := Vector2.RIGHT.rotated(rotation)
 	if absf(rad_to_deg(facing.angle_to(to_player.normalized()))) > vision_fov_degrees * 0.5: return false
-	var query := PhysicsRayQueryParameters2D.create(global_position, player.global_position, 8)
+	var query := PhysicsRayQueryParameters2D.create(global_position, player.global_position, 32)
 	query.exclude = [get_rid()]
 	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
@@ -249,7 +251,7 @@ func _on_combat_noise(world_position: Vector2, radius: float, _source_kind: Stri
 	if is_dead or state == State.CHASE: return
 	var effective_distance := global_position.distance_to(world_position)
 	if effective_distance > radius: return
-	var query := PhysicsRayQueryParameters2D.create(global_position, world_position, 8)
+	var query := PhysicsRayQueryParameters2D.create(global_position, world_position, 32)
 	query.exclude = [get_rid()]
 	if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): effective_distance *= 1.5
 	if effective_distance > radius: return
@@ -273,20 +275,25 @@ func _on_actor_died(source_position: Vector2) -> void:
 	var spray_direction := (global_position - source_position).normalized()
 	if spray_direction.length_squared() < 0.001: spray_direction = Vector2.RIGHT.rotated(rotation)
 	death_particles.rotation = spray_direction.angle()
-	death_particles.reparent(get_tree().current_scene, true)
-	death_particles.restart()
-	death_particles.emitting = true
-	get_tree().create_timer(death_particles.lifetime + 0.4).timeout.connect(death_particles.queue_free)
+	var death_parent := get_tree().current_scene
+	if is_instance_valid(death_parent):
+		death_particles.reparent(death_parent, true)
+		death_particles.restart()
+		death_particles.emitting = true
+		get_tree().create_timer(death_particles.lifetime + 0.4).timeout.connect(death_particles.queue_free)
 	died_at.emit(global_position, rotation)
 	queue_free()
 
 func _draw() -> void:
 	if debug_draw_vision:
 		var half_fov := deg_to_rad(vision_fov_degrees * 0.5)
+		var vision_color := Color(0.2, 1.0, 0.45, 0.16) if player_in_sight else Color(1.0, 0.2, 0.32, 0.09)
 		var points := PackedVector2Array([Vector2.ZERO])
 		for index in range(17):
 			var angle := lerpf(-half_fov, half_fov, float(index) / 16.0)
 			points.append(Vector2.RIGHT.rotated(angle) * detection_range)
-		draw_colored_polygon(points, Color(1.0, 0.2, 0.32, 0.09))
-		draw_arc(Vector2.ZERO, detection_range, -half_fov, half_fov, 24, Color(1.0, 0.35, 0.42, 0.32), 1.0)
+		draw_colored_polygon(points, vision_color)
+		draw_arc(Vector2.ZERO, detection_range, -half_fov, half_fov, 24, Color(vision_color, 0.5), 1.0)
+		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(-half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
+		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
 	if alertness > 0.65: draw_circle(Vector2(-1, -7), 1.0, Color("ff385f"))

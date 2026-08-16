@@ -40,11 +40,14 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 	tile_set.tile_size = TILE_SIZE
 	if with_physics:
 		tile_set.add_physics_layer()
-		tile_set.set_physics_layer_collision_layer(0, 2)
-		tile_set.set_physics_layer_collision_mask(0, 5)
+		tile_set.set_physics_layer_collision_layer(0, 4)
+		tile_set.set_physics_layer_collision_mask(0, 0)
 		tile_set.add_physics_layer()
 		tile_set.set_physics_layer_collision_layer(1, 8)
 		tile_set.set_physics_layer_collision_mask(1, 0)
+		tile_set.add_physics_layer()
+		tile_set.set_physics_layer_collision_layer(2, 32)
+		tile_set.set_physics_layer_collision_mask(2, 0)
 	var atlas := TileSetAtlasSource.new()
 	atlas.texture = ATLAS_TEXTURE
 	atlas.texture_region_size = TILE_SIZE
@@ -55,13 +58,14 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 	for tile_index in [Tile.WALL, Tile.WINDOW, Tile.BRIGHT_WALL] if with_physics else []:
 		var atlas_coordinate := Vector2i(int(tile_index), 0)
 		var tile_data := atlas.get_tile_data(atlas_coordinate, 0)
-		tile_data.add_collision_polygon(0)
-		tile_data.set_collision_polygon_points(0, 0, PackedVector2Array([
+		var physical_layer := 1 if tile_index == Tile.WINDOW else 0
+		tile_data.add_collision_polygon(physical_layer)
+		tile_data.set_collision_polygon_points(physical_layer, 0, PackedVector2Array([
 			Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
 		]))
 		if tile_index != Tile.WINDOW:
-			tile_data.add_collision_polygon(1)
-			tile_data.set_collision_polygon_points(1, 0, PackedVector2Array([
+			tile_data.add_collision_polygon(2)
+			tile_data.set_collision_polygon_points(2, 0, PackedVector2Array([
 				Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
 			]))
 	for tile_index in [Tile.SOFA, Tile.TABLE, Tile.TOILET, Tile.SINK, Tile.BED, Tile.TV, Tile.VENDING] if with_physics else []:

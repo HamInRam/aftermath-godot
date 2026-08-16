@@ -77,6 +77,15 @@ look_ahead={
 ]
 }
 
+[layer_names]
+
+2d_physics/layer_1="Player"
+2d_physics/layer_2="Enemy"
+2d_physics/layer_3="Solid_Wall"
+2d_physics/layer_4="Glass_Window"
+2d_physics/layer_5="Projectile"
+2d_physics/layer_6="Vision_Occluder"
+
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0

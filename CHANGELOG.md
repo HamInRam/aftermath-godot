@@ -42,6 +42,9 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Corpse discovery checks for idle guards using the same distance, FOV and opaque-ray rules as player vision, triggering an incident investigation once per corpse.
 - Investigation arrival behavior with a configurable 2.2-second multi-direction look-around before returning to patrol or sentry duty.
 - Explicit high-priority visual chase transition with 1.25x human pursuit speed and last-seen-position investigation after contact is lost.
+- Named Player, Enemy, Solid_Wall, Glass_Window, Projectile and Vision_Occluder physics layers with purpose-specific collision masks.
+- Glass now blocks actor movement while allowing projectile, vision and non-attenuated sound passage; solid walls and doors retain all relevant blocking behavior.
+- Red/green FOV debug feedback that changes immediately when raw visual contact is established.
 
 ### Changed
 
@@ -71,6 +74,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Hearing/patrol/path regression verifies glass and wall propagation differences, patrol motion, furniture obstacles, diagonal routing and weapon-specific sound radii.
 - Patrol-cadence coverage verifies moving/waiting/sentry transitions, minimum route length and weighted obstacle clearance.
 - AI-state-network regression verifies corpse discovery, investigation targeting and scanning, reaction gating and aggressive chase configuration.
+- Physics-layer/glass regression fires real projectiles through a window and into an adjacent solid wall while verifying every named layer and mask.
 
 ## [v.0.0.1] - 2026-08-16
 
