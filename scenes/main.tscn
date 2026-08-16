@@ -75,7 +75,7 @@ position = Vector2(92, 88)
 
 [node name="LobbyDoor" parent="Doors" instance=ExtResource("5_door")]
 position = Vector2(232, 76)
-rotation = 1.5708
+rotation = -1.5708
 
 [node name="BloodSystem" type="Node2D" parent="."]
 script = ExtResource("2_blood_system")

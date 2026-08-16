@@ -54,7 +54,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Character slide collisions now continuously transfer force to pushable rigid bodies instead of relying only on the initial contact event.
 - Increased door impact response and reduced angular damping so doors open clearly under player and projectile force.
 - Door pushing now preserves pre-slide intended velocity, eliminating lost or sideways force after CharacterBody2D collision resolution.
-- Removed duplicate first-contact impulses, enabled door-to-frame collision and added a stable ±80° hinge limit.
+- Removed duplicate first-contact impulses and added a stable ±80° hinge limit.
+- Removed unstable door/frame self-collision, corrected the lobby door orientation and widened its wall opening to the full 16-pixel leaf length.
 
 ### Validation
 
@@ -65,3 +66,4 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Mechanics smoke test verified LMG data, standalone particles, muzzle-origin shooting, kick animation and projectile-driven door torque.
 - Door regression test now simulates sustained CharacterBody2D contact and verifies resulting hinge rotation.
 - Door-limit regression verifies forced over-rotation is clamped back inside the configured opening range.
+- Standalone stability regression verifies a closed door remains motionless for 90 physics frames and opens visibly under actor force.

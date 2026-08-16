@@ -65,7 +65,7 @@ func _build_walls() -> void:
 	for y in range(4, 20):
 		if y not in [11, 12]: _set_tile(wall_layer, Vector2i(11, y), Tile.WALL)
 	for x in range(24, 35):
-		if x != 29: _set_tile(wall_layer, Vector2i(x, 9), Tile.WALL)
+		if x not in [29, 30]: _set_tile(wall_layer, Vector2i(x, 9), Tile.WALL)
 	for y in range(10, 17):
 		if y != 14: _set_tile(wall_layer, Vector2i(24, y), Tile.WALL)
 	for y in range(16, 22):
