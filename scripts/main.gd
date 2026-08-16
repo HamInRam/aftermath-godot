@@ -16,7 +16,7 @@ const WEAPON_DATA := {
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 142)
 @export var enemy_spawns := PackedVector2Array([Vector2(45, 47), Vector2(130, 28), Vector2(170, 64), Vector2(230, 38), Vector2(280, 62), Vector2(125, 108), Vector2(180, 147), Vector2(230, 113), Vector2(280, 147)])
-@export var enemy_patrol_offsets := PackedVector2Array([Vector2(24, 0), Vector2(24, 0), Vector2(20, 0), Vector2(20, 0), Vector2(24, 0), Vector2(20, 0), Vector2(0, 20), Vector2(0, 20), Vector2(24, 0)])
+@export var enemy_patrol_offsets := PackedVector2Array([Vector2(0, 48), Vector2(56, 0), Vector2(0, 48), Vector2(64, 0), Vector2(-48, 0), Vector2(48, 0), Vector2(56, 0), Vector2(0, 56), Vector2(56, 0)])
 @export var doors_enabled := true
 
 var phase := "combat"
@@ -145,7 +145,7 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	enemies_container.add_child(enemy)
 	enemy.global_position = pos
 	if patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size():
-		enemy.patrol_waypoints = PackedVector2Array([pos, pos + enemy_patrol_offsets[patrol_index]])
+		enemy.configure_patrol(PackedVector2Array([pos, pos + enemy_patrol_offsets[patrol_index]]))
 
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return

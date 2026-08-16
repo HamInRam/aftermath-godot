@@ -175,6 +175,20 @@ func _build_path_grid() -> void:
 	for cell in wall_layer.get_used_cells(): path_grid.set_point_solid(cell, true)
 	for cell in object_layer.get_used_cells():
 		if object_layer.get_cell_atlas_coords(cell).x != Tile.PLANT: path_grid.set_point_solid(cell, true)
+	_apply_navigation_clearance_cost()
+
+func _apply_navigation_clearance_cost() -> void:
+	var neighbor_offsets := [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN, Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]
+	for y in range(MAP_SIZE.y):
+		for x in range(MAP_SIZE.x):
+			var cell := Vector2i(x, y)
+			if path_grid.is_point_solid(cell): continue
+			var nearby_obstacles := 0
+			for offset in neighbor_offsets:
+				var neighbor: Vector2i = cell + offset
+				if path_grid.is_in_boundsv(neighbor) and path_grid.is_point_solid(neighbor): nearby_obstacles += 1
+			if nearby_obstacles > 0:
+				path_grid.set_point_weight_scale(cell, 1.0 + minf(2.4, nearby_obstacles * 0.45))
 
 func get_navigation_path(from_world: Vector2, to_world: Vector2) -> PackedVector2Array:
 	var from_cell := floor_layer.local_to_map(floor_layer.to_local(from_world))

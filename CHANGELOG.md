@@ -36,6 +36,9 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Authored two-point idle patrol routes for spawned enemies, replaced immediately by investigation or chase targets when alerted.
 - Safer diagonal AStarGrid2D routing with 7–10 frame human refresh intervals and solid furniture included in navigation.
 - Reusable `human` / `dog` AI profile foundation with faster dog reaction, movement, path refresh and direct open-room pursuit.
+- Patrol micro-state machine with AStar-driven movement, randomized 0.5–1.5 second waypoint waits and separate level-authored 48–64px routes.
+- Automatic sentry fallback for missing or unreachable patrol routes, smoothly scanning ±45 degrees every 2–4 seconds.
+- Soft navigation clearance costs around walls and furniture, encouraging safer paths without sealing narrow two-tile doorways.
 
 ### Changed
 
@@ -63,6 +66,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Orthographic-layer regression verifies the exterior underlay, transparent floor perimeter, solid navigation boundary, 0.25 normal look weight and Shift extended view.
 - Enemy-FOV regression verifies continuous reaction timing, exposure reset, distance/angle rejection, wall and door occlusion, and sight through physical windows.
 - Hearing/patrol/path regression verifies glass and wall propagation differences, patrol motion, furniture obstacles, diagonal routing and weapon-specific sound radii.
+- Patrol-cadence coverage verifies moving/waiting/sentry transitions, minimum route length and weighted obstacle clearance.
 
 ## [v.0.0.1] - 2026-08-16
 

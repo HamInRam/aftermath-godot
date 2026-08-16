@@ -68,6 +68,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Enemy vision uses distance/angle broad-phase checks followed by an opaque-only 2D raycast; `debug_draw_vision` exposes the tuning cone
 - Weapon-specific circular hearing events propagate through walls at a 1.5x effective-distance penalty and send every in-range enemy to the same source point
 - Unalerted enemies follow two-point patrol routes; alerted enemies switch to frequently refreshed diagonal A* paths around walls and solid furniture
+- Patrol routes span 48–64px, use A* instead of blind straight-line motion, and pause 0.5–1.5 seconds at each waypoint
+- Unroutable guards become stationary sentries that smoothly scan ±45 degrees; soft obstacle costs reduce furniture and corner rubbing
 - Human/dog AI profiles support faster dog reaction and direct open-room pursuit when dedicated dog content is added
 - Enemies outside detection range decelerate to rest instead of jittering toward the player
 - Ammo UI republishes the equipped gun state whenever a level finishes loading

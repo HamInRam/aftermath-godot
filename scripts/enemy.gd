@@ -12,9 +12,14 @@ signal died_at(world_position: Vector2, facing: float)
 @export var debug_draw_vision := false
 @export_enum("human", "dog") var actor_type := "human"
 @export var patrol_waypoints := PackedVector2Array()
+@export_range(0.1, 3.0, 0.1) var patrol_wait_min := 0.5
+@export_range(0.1, 3.0, 0.1) var patrol_wait_max := 1.5
+@export_range(5.0, 90.0, 1.0) var sentry_look_degrees := 45.0
+@export_range(0.5, 8.0, 0.1) var sentry_turn_speed := 2.4
 @onready var gun = $Gun
 
 enum State { IDLE, INVESTIGATE, CHASE, STAGGERED }
+enum PatrolMode { MOVING, WAITING, SENTRY }
 
 var player: CharacterBody2D
 var alertness := 0.0
@@ -29,12 +34,19 @@ var investigation_target := Vector2.ZERO
 var investigation_wait := 0.0
 var stagger_time := 0.0
 var patrol_index := 0
+var patrol_mode := PatrolMode.SENTRY
+var patrol_wait_time := 0.0
+var sentry_base_rotation := 0.0
+var sentry_target_rotation := 0.0
+var sentry_look_time := 0.0
 
 func _ready() -> void:
 	super._ready()
 	player = get_tree().get_first_node_in_group("player") as CharacterBody2D
 	tile_world = get_tree().get_first_node_in_group("pathfinding_world")
 	strafe_sign = [-1.0, 1.0].pick_random()
+	sentry_base_rotation = rotation
+	_pick_sentry_angle()
 	reaction_time = randf_range(reaction_time_min, maxf(reaction_time_min, reaction_time_max))
 	if actor_type == "dog": reaction_time *= 0.55
 	gun.cooldown = randf_range(0.25, 0.9)
@@ -114,19 +126,65 @@ func _physics_process(delta: float) -> void:
 
 func _update_patrol(delta: float) -> void:
 	if patrol_waypoints.size() < 2:
-		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
+		patrol_mode = PatrolMode.SENTRY
+		_update_sentry(delta)
+		return
+	if patrol_mode == PatrolMode.SENTRY:
+		_update_sentry(delta)
+		return
+	if patrol_mode == PatrolMode.WAITING:
+		patrol_wait_time -= delta
+		velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
 		move_and_slide()
+		if patrol_wait_time <= 0.0:
+			patrol_index = (patrol_index + 1) % patrol_waypoints.size()
+			patrol_mode = PatrolMode.MOVING
+			path_points.clear()
+			path_refresh = 0.0
 		return
 	var patrol_target := patrol_waypoints[patrol_index]
-	if global_position.distance_to(patrol_target) < 5.0:
-		patrol_index = (patrol_index + 1) % patrol_waypoints.size()
-		patrol_target = patrol_waypoints[patrol_index]
-	var patrol_direction := global_position.direction_to(patrol_target)
+	if global_position.distance_to(patrol_target) < 6.0:
+		patrol_mode = PatrolMode.WAITING
+		patrol_wait_time = randf_range(patrol_wait_min, maxf(patrol_wait_min, patrol_wait_max))
+		velocity = Vector2.ZERO
+		return
+	if (path_points.is_empty() or path_refresh <= 0.0) and is_instance_valid(tile_world):
+		path_refresh = 0.5
+		path_points = tile_world.get_navigation_path(global_position, patrol_target)
+		if path_points.is_empty():
+			patrol_mode = PatrolMode.SENTRY
+			sentry_base_rotation = rotation
+			_pick_sentry_angle()
+			return
+	path_refresh -= delta
+	while not path_points.is_empty() and global_position.distance_to(path_points[0]) < 5.0:
+		path_points.remove_at(0)
+	if path_points.is_empty(): return
+	var patrol_direction := global_position.direction_to(path_points[0])
 	rotation = lerp_angle(rotation, patrol_direction.angle(), 1.0 - exp(-8.0 * delta))
 	velocity = patrol_direction * move_speed * 0.62
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
+
+func configure_patrol(points: PackedVector2Array) -> void:
+	patrol_waypoints = points
+	patrol_index = 0
+	patrol_mode = PatrolMode.MOVING if points.size() >= 2 else PatrolMode.SENTRY
+	path_points.clear()
+	path_refresh = 0.0
+
+func _update_sentry(delta: float) -> void:
+	velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
+	move_and_slide()
+	rotation = lerp_angle(rotation, sentry_target_rotation, 1.0 - exp(-sentry_turn_speed * delta))
+	sentry_look_time -= delta
+	if sentry_look_time <= 0.0: _pick_sentry_angle()
+
+func _pick_sentry_angle() -> void:
+	var range_radians := deg_to_rad(sentry_look_degrees)
+	sentry_target_rotation = sentry_base_rotation + randf_range(-range_radians, range_radians)
+	sentry_look_time = randf_range(2.0, 4.0)
 
 func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
 	if has_visual_contact:
