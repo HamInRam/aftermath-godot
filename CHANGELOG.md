@@ -45,6 +45,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Named Player, Enemy, Solid_Wall, Glass_Window, Projectile and Vision_Occluder physics layers with purpose-specific collision masks.
 - Glass now blocks actor movement while allowing projectile, vision and non-attenuated sound passage; solid walls and doors retain all relevant blocking behavior.
 - Red/green FOV debug feedback that changes immediately when raw visual contact is established.
+- Runtime `F3` toggle that enables or disables FOV visualization for every active enemy without requiring Inspector edits.
+- Larger 7–10px HUD typography, stronger muted-text contrast and a shorter control legend for legibility at the native 320x180 viewport.
 
 ### Changed
 
@@ -75,6 +77,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Patrol-cadence coverage verifies moving/waiting/sentry transitions, minimum route length and weighted obstacle clearance.
 - AI-state-network regression verifies corpse discovery, investigation targeting and scanning, reaction gating and aggressive chase configuration.
 - Physics-layer/glass regression fires real projectiles through a window and into an adjacent solid wall while verifying every named layer and mask.
+- Debug/UI regression verifies global F3 cone toggling, red/green-capable enemy flags and minimum readable HUD/theme font sizes.
 
 ## [v.0.0.1] - 2026-08-16
 

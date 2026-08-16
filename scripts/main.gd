@@ -36,6 +36,7 @@ var pending_death_knockback := 20.0
 var pending_death_blood_power := 1.0
 var hit_stop_generation := 0
 var transitioning_cleanup := false
+var vision_debug_enabled := false
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -65,6 +66,9 @@ func _process(delta: float) -> void:
 		else: status_label.text = "CLEAN // %02d" % stains.size()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
+		_toggle_vision_debug()
+		return
 	if event.is_action_pressed("ui_cancel"):
 		get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
 		return
@@ -81,12 +85,12 @@ func _make_label(canvas: CanvasLayer, pos: Vector2, size: int, color: Color) -> 
 func _create_ui() -> void:
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
-	status_label = _make_label(canvas, Vector2(10, 8), 8, Color("fff1f7"))
-	detail_label = _make_label(canvas, Vector2(10, 19), 5, Color("c4aabd"))
-	ammo_label = _make_label(canvas, Vector2(275, 160), 7, Color("ffe5a8"))
-	combo_label = _make_label(canvas, Vector2(270, 12), 9, Color("ff3d78"))
-	var controls := _make_label(canvas, Vector2(10, 166), 5, Color("86788b"))
-	controls.text = "WASD MOVE // SHIFT LOOK // LMB FIRE // R RELOAD // ESC MENU"
+	status_label = _make_label(canvas, Vector2(10, 7), 9, Color("fff1f7"))
+	detail_label = _make_label(canvas, Vector2(10, 20), 7, Color("e2cedd"))
+	ammo_label = _make_label(canvas, Vector2(270, 158), 8, Color("ffe5a8"))
+	combo_label = _make_label(canvas, Vector2(266, 11), 10, Color("ff3d78"))
+	var controls := _make_label(canvas, Vector2(10, 165), 7, Color("bdaebe"))
+	controls.text = "WASD // SHIFT LOOK // LMB // R // F3 VISION // ESC"
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)
@@ -144,8 +148,16 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	enemy.died_at.connect(_on_enemy_died)
 	enemies_container.add_child(enemy)
 	enemy.global_position = pos
+	enemy.debug_draw_vision = vision_debug_enabled
 	if patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size():
 		enemy.configure_patrol(PackedVector2Array([pos, pos + enemy_patrol_offsets[patrol_index]]))
+
+func _toggle_vision_debug() -> void:
+	vision_debug_enabled = not vision_debug_enabled
+	for enemy_node in get_tree().get_nodes_in_group("enemy"):
+		enemy_node.debug_draw_vision = vision_debug_enabled
+		enemy_node.queue_redraw()
+	detail_label.text = "VISION DEBUG: %s" % ("ON" if vision_debug_enabled else "OFF")
 
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return

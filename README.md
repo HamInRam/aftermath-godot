@@ -14,6 +14,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Named physics layers separate players, enemies, solid walls, glass, projectiles and opaque vision blockers
 - Glass blocks movement but passes bullets, vision and full-strength sound; solid walls and doors block and attenuate the appropriate systems
 - Optional FOV debug cones switch from red to green on raw visual contact
+- Press `F3` during gameplay to toggle every enemy FOV cone; no Inspector configuration is required
+- Enlarged high-contrast HUD typography remains pixel-crisp at the native resolution
 - Fast physics doors that can stagger enemies without uncontrolled angular acceleration
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability
@@ -54,6 +56,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Hold left mouse — fire / scrub during cleanup
 - `R` — reload; restart after death or completion
 - Hold `Shift` — extend the camera toward the cursor
+- `F3` — toggle enemy vision debug cones
 - `Esc` — return to the debug room-select menu
 
 ## Game loop

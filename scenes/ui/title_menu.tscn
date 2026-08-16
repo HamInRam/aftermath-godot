@@ -42,7 +42,7 @@ horizontal_alignment = 1
 [node name="Subtitle" type="Label" parent="Panel/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.68, 0.57, 0.7, 1)
-theme_override_font_sizes/font_size = 7
+theme_override_font_sizes/font_size = 8
 text = "DEBUG ROOM SELECT"
 horizontal_alignment = 1
 
