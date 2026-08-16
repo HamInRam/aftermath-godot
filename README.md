@@ -16,6 +16,9 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Optional FOV debug cones switch from red to green on raw visual contact
 - Press `F3` during gameplay to toggle every enemy FOV cone; no Inspector configuration is required
 - Enlarged high-contrast HUD typography remains pixel-crisp at the native resolution
+- Gunner and melee enemy roles share the same perception/state network but use ranged or one-hit close combat
+- Clear CHASE sightlines produce an aggressive 1.25x direct rush; walls switch movement back to A* for a 1.5-second pursuit-memory window
+- Enemy gunfire reuses GunData, muzzle, spread, ammo/reload, audio-bus and projectile systems; melee guards hide firearms and display a swing arc
 - Fast physics doors that can stagger enemies without uncontrolled angular acceleration
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability

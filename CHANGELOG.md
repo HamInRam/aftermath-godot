@@ -47,6 +47,10 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Red/green FOV debug feedback that changes immediately when raw visual contact is established.
 - Runtime `F3` toggle that enables or disables FOV visualization for every active enemy without requiring Inspector edits.
 - Larger 7–10px HUD typography, stronger muted-text contrast and a shorter control legend for legibility at the native 320x180 viewport.
+- Configurable gunner/melee enemy combat roles, with two melee guards enabled in the default Nightclub encounter.
+- Direct 1.25x-speed CHASE rush whenever the opaque line to the player is clear, falling back to A* only while geometry blocks pursuit.
+- 1.5-second chase memory before last-known-position investigation, preventing instant disengagement when the player cuts a corner.
+- Short-range one-hit melee attacks with hidden firearms, independent cooldown and a brief visible swing arc.
 
 ### Changed
 
@@ -78,6 +82,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - AI-state-network regression verifies corpse discovery, investigation targeting and scanning, reaction gating and aggressive chase configuration.
 - Physics-layer/glass regression fires real projectiles through a window and into an adjacent solid wall while verifying every named layer and mask.
 - Debug/UI regression verifies global F3 cone toggling, red/green-capable enemy flags and minimum readable HUD/theme font sizes.
+- Chase-combat regression verifies role configuration, direct-path rushing, wall-triggered A*, chase-memory expiration, shared gunfire and melee lethality.
 
 ## [v.0.0.1] - 2026-08-16
 
