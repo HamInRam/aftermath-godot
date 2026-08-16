@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const WALL_SPARKS_SCENE := preload("res://scenes/effects/wall_sparks.tscn")
+
 signal blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool)
 
 @export var speed := 650.0
@@ -26,6 +28,11 @@ func _physics_process(delta: float) -> void:
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
 		var collider := collision.get_collider()
+		if collider is CollisionObject2D and collider.get_collision_layer_value(3):
+			var sparks = WALL_SPARKS_SCENE.instantiate()
+			sparks.global_position = collision.get_position()
+			sparks.setup(direction)
+			get_tree().current_scene.add_child(sparks)
 		if collider is Node and collider.has_method("receive_projectile_impact"):
 			collider.receive_projectile_impact(velocity, collision.get_position())
 		if collider is Node and collider.has_method("take_damage"):

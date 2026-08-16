@@ -216,7 +216,7 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	enemies_killed += 1
 	combo += 1
 	combo_timer = 2.2
-	trauma_camera.trigger_kill_effect(0.42, "red")
+	trauma_camera.trigger_kill_effect(0.72, "red")
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.global_position = pos
 	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power)

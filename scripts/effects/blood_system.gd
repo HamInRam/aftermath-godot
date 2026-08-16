@@ -55,7 +55,7 @@ func spawn_death_pool(world_position: Vector2, intensity := 1.0) -> void:
 	pool.setup(clampf(intensity, 0.7, 2.2))
 
 func _spawn_gore_chunks(hit_position: Vector2, direction: Vector2, intensity: float) -> void:
-	var count := clampi(roundi(intensity * 1.4), 1, 4)
+	var count := clampi(roundi(intensity * 2.6), 2, 8)
 	for index in range(count):
 		var chunk = GORE_CHUNK_SCENE.instantiate()
 		add_child(chunk)

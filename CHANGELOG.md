@@ -64,6 +64,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Four-second door knockdowns with a sideways prone pose, disabled attacks and an alerted recovery transition.
 - Space-triggered 24px ground executions with nearest-target selection, full movement/fire/reload input lock and three timed impact beats.
 - Execution-specific camera trauma, final-frame hit stop, red flash, radial blood burst, gore chunks, corpse pool and normal combo credit.
+- Eight-particle 0.15-second metal spark bursts on Solid_Wall bullet impacts, emitted opposite the incoming trajectory.
+- Expanded lethal blood feedback with up to 60 directional mist droplets, a 48-particle death spray, 2–8 tissue/bone chunks and stronger kill trauma.
 - Context-sensitive center-screen `[ SPACE ] EXECUTE` prompt near a knocked-down enemy.
 - Zero-input door activation: any moving player or enemy slide collision instantly starts the same fixed-speed slam.
 - One-way CLOSED → SLAM_OPENING → OPEN state machine; opened doors remain open and cannot fight with a close transition.

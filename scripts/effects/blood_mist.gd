@@ -5,10 +5,10 @@ var max_lifetime := 0.34
 
 func setup(spray_direction: Vector2, intensity: float, color := Color("b30325"), cone := 0.72) -> void:
 	var direction := spray_direction.normalized()
-	var count := clampi(roundi(10.0 + intensity * 9.0), 10, 34)
+	var count := clampi(roundi(20.0 + intensity * 16.0), 20, 60)
 	for i in range(count):
 		var angle := randf_range(-cone, cone)
-		var speed := randf_range(17.0, 38.0) * clampf(intensity, 0.65, 2.4)
+		var speed := randf_range(28.0, 66.0) * clampf(intensity, 0.65, 2.4)
 		var velocity := direction.rotated(angle) * speed
 		velocity += Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
 		particles.append({
