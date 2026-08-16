@@ -107,7 +107,7 @@ func _create_ui() -> void:
 	interaction_label.size = Vector2(300, 14)
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var controls := _make_label(canvas, Vector2(10, 165), 7, Color("bdaebe"))
-	controls.text = "WASD // E DOOR // SPACE EXECUTE // LMB // R // ESC"
+	controls.text = "WASD // TOUCH DOORS // SPACE EXECUTE // LMB // R // ESC"
 
 func _update_interaction_prompt() -> void:
 	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or run_over or phase != "combat" or player.is_executing:
@@ -115,8 +115,6 @@ func _update_interaction_prompt() -> void:
 		return
 	if is_instance_valid(player.get_nearby_execution_target()):
 		interaction_label.text = "[ SPACE ] EXECUTE"
-	elif is_instance_valid(player.get_nearby_slam_door()):
-		interaction_label.text = "[ E ] OPEN/CLOSE  //  SPEED = FORCE"
 	else:
 		interaction_label.text = ""
 

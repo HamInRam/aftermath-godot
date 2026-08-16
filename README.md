@@ -22,7 +22,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Nearest-sampled CRT/vignette/chromatic post-processing, WorldEnvironment glow/contrast/saturation and subtle ambient camera drift
 - HUD renders above post-processing so text remains undistorted
 - Frozen-until-contact physics doors with cast-shape CCD, a widened sweep detector and stable hinged rebound
-- Three impact tiers: stagger, four-second directional knockdown from player slams, and projectile-armed lethal breaches, with loud AI alerts and wood splinters
+- Fixed-speed contact doors knock enemies down for four seconds during their brief opening sweep, with loud AI alerts and wood splinters
 - Four-second prone knockdowns create a Space-key execution window with three impact beats, locked controls and radial lethal gore
 - Directional corpse impact, strong death feedback and immediate restart
 - Subtle scanline/grain treatment that preserves pixel readability
@@ -63,7 +63,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Hold left mouse — fire / scrub during cleanup
 - `R` — reload; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
-- `E` near a door — open/close it; movement speed determines opening force, while closing is slow and non-damaging
+- Move into a closed door — player and enemy contact automatically slams it open once; opened doors remain open
 - Hold `Shift` — extend the camera toward the cursor
 - `F3` — toggle enemy vision debug cones
 - `F4` — toggle CRT/screen post-processing
@@ -91,7 +91,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Patrol routes span 48–64px, use A* instead of blind straight-line motion, and pause 0.5–1.5 seconds at each waypoint
 - Unroutable guards become stationary sentries that smoothly scan ±45 degrees; soft obstacle costs reduce furniture and corner rubbing
 - Human/dog AI profiles support faster dog reaction and direct open-room pursuit when dedicated dog content is added
-- Fixed sentries ignore sound bait but still acquire and attack visible players; door panels stagger, knock down or kill according to angular speed
+- Fixed sentries ignore sound bait but still acquire and attack visible players; opening door sweeps knock enemies down without a lethal tier
 - Enemies outside detection range decelerate to rest instead of jittering toward the player
 - Ammo UI republishes the equipped gun state whenever a level finishes loading
 

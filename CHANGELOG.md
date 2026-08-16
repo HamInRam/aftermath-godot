@@ -13,7 +13,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Predictable enemy IDLE, INVESTIGATE, CHASE and STAGGERED states.
 - 90-degree enemy vision with distance checks and wall/closed-door line-of-sight occlusion.
 - Gunshot and door-impact hearing events that send enemies to the sound position without revealing the player's live position.
-- Physics-door enemy stagger, impact noise and impact-tier camera feedback.
+- Contact-driven door knockdown, impact noise and camera feedback.
 - Lightweight non-blurring scanline/grain overlay and brief player-death red flash.
 - CombatAudioDirector interface for future copyright-safe combat music and cleanup ambience.
 - Delayed 0.42-second Violence-to-Silence transition event before `CLEANUP REQUIRED`.
@@ -59,18 +59,18 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Dedicated four-room Tactical Lab selectable from the debug menu, built around four physical doors, internal glass firing lanes, blind corners and multiple routes.
 - Mixed Tactical Lab encounter with melee patrols, mobile gunners and two anti-bait fixed sentries that ignore sound investigation while retaining vision and attacks.
 - Frozen-until-contact physical doors with cast-shape continuous collision detection and an enlarged enemy-only sweep area.
-- Three-tier door-panel combat: moderate swings stagger, forceful player breaches knock enemies down for four seconds, and only projectile-armed extreme swings kill.
+- Opening door sweeps apply a consistent four-second knockdown; door-specific stagger and lethal tiers were removed.
 - Directional door knockback, post-impact angular damping, high-energy white flash feedback and 30-piece pixel wood splinters.
 - Four-second door knockdowns with a sideways prone pose, disabled attacks and an alerted recovery transition.
 - Space-triggered 24px ground executions with nearest-target selection, full movement/fire/reload input lock and three timed impact beats.
 - Execution-specific camera trauma, final-frame hit stop, red flash, radial blood burst, gore chunks, corpse pool and normal combo credit.
 - Context-sensitive center-screen `[ SPACE ] EXECUTE` prompt near a knocked-down enemy.
-- Explicit E-key door activation with current CharacterBody2D movement speed mapped continuously to swing force, noise and impact feedback.
-- Passive body contact no longer opens doors; standing interaction is gentle while a full-speed interaction produces a violent slam.
+- Zero-input door activation: any moving player or enemy slide collision instantly starts the same fixed-speed slam.
+- One-way CLOSED → SLAM_OPENING → OPEN state machine; opened doors remain open and cannot fight with a close transition.
 - Corrected door-side math to use the panel normal, ensuring every E interaction swings away from the player instead of becoming body-blocked.
-- Door damage now requires at least 0.035 radians of measured physical rotation; commanded angular velocity alone can no longer knock down an enemy behind a stationary door.
+- Door damage is evaluated only during real deterministic SLAM_OPENING rotation, so a stationary or fully open panel cannot knock down an enemy.
 - Door-panel collision is temporarily suppressed during the initial swing and restored only after the player leaves the sweep area, preventing depenetration jitter and body pinning.
-- E toggles an already-open resting door into a slow, quiet, non-damaging close while preserving velocity-scaled opening force.
+- Door rotation is deterministic at 22 rad/s with physical blocking disabled only during the roughly 0.07-second sweep and restored at the open endpoint.
 - Thirty-piece directional pixel splinter burst and stronger opening trauma on the first high-speed body impact.
 
 ### Changed
@@ -79,7 +79,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Projectile speed increased from 295 to a 650–720 px/s weapon-specific range.
 - Pistol is semi-automatic with 12 rounds, 0.15-second interval and 0.75-degree spread; SMG and LMG remain automatic.
 - Camera mouse lead remains approximately 30 pixels with whole-pixel smoothing and fast trauma decay.
-- Door force falls off with angular speed and angular velocity is capped, preventing exaggerated late-swing acceleration.
+- Door opening uses a fixed 22 rad/s deterministic sweep instead of accumulated rigid-body acceleration.
 - Player/enemy/interaction colors were brightened for combat readability without changing the existing identity.
 - Environment lighting combines a readable global grade with restrained breathing PointLight2D accents; combat muzzle lights remain enabled.
 - Hue cycling is confined to the exterior void and can be disabled independently without altering interior art.
@@ -108,9 +108,9 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Debug/UI regression verifies global F3 cone toggling, red/green-capable enemy flags and minimum readable HUD/theme font sizes.
 - Chase-combat regression verifies role configuration, direct-path rushing, wall-triggered A*, chase-memory expiration, shared gunfire and melee lethality.
 - Neon/shader/camera regression verifies Shader compilation, nearest sampling, post-processing values, light controllers, F4/F5 toggles, HUD isolation and kill flashes.
-- Tactical Lab regressions verify menu access, four-room layout, glass lanes, four doors, fixed sentries, cross-room A*, cast-shape CCD, lethal/knockdown/stagger door tiers and a 600-frame run.
+- Tactical Lab regressions verify menu access, four-room layout, glass lanes, four one-way contact doors, fixed sentries, cross-room A*, knockdown sweeps and a 600-frame run.
 - Ground-execution regression verifies the Space action, four-second prone state, disabled enemy weapon, input lock, three-hit sequence, normal kill/combo credit, corpse generation and persistent blood output.
-- Context-interaction regression verifies range-gated E/Space prompts, explicit door activation and velocity-scaled swing response.
+- Door-state regression verifies player/enemy contact activation, fixed-speed sweep, one-way open state, collision restoration and range-gated Space execution prompts.
 
 ## [v.0.0.1] - 2026-08-16
 
