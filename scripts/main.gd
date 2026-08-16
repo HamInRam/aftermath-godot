@@ -116,7 +116,7 @@ func _update_interaction_prompt() -> void:
 	if is_instance_valid(player.get_nearby_execution_target()):
 		interaction_label.text = "[ SPACE ] EXECUTE"
 	elif is_instance_valid(player.get_nearby_slam_door()):
-		interaction_label.text = "[ E ] OPEN  //  MOVE FASTER = HARDER"
+		interaction_label.text = "[ E ] OPEN/CLOSE  //  SPEED = FORCE"
 	else:
 		interaction_label.text = ""
 

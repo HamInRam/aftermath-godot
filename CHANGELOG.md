@@ -69,6 +69,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Passive body contact no longer opens doors; standing interaction is gentle while a full-speed interaction produces a violent slam.
 - Corrected door-side math to use the panel normal, ensuring every E interaction swings away from the player instead of becoming body-blocked.
 - Door damage now requires at least 0.035 radians of measured physical rotation; commanded angular velocity alone can no longer knock down an enemy behind a stationary door.
+- Door-panel collision is temporarily suppressed during the initial swing and restored only after the player leaves the sweep area, preventing depenetration jitter and body pinning.
+- E toggles an already-open resting door into a slow, quiet, non-damaging close while preserving velocity-scaled opening force.
 - Thirty-piece directional pixel splinter burst and stronger opening trauma on the first high-speed body impact.
 
 ### Changed

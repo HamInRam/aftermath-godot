@@ -63,7 +63,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Hold left mouse — fire / scrub during cleanup
 - `R` — reload; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
-- `E` near a door — open it; current movement speed determines swing force and impact feedback
+- `E` near a door — open/close it; movement speed determines opening force, while closing is slow and non-damaging
 - Hold `Shift` — extend the camera toward the cursor
 - `F3` — toggle enemy vision debug cones
 - `F4` — toggle CRT/screen post-processing

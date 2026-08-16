@@ -17,6 +17,9 @@ var measured_angular_speed := 0.0
 var swing_travel := 0.0
 var last_rotation := 0.0
 var hit_bodies := {}
+var collision_suppressed := false
+var collision_suppression_time := 0.0
+var manual_closing := false
 
 func _ready() -> void:
 	contact_monitor = true
@@ -31,6 +34,18 @@ func _physics_process(delta: float) -> void:
 	measured_angular_speed = rotation_step / maxf(delta, 0.0001)
 	swing_travel += rotation_step
 	last_rotation = rotation
+	if manual_closing:
+		var close_angle := wrapf(rotation, -PI, PI)
+		rotation = move_toward(close_angle, 0.0, 0.8 * delta)
+		angular_velocity = 0.0
+		if absf(rotation) <= 0.045:
+			rotation = 0.0
+			manual_closing = false
+			freeze = true
+	if collision_suppressed:
+		collision_suppression_time -= delta
+		if collision_suppression_time <= 0.0 and not _player_overlaps_panel():
+			_set_panel_collision_enabled(true)
 	if swing_travel >= 0.035 and measured_angular_speed >= 0.45:
 		for body in $HitArea.get_overlapping_bodies():
 			if body.is_in_group("enemy") and not hit_bodies.has(body.get_instance_id()):
@@ -51,6 +66,9 @@ func receive_actor_push(push_velocity: Vector2, world_point: Vector2) -> void:
 
 func slam_door(pusher_position: Vector2, pusher_velocity: Vector2, fallback_direction: Vector2) -> void:
 	if absf(angular_velocity) > 0.65: return
+	if absf(wrapf(rotation, -PI, PI)) > 0.25:
+		_begin_manual_close()
+		return
 	var speed_ratio := clampf(pusher_velocity.length() / 115.0, 0.0, 1.0)
 	var side_normal := Vector2.RIGHT.rotated(global_rotation)
 	var side := signf((pusher_position - global_position).dot(side_normal))
@@ -58,6 +76,7 @@ func slam_door(pusher_position: Vector2, pusher_velocity: Vector2, fallback_dire
 	var push_direction := -side_normal * side
 	freeze = false
 	_begin_swing_tracking()
+	_suppress_panel_collision()
 	angular_velocity = side * lerpf(0.8, max_angular_speed * 0.9, speed_ratio)
 	if speed_ratio > 0.65: _spawn_splinters(push_direction)
 	_emit_impact_feedback(lerpf(1.05, 1.55, speed_ratio), lerpf(65.0, 120.0, speed_ratio), 0.3)
@@ -75,7 +94,30 @@ func _begin_swing_tracking() -> void:
 	last_rotation = rotation
 	hit_bodies.clear()
 
+func _begin_manual_close() -> void:
+	freeze = true
+	manual_closing = true
+	projectile_lethal_window = 0.0
+	_begin_swing_tracking()
+	_suppress_panel_collision()
+	_emit_impact_feedback(0.72, 38.0, 0.25)
+
+func _suppress_panel_collision() -> void:
+	collision_suppressed = true
+	collision_suppression_time = 0.08
+	_set_panel_collision_enabled(false)
+
+func _set_panel_collision_enabled(enabled: bool) -> void:
+	collision_suppressed = not enabled
+	$PanelCollision.set_deferred("disabled", not enabled)
+
+func _player_overlaps_panel() -> bool:
+	for body in $HitArea.get_overlapping_bodies():
+		if body.is_in_group("player"): return true
+	return false
+
 func _apply_door_hit(body: Node, actual_speed: float) -> void:
+	if manual_closing: return
 	if body.has_method("take_damage") and projectile_lethal_window > 0.0 and actual_speed >= lethal_angular_speed:
 		body.take_door_hit((body.global_position - global_position).normalized(), "kill")
 		projectile_lethal_window = 0.0
