@@ -1,0 +1,74 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource path="res://scripts/props/swing_door.gd" type="Script" id="1_door"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape_panel"]
+size = Vector2(4, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape_frame"]
+size = Vector2(6, 3)
+
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_door"]
+friction = 0.65
+bounce = 0.08
+
+[node name="SwingDoor" type="Node2D"]
+
+[node name="Anchor" type="StaticBody2D" parent="."]
+collision_layer = 0
+collision_mask = 0
+
+[node name="Frame" type="StaticBody2D" parent="."]
+collision_layer = 2
+collision_mask = 5
+
+[node name="TopCollision" type="CollisionShape2D" parent="Frame"]
+position = Vector2(0, -2)
+shape = SubResource("RectangleShape_frame")
+
+[node name="BottomCollision" type="CollisionShape2D" parent="Frame"]
+position = Vector2(0, 18)
+shape = SubResource("RectangleShape_frame")
+
+[node name="TopFrame" type="Polygon2D" parent="Frame"]
+polygon = PackedVector2Array(-3, -3, 3, -3, 3, 0, -3, 0)
+color = Color(0.18, 0.13, 0.2, 1)
+
+[node name="BottomFrame" type="Polygon2D" parent="Frame"]
+polygon = PackedVector2Array(-3, 16, 3, 16, 3, 19, -3, 19)
+color = Color(0.18, 0.13, 0.2, 1)
+
+[node name="Door" type="RigidBody2D" parent="."]
+collision_layer = 2
+collision_mask = 5
+mass = 0.7
+physics_material_override = SubResource("PhysicsMaterial_door")
+gravity_scale = 0.0
+linear_damp = 8.0
+angular_damp = 5.0
+contact_monitor = true
+max_contacts_reported = 8
+script = ExtResource("1_door")
+
+[node name="PanelCollision" type="CollisionShape2D" parent="Door"]
+position = Vector2(0, 8)
+shape = SubResource("RectangleShape_panel")
+
+[node name="Panel" type="Polygon2D" parent="Door"]
+polygon = PackedVector2Array(-2, 0, 2, 0, 2, 16, -2, 16)
+color = Color(0.52, 0.25, 0.17, 1)
+
+[node name="Edge" type="Line2D" parent="Door"]
+points = PackedVector2Array(1, 1, 1, 15)
+width = 1.0
+default_color = Color(0.82, 0.48, 0.27, 1)
+
+[node name="Handle" type="Polygon2D" parent="Door"]
+polygon = PackedVector2Array(-1, 13, 1, 13, 1, 15, -1, 15)
+color = Color(0.95, 0.75, 0.3, 1)
+
+[node name="Hinge" type="PinJoint2D" parent="."]
+node_a = NodePath("../Anchor")
+node_b = NodePath("../Door")
+bias = 0.9
+softness = 0.12

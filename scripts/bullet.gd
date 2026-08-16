@@ -25,6 +25,8 @@ func _physics_process(delta: float) -> void:
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
 		var collider := collision.get_collider()
+		if collider is Node and collider.has_method("receive_projectile_impact"):
+			collider.receive_projectile_impact(velocity, collision.get_position())
 		if collider is Node and collider.has_method("take_damage"):
 			var valid_target: bool = (enemy_owned and collider.is_in_group("player")) or ((not enemy_owned) and collider.is_in_group("enemy"))
 			if valid_target:

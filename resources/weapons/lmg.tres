@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="GunData" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/gun_data.gd" type="Script" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+weapon_id = "lmg"
+display_name = "LMG"
+ammo_capacity = 60
+damage = 3
+fire_interval = 0.085
+fire_interval_variance = 0.008
+reload_duration = 2.8
+pitch_min = 0.84
+pitch_max = 0.96
+blood_power = 1.65

@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1_main"]
 [ext_resource path="res://scripts/effects/blood_system.gd" type="Script" id="2_blood_system"]
 [ext_resource path="res://scripts/camera/trauma_camera.gd" type="Script" id="3_camera"]
 [ext_resource path="res://scripts/world/tile_world.gd" type="Script" id="4_tile_world"]
+[ext_resource path="res://scenes/props/swing_door.tscn" type="PackedScene" id="5_door"]
 
 [sub_resource type="Gradient" id="Gradient_light"]
 offsets = PackedFloat32Array(0, 0.42, 1)
@@ -66,6 +67,15 @@ color = Color(0.87, 0.18, 1, 1)
 energy = 1.1
 texture = SubResource("GradientTexture_light")
 texture_scale = 0.68
+
+[node name="Doors" type="Node2D" parent="."]
+
+[node name="WestRoomDoor" parent="Doors" instance=ExtResource("5_door")]
+position = Vector2(92, 88)
+
+[node name="LobbyDoor" parent="Doors" instance=ExtResource("5_door")]
+position = Vector2(232, 76)
+rotation = 1.5708
 
 [node name="BloodSystem" type="Node2D" parent="."]
 script = ExtResource("2_blood_system")

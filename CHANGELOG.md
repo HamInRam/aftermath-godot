@@ -39,12 +39,18 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Custom 16×16 enemy pixel-art sprite and a dedicated 12×5 AK-style weapon sprite for SMG enemies.
 - Dynamic camera framing that smoothly follows the midpoint between the player and cursor while retaining trauma shake.
 - Expanded the tile world to 384×224 so the dynamic camera can reveal nearby rooms without exposing the map edge.
+- Reusable standalone death-blood GPUParticles2D scene with global-coordinate gravity, independent of actor rotation.
+- AnimationPlayer-driven weapon kick and Marker2D muzzle points so projectiles originate at the barrel tip.
+- Distinct imported pistol and AK weapon sprites plus a high-damage 60-round LMG GunData configuration.
+- Two hinged physics doors built from static frames, RigidBody2D panels and PinJoint2D anchors.
+- Scripted actor and projectile impulses that physically swing doors while preserving collision blocking.
 
 ### Changed
 
 - Restored the standard macOS window frame and window controls.
 - Replaced the procedural environment renderer with an editable layered TileMap workflow.
 - Enemy placeholder drawing was replaced by imported pixel art; pistol and SMG weapons now use distinct visuals.
+- Weapon rendering moved to an animated pivot shared by sprites and muzzle placement.
 
 ### Validation
 
@@ -52,3 +58,4 @@ All notable project changes are recorded here. Version branches remain unrelease
 - 300-frame headless runtime test completed without project errors.
 - Environment smoke test verified layer population, wall physics, projectile-blocking collision and shot-only camera trauma.
 - Presentation smoke test verified four colored lights, both 16×16 actor textures, the AK sprite and bounded player/cursor camera targeting.
+- Mechanics smoke test verified LMG data, standalone particles, muzzle-origin shooting, kick animation and projectile-driven door torque.

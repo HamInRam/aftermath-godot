@@ -6,6 +6,8 @@ signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int
 const SHOT_STREAM := preload("res://assets/audio/sfx/pistol_shot.wav")
 const RELOAD_STREAM := preload("res://assets/audio/sfx/pistol_reload.wav")
 const DRY_FIRE_STREAM := preload("res://assets/audio/sfx/dry_fire.wav")
+const PISTOL_TEXTURE := preload("res://assets/weapons/pistol_10x4.png")
+const AK_TEXTURE := preload("res://assets/weapons/ak_12x5.png")
 
 @export var gun_data: Resource
 @export var enemy_owned := false
@@ -24,7 +26,9 @@ var pitch_max := 1.09
 @onready var shot_audio: AudioStreamPlayer = $ShotAudio
 @onready var reload_audio: AudioStreamPlayer = $ReloadAudio
 @onready var dry_fire_audio: AudioStreamPlayer = $DryFireAudio
-@onready var weapon_sprite: Sprite2D = $WeaponSprite
+@onready var weapon_sprite: Sprite2D = $WeaponPivot/WeaponSprite
+@onready var muzzle: Marker2D = $WeaponPivot/Muzzle
+@onready var animation_player: AnimationPlayer = $AnimationPlayer
 
 var ammo := 12
 var cooldown := 0.0
@@ -37,7 +41,8 @@ func _ready() -> void:
 	shot_audio.stream = SHOT_STREAM
 	reload_audio.stream = RELOAD_STREAM
 	dry_fire_audio.stream = DRY_FIRE_STREAM
-	weapon_sprite.visible = weapon_id == "smg"
+	weapon_sprite.texture = AK_TEXTURE if weapon_id in ["smg", "lmg"] else PISTOL_TEXTURE
+	muzzle.position.x = weapon_sprite.texture.get_width() * 0.5 + 1.0
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	queue_redraw()
@@ -72,8 +77,10 @@ func try_fire(direction: Vector2) -> bool:
 	recoil = 2.0
 	shot_audio.pitch_scale = randf_range(pitch_min, pitch_max)
 	shot_audio.play()
+	animation_player.stop()
+	animation_player.play("kick")
 	var normalized_direction := direction.normalized()
-	var origin := global_position + normalized_direction * 8.0
+	var origin := muzzle.global_position
 	fired.emit(origin, normalized_direction, enemy_owned, projectile_damage, weapon_id)
 	Events.weapon_fired.emit(origin, normalized_direction, enemy_owned)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
@@ -95,9 +102,3 @@ func _on_reload_timer_timeout() -> void:
 	if not enemy_owned:
 		Events.reload_finished.emit(ammo, max_ammo)
 		Events.publish_ammo(ammo, max_ammo, false)
-
-func _draw() -> void:
-	if weapon_id == "smg": return
-	var gun_color := Color("181820") if not enemy_owned else Color("28151f")
-	draw_rect(Rect2(1.0 - recoil, -1.0, 9.0, 3.0), gun_color)
-	draw_rect(Rect2(3.0 - recoil, 2.0, 2.0, 2.0), Color("34313b"))

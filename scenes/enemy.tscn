@@ -1,25 +1,13 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource path="res://scripts/enemy.gd" type="Script" id="1_enemy"]
 [ext_resource path="res://scenes/gun.tscn" type="PackedScene" id="2_gun"]
 [ext_resource path="res://resources/weapons/smg.tres" type="Resource" id="3_smg"]
-[ext_resource path="res://assets/casing/casing_2x1.png" type="Texture2D" id="4_particle"]
 [ext_resource path="res://assets/player/enemy_16x16.png" type="Texture2D" id="5_enemy_texture"]
+[ext_resource path="res://scenes/effects/death_blood_particles.tscn" type="PackedScene" id="6_blood_particles"]
 
 [sub_resource type="CircleShape2D" id="CircleShape_enemy"]
 radius = 5.0
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcess_blood"]
-direction = Vector3(1, 0, 0)
-spread = 34.0
-initial_velocity_min = 22.0
-initial_velocity_max = 52.0
-gravity = Vector3(0, 0, 0)
-damping_min = 38.0
-damping_max = 58.0
-scale_min = 0.55
-scale_max = 1.4
-color = Color(0.69, 0.005, 0.055, 0.9)
 
 [node name="Enemy" type="CharacterBody2D" groups=["enemy"]]
 z_index = 5
@@ -39,15 +27,4 @@ texture = ExtResource("5_enemy_texture")
 gun_data = ExtResource("3_smg")
 enemy_owned = true
 
-[node name="DeathBloodParticles" type="GPUParticles2D" parent="."]
-z_index = 8
-emitting = false
-amount = 28
-lifetime = 0.38
-one_shot = true
-explosiveness = 1.0
-randomness = 0.42
-local_coords = false
-visibility_rect = Rect2(-64, -64, 128, 128)
-process_material = SubResource("ParticleProcess_blood")
-texture = ExtResource("4_particle")
+[node name="DeathBloodParticles" parent="." instance=ExtResource("6_blood_particles")]

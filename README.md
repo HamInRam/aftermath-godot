@@ -14,6 +14,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Reusable child `Gun` scene owns the 0.1-second fire rate, ammo and projectile emission
 - Swappable GunData resources configure pistol and SMG capacity, damage, timing and reload
 - Randomized fire timing, pitch-varied gunshots, timed reload and dry-fire feedback
+- AnimationPlayer kickback and barrel-tip Marker2D projectile spawning
+- Pistol, SMG and high-damage 60-round LMG GunData configurations
 - Autoload event bus keeps gun state, UI and persistent shell casings decoupled
 - Spatial shell-casing landing audio varies by ejection speed, pitch and occasional bounce
 - Bullets are independent `CharacterBody2D` scenes with a 2x2 collision box
@@ -46,6 +48,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Bullet trails, firing flash and screen shake
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
 - Smooth bounded camera framing between the player and cursor for forward visibility
+- Standalone global-coordinate death particles that remain independent of actor rotation
+- Hinged RigidBody2D doors with static frames, PinJoint2D anchors and actor/projectile push impulses
 - Corpses, directional persistent blood pools and wall splatter
 - Modular weapon-aware blood mist and animated impact droplets
 - Field-recorded CC0 blood-splat audio on lethal impact stains

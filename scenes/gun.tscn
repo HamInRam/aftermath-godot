@@ -1,17 +1,44 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource path="res://scripts/gun.gd" type="Script" id="1_gun"]
 [ext_resource path="res://resources/weapons/pistol.tres" type="Resource" id="2_pistol"]
 [ext_resource path="res://assets/weapons/ak_12x5.png" type="Texture2D" id="3_ak"]
+[ext_resource path="res://assets/weapons/pistol_10x4.png" type="Texture2D" id="4_pistol"]
+
+[sub_resource type="Animation" id="Animation_reset"]
+resource_name = "RESET"
+length = 0.0
+tracks/0/type = "value"
+tracks/0/path = NodePath("WeaponPivot:position")
+tracks/0/keys = {"times": PackedFloat32Array(0), "transitions": PackedFloat32Array(1), "update": 0, "values": [Vector2(3, 0)]}
+
+[sub_resource type="Animation" id="Animation_kick"]
+resource_name = "kick"
+length = 0.1
+tracks/0/type = "value"
+tracks/0/path = NodePath("WeaponPivot:position")
+tracks/0/interp = 1
+tracks/0/keys = {"times": PackedFloat32Array(0, 0.035, 0.1), "transitions": PackedFloat32Array(1, 1, 1), "update": 0, "values": [Vector2(3, 0), Vector2(0.5, 0), Vector2(3, 0)]}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_gun"]
+_data = {"RESET": SubResource("Animation_reset"), "kick": SubResource("Animation_kick")}
 
 [node name="Gun" type="Node2D"]
 script = ExtResource("1_gun")
 gun_data = ExtResource("2_pistol")
 
-[node name="WeaponSprite" type="Sprite2D" parent="."]
-position = Vector2(8, 0)
+[node name="WeaponPivot" type="Node2D" parent="."]
+position = Vector2(3, 0)
+
+[node name="WeaponSprite" type="Sprite2D" parent="WeaponPivot"]
 texture_filter = 1
-texture = ExtResource("3_ak")
+texture = ExtResource("4_pistol")
+
+[node name="Muzzle" type="Marker2D" parent="WeaponPivot"]
+position = Vector2(6, 0)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {"": SubResource("AnimationLibrary_gun")}
 
 [node name="ReloadTimer" type="Timer" parent="."]
 one_shot = true
