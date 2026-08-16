@@ -3,9 +3,7 @@ extends RigidBody2D
 
 @export_range(0.1, 12.0, 0.1) var actor_push_scale := 3.2
 @export_range(0.1, 12.0, 0.1) var projectile_push_scale := 7.5
-
-func _ready() -> void:
-	body_entered.connect(_on_body_entered)
+@export_range(0.25, 1.55, 0.05) var max_open_angle := 1.4
 
 func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -> void:
 	var impulse := impact_velocity.normalized() * projectile_push_scale
@@ -16,11 +14,12 @@ func receive_actor_push(push_velocity: Vector2, world_point: Vector2) -> void:
 	var force := push_velocity.limit_length(100.0) * actor_push_scale
 	apply_force(force, to_local(world_point))
 
-func _on_body_entered(body: Node) -> void:
-	if body is CharacterBody2D and not body.is_in_group("bullet"):
-		var actor := body as CharacterBody2D
-		var push_direction := actor.velocity.normalized()
-		if push_direction.length_squared() < 0.001:
-			push_direction = (global_position - actor.global_position).normalized()
-		var strength := maxf(2.0, actor.velocity.length() / 20.0) * actor_push_scale
-		apply_impulse(push_direction * strength, to_local(actor.global_position))
+func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
+	var angle := wrapf(rotation, -PI, PI)
+	var parent_rotation: float = get_parent().global_rotation
+	if angle > max_open_angle:
+		state.transform = Transform2D(parent_rotation + max_open_angle, state.transform.origin)
+		state.angular_velocity = minf(0.0, state.angular_velocity)
+	elif angle < -max_open_angle:
+		state.transform = Transform2D(parent_rotation - max_open_angle, state.transform.origin)
+		state.angular_velocity = maxf(0.0, state.angular_velocity)
