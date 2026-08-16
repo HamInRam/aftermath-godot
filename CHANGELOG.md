@@ -29,6 +29,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - One-shot GPUParticles2D blood spray detached from defeated enemies so it finishes playing.
 - Dedicated Enemies scene container and immediate collision-layer shutdown on death.
 - Spatial shell-casing clinks with speed-based volume, pitch variation and occasional secondary bounces.
+- Rebalanced weapon/casing mix with clearer, longer metal transients and wider spatial reach.
 
 ### Changed
 

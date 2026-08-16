@@ -12,7 +12,7 @@ one_shot = true
 
 [node name="ShotAudio" type="AudioStreamPlayer" parent="."]
 max_polyphony = 8
-volume_db = -7.0
+volume_db = -10.0
 
 [node name="ReloadAudio" type="AudioStreamPlayer" parent="."]
 volume_db = -10.0

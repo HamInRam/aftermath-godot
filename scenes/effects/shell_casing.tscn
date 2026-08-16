@@ -12,6 +12,6 @@ texture_filter = 1
 texture = ExtResource("2_texture")
 
 [node name="ClinkAudio" type="AudioStreamPlayer2D" parent="."]
-max_distance = 150.0
-attenuation = 1.35
+max_distance = 220.0
+attenuation = 1.05
 max_polyphony = 2

@@ -31,12 +31,12 @@ func _process(delta: float) -> void:
 	spin *= exp(-7.0 * delta)
 	if allow_bounce and not played_bounce and velocity.length() < 8.5:
 		played_bounce = true
-		_play_clink(-24.0, 1.12, 1.34)
+		_play_clink(-18.5, 1.08, 1.28)
 	if velocity.length_squared() < 0.3:
 		settled = true
 		position = position.round()
 		rotation = snappedf(rotation, PI * 0.5)
-		var impact_volume := remap(clampf(launch_speed, 16.0, 34.0), 16.0, 34.0, -21.0, -13.5)
+		var impact_volume := remap(clampf(launch_speed, 16.0, 34.0), 16.0, 34.0, -16.0, -8.0)
 		_play_clink(impact_volume, 0.88, 1.18)
 
 func _play_clink(volume: float, pitch_low: float, pitch_high: float) -> void:
