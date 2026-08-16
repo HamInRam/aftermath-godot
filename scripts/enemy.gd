@@ -57,6 +57,7 @@ var melee_cooldown := 0.0
 var melee_swing_time := 0.0
 var is_fixed_sentry := false
 var knockdown_time := 0.0
+const KNOCKDOWN_DURATION := 4.0
 
 func _ready() -> void:
 	super._ready()
@@ -100,9 +101,8 @@ func _physics_process(delta: float) -> void:
 		push_contact_bodies(knockdown_velocity)
 		velocity = velocity.move_toward(Vector2.ZERO, 260.0 * delta)
 		if knockdown_time <= 0.0:
-			state = State.IDLE
-			alertness = 0.0
-			path_points.clear()
+			_set_knockdown_visual(false)
+			_begin_investigation(player.global_position, 0.72)
 		return
 	var has_visual_contact := _can_see_player(distance, to_player)
 	var has_direct_line := _has_direct_line_to_player()
@@ -330,9 +330,24 @@ func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 		take_damage(1, global_position - hit_direction)
 		return
 	state = State.KNOCKED_DOWN
-	knockdown_time = 3.0
-	velocity = hit_direction.normalized() * 120.0
+	knockdown_time = KNOCKDOWN_DURATION
+	velocity = hit_direction.normalized() * 150.0
 	gun.cooldown = maxf(gun.cooldown, knockdown_time)
+	_set_knockdown_visual(true)
+
+func is_knocked_down() -> bool:
+	return not is_dead and state == State.KNOCKED_DOWN
+
+func execute_ground(source_position: Vector2) -> void:
+	if not is_knocked_down(): return
+	_set_knockdown_visual(false)
+	take_damage(maxi(1, hp), source_position)
+
+func _set_knockdown_visual(enabled: bool) -> void:
+	$Sprite2D.rotation = PI * 0.5 if enabled else 0.0
+	$FakeShadow.rotation = PI * 0.5 if enabled else 0.0
+	gun.visible = false if enabled else enemy_type == "gunner"
+	queue_redraw()
 
 func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)

@@ -102,7 +102,7 @@ func _create_ui() -> void:
 	ammo_label = _make_label(canvas, Vector2(270, 158), 8, Color("ffe5a8"))
 	combo_label = _make_label(canvas, Vector2(266, 11), 10, Color("ff3d78"))
 	var controls := _make_label(canvas, Vector2(10, 165), 7, Color("bdaebe"))
-	controls.text = "WASD // SHIFT LOOK // LMB // R // F3 VISION // ESC"
+	controls.text = "WASD // SPACE EXECUTE // LMB // R // F3 // ESC"
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)
@@ -147,6 +147,7 @@ func _start_run() -> void:
 	player.projectile_requested.connect(_on_projectile_requested)
 	player.clean_requested.connect(_on_clean_requested)
 	player.died.connect(_on_player_died)
+	player.execution_impact.connect(_on_execution_impact)
 	add_child(player)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
@@ -217,6 +218,17 @@ func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, we
 		pending_death_knockback = data.knockback
 		pending_death_blood_power = data.blood_power
 		_trigger_hit_stop(data.hit_stop)
+
+func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: bool) -> void:
+	var profile := "shotgun" if lethal else "smg"
+	blood_system.emit_hit(hit_position, direction, 1, profile, 0.0, lethal)
+	trauma_camera.add_trauma(0.42 if lethal else 0.2)
+	if lethal:
+		pending_death_direction = direction
+		pending_death_knockback = 18.0
+		pending_death_blood_power = 1.85
+		_on_impact_flash_requested(Color(0.9, 0.02, 0.12, 0.28))
+		_trigger_hit_stop(0.045)
 
 func _trigger_hit_stop(duration: float) -> void:
 	if duration <= 0.0: return

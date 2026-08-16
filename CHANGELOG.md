@@ -59,8 +59,11 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Dedicated four-room Tactical Lab selectable from the debug menu, built around four physical doors, internal glass firing lanes, blind corners and multiple routes.
 - Mixed Tactical Lab encounter with melee patrols, mobile gunners and two anti-bait fixed sentries that ignore sound investigation while retaining vision and attacks.
 - Frozen-until-contact physical doors with cast-shape continuous collision detection and an enlarged enemy-only sweep area.
-- Three-tier door-panel combat: moderate swings stagger, forceful breaches knock enemies down for three seconds, and extreme swings kill.
+- Three-tier door-panel combat: moderate swings stagger, forceful breaches knock enemies down for four seconds, and extreme swings kill.
 - Directional door knockback, post-impact angular damping, high-energy white flash feedback and 12-piece pixel wood splinters.
+- Four-second door knockdowns with a sideways prone pose, disabled attacks and an alerted recovery transition.
+- Space-triggered 24px ground executions with nearest-target selection, full movement/fire/reload input lock and three timed impact beats.
+- Execution-specific camera trauma, final-frame hit stop, red flash, radial blood burst, gore chunks, corpse pool and normal combo credit.
 
 ### Changed
 
@@ -73,7 +76,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Environment lighting combines a readable global grade with restrained breathing PointLight2D accents; combat muzzle lights remain enabled.
 - Hue cycling is confined to the exterior void and can be disabled independently without altering interior art.
 - STAGGERED enemies ignore the door's own noise event, preventing impact feedback from being overwritten by INVESTIGATE in the same frame.
-- KNOCKED_DOWN enemies also ignore combat-noise state changes until their three-second recovery completes.
+- KNOCKED_DOWN enemies also ignore combat-noise state changes until their four-second recovery completes.
 - Exterior void cells are excluded from AStar navigation so the visual background cannot become a traversable shortcut.
 - Enemy aim requires current line of sight; losing sight transitions to investigation at the last seen position.
 - Player death accepts immediate `R` restart with no fade, confirmation or loading screen.
@@ -97,6 +100,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Chase-combat regression verifies role configuration, direct-path rushing, wall-triggered A*, chase-memory expiration, shared gunfire and melee lethality.
 - Neon/shader/camera regression verifies Shader compilation, nearest sampling, post-processing values, light controllers, F4/F5 toggles, HUD isolation and kill flashes.
 - Tactical Lab regressions verify menu access, four-room layout, glass lanes, four doors, fixed sentries, cross-room A*, cast-shape CCD, lethal/knockdown/stagger door tiers and a 600-frame run.
+- Ground-execution regression verifies the Space action, four-second prone state, disabled enemy weapon, input lock, three-hit sequence, normal kill/combo credit, corpse generation and persistent blood output.
 
 ## [v.0.0.1] - 2026-08-16
 
