@@ -10,6 +10,8 @@ signal died_at(world_position: Vector2, facing: float)
 @export_range(0.05, 1.0, 0.01) var reaction_time_min := 0.2
 @export_range(0.05, 1.0, 0.01) var reaction_time_max := 0.4
 @export var debug_draw_vision := false
+@export_enum("human", "dog") var actor_type := "human"
+@export var patrol_waypoints := PackedVector2Array()
 @onready var gun = $Gun
 
 enum State { IDLE, INVESTIGATE, CHASE, STAGGERED }
@@ -26,6 +28,7 @@ var state := State.IDLE
 var investigation_target := Vector2.ZERO
 var investigation_wait := 0.0
 var stagger_time := 0.0
+var patrol_index := 0
 
 func _ready() -> void:
 	super._ready()
@@ -33,6 +36,7 @@ func _ready() -> void:
 	tile_world = get_tree().get_first_node_in_group("pathfinding_world")
 	strafe_sign = [-1.0, 1.0].pick_random()
 	reaction_time = randf_range(reaction_time_min, maxf(reaction_time_min, reaction_time_max))
+	if actor_type == "dog": reaction_time *= 0.55
 	gun.cooldown = randf_range(0.25, 0.9)
 	gun.fired.connect(_on_gun_fired)
 	actor_died.connect(_on_actor_died)
@@ -67,8 +71,7 @@ func _physics_process(delta: float) -> void:
 		state = State.INVESTIGATE
 		investigation_wait = 0.0
 	if state == State.IDLE:
-		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
-		move_and_slide()
+		_update_patrol(delta)
 		return
 	var target_position := player.global_position if state == State.CHASE else investigation_target
 	var to_target := target_position - global_position
@@ -86,15 +89,18 @@ func _physics_process(delta: float) -> void:
 	var aim_direction := to_player.normalized()
 	rotation = lerp_angle(rotation, direction.angle(), 1.0 - exp(-10.0 * delta))
 	path_refresh -= delta
-	if path_refresh <= 0.0 and is_instance_valid(tile_world):
-		path_refresh = 0.22 + randf_range(0.0, 0.08)
+	var direct_dog_chase := actor_type == "dog" and state == State.CHASE and has_visual_contact
+	if direct_dog_chase:
+		path_points.clear()
+	elif path_refresh <= 0.0 and is_instance_valid(tile_world):
+		path_refresh = (0.07 + randf_range(0.0, 0.035)) if actor_type == "dog" else (0.12 + randf_range(0.0, 0.05))
 		path_points = tile_world.get_navigation_path(global_position, target_position)
 	if not path_points.is_empty():
 		while not path_points.is_empty() and global_position.distance_to(path_points[0]) < 5.0:
 			path_points.remove_at(0)
 		if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
 	if state == State.INVESTIGATE or distance > preferred_distance:
-		velocity = direction * move_speed
+		velocity = direction * move_speed * (1.8 if actor_type == "dog" else 1.0)
 	elif distance < preferred_distance * 0.62:
 		velocity = -direction * move_speed * 0.72
 	else:
@@ -105,6 +111,22 @@ func _physics_process(delta: float) -> void:
 	if state == State.CHASE and sees_player and distance <= shoot_range:
 		if gun.ammo <= 0 and not gun.is_reloading: gun.reload()
 		if gun.try_fire(aim_direction): gun.cooldown += randf_range(0.35, 0.75)
+
+func _update_patrol(delta: float) -> void:
+	if patrol_waypoints.size() < 2:
+		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
+		move_and_slide()
+		return
+	var patrol_target := patrol_waypoints[patrol_index]
+	if global_position.distance_to(patrol_target) < 5.0:
+		patrol_index = (patrol_index + 1) % patrol_waypoints.size()
+		patrol_target = patrol_waypoints[patrol_index]
+	var patrol_direction := global_position.direction_to(patrol_target)
+	rotation = lerp_angle(rotation, patrol_direction.angle(), 1.0 - exp(-8.0 * delta))
+	velocity = patrol_direction * move_speed * 0.62
+	var intended_velocity := velocity
+	move_and_slide()
+	push_contact_bodies(intended_velocity)
 
 func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
 	if has_visual_contact:
@@ -125,7 +147,12 @@ func _can_see_player(distance: float, to_player: Vector2) -> bool:
 
 func _on_combat_noise(world_position: Vector2, radius: float, _source_kind: String) -> void:
 	if is_dead or state == State.CHASE: return
-	if global_position.distance_to(world_position) > radius: return
+	var effective_distance := global_position.distance_to(world_position)
+	if effective_distance > radius: return
+	var query := PhysicsRayQueryParameters2D.create(global_position, world_position, 8)
+	query.exclude = [get_rid()]
+	if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): effective_distance *= 1.5
+	if effective_distance > radius: return
 	state = State.INVESTIGATE
 	investigation_target = world_position
 	investigation_wait = 0.0

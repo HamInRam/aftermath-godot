@@ -16,6 +16,7 @@ const WEAPON_DATA := {
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 142)
 @export var enemy_spawns := PackedVector2Array([Vector2(45, 47), Vector2(130, 28), Vector2(170, 64), Vector2(230, 38), Vector2(280, 62), Vector2(125, 108), Vector2(180, 147), Vector2(230, 113), Vector2(280, 147)])
+@export var enemy_patrol_offsets := PackedVector2Array([Vector2(24, 0), Vector2(24, 0), Vector2(20, 0), Vector2(20, 0), Vector2(24, 0), Vector2(20, 0), Vector2(0, 20), Vector2(0, 20), Vector2(24, 0)])
 @export var doors_enabled := true
 
 var phase := "combat"
@@ -130,19 +131,21 @@ func _start_run() -> void:
 	player.clean_requested.connect(_on_clean_requested)
 	player.died.connect(_on_player_died)
 	add_child(player)
-	for pos in enemy_spawns: _spawn_enemy(pos)
+	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
 
 func _sync_ammo_ui() -> void:
 	if is_instance_valid(player) and is_instance_valid(player.gun):
 		Events.publish_ammo(player.gun.ammo, player.gun.max_ammo, player.gun.is_reloading)
 
-func _spawn_enemy(pos: Vector2) -> void:
+func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	var enemy = ENEMY_SCENE.instantiate()
 	enemy.projectile_requested.connect(_on_projectile_requested)
 	enemy.died_at.connect(_on_enemy_died)
 	enemies_container.add_child(enemy)
 	enemy.global_position = pos
+	if patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size():
+		enemy.patrol_waypoints = PackedVector2Array([pos, pos + enemy_patrol_offsets[patrol_index]])
 
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return

@@ -32,6 +32,10 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Enemy visual reaction delay randomized from 0.2–0.4 seconds, requiring continuous exposure before pursuit and firing begin.
 - Separate opaque-vision collision layer: walls and doors block sight while physical glass windows remain transparent to AI raycasts.
 - Optional per-enemy translucent FOV debug cone with range arc for angle and distance tuning.
+- Wall-aware instantaneous hearing: opaque geometry applies a 1.5x effective-distance penalty while glass does not attenuate sound.
+- Authored two-point idle patrol routes for spawned enemies, replaced immediately by investigation or chase targets when alerted.
+- Safer diagonal AStarGrid2D routing with 7–10 frame human refresh intervals and solid furniture included in navigation.
+- Reusable `human` / `dog` AI profile foundation with faster dog reaction, movement, path refresh and direct open-room pursuit.
 
 ### Changed
 
@@ -58,6 +62,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Camera-tilt regression verifies a level center dead zone, mirrored left/right angles and the configured maximum rotation.
 - Orthographic-layer regression verifies the exterior underlay, transparent floor perimeter, solid navigation boundary, 0.25 normal look weight and Shift extended view.
 - Enemy-FOV regression verifies continuous reaction timing, exposure reset, distance/angle rejection, wall and door occlusion, and sight through physical windows.
+- Hearing/patrol/path regression verifies glass and wall propagation differences, patrol motion, furniture obstacles, diagonal routing and weapon-specific sound radii.
 
 ## [v.0.0.1] - 2026-08-16
 

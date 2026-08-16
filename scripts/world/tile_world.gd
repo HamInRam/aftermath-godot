@@ -25,7 +25,7 @@ func _ready() -> void:
 	wall_shadow_layer.tile_set = wall_layer.tile_set
 	decoration_layer.tile_set = floor_layer.tile_set
 	object_shadow_layer.tile_set = floor_layer.tile_set
-	object_layer.tile_set = floor_layer.tile_set
+	object_layer.tile_set = wall_layer.tile_set
 	_build_exterior()
 	_build_floor()
 	_build_walls()
@@ -64,6 +64,12 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 			tile_data.set_collision_polygon_points(1, 0, PackedVector2Array([
 				Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
 			]))
+	for tile_index in [Tile.SOFA, Tile.TABLE, Tile.TOILET, Tile.SINK, Tile.BED, Tile.TV, Tile.VENDING] if with_physics else []:
+		var tile_data := atlas.get_tile_data(Vector2i(int(tile_index), 0), 0)
+		tile_data.add_collision_polygon(0)
+		tile_data.set_collision_polygon_points(0, 0, PackedVector2Array([
+			Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
+		]))
 	return tile_set
 
 func _set_tile(layer: TileMapLayer, cell: Vector2i, tile: Tile) -> void:
@@ -160,13 +166,15 @@ func _build_object_shadows() -> void:
 func _build_path_grid() -> void:
 	path_grid.region = Rect2i(Vector2i.ZERO, MAP_SIZE)
 	path_grid.cell_size = Vector2(TILE_SIZE)
-	path_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
+	path_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 	path_grid.update()
 	for y in range(MAP_SIZE.y):
 		for x in range(MAP_SIZE.x):
 			var cell := Vector2i(x, y)
 			if floor_layer.get_cell_source_id(cell) < 0: path_grid.set_point_solid(cell, true)
 	for cell in wall_layer.get_used_cells(): path_grid.set_point_solid(cell, true)
+	for cell in object_layer.get_used_cells():
+		if object_layer.get_cell_atlas_coords(cell).x != Tile.PLANT: path_grid.set_point_solid(cell, true)
 
 func get_navigation_path(from_world: Vector2, to_world: Vector2) -> PackedVector2Array:
 	var from_cell := floor_layer.local_to_map(floor_layer.to_local(from_world))

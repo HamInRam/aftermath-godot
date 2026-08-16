@@ -18,5 +18,5 @@ extends Resource
 @export_range(0.01, 0.1, 0.005) var muzzle_flash_duration := 0.045
 @export_range(300.0, 1000.0, 10.0) var bullet_speed := 650.0
 @export_range(0.0, 80.0, 1.0) var knockback := 24.0
-@export_range(0.0, 400.0, 5.0) var hearing_radius := 190.0
+@export_range(0.0, 800.0, 5.0) var hearing_radius := 190.0
 @export_range(0.0, 0.1, 0.005) var hit_stop := 0.035
