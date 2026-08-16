@@ -48,6 +48,16 @@ modulate = Color(0.06, 0.035, 0.08, 0.52)
 z_index = -5
 collision_enabled = false
 
+[node name="ObjectShadows" type="TileMapLayer" parent="TileMap"]
+z_index = 0
+position = Vector2(3, 3)
+collision_enabled = false
+modulate = Color(0.035, 0.02, 0.05, 0.5)
+
+[node name="Objects" type="TileMapLayer" parent="TileMap"]
+z_index = 1
+collision_enabled = false
+
 [node name="CanvasModulate" type="CanvasModulate" parent="."]
 color = Color(0.72, 0.67, 0.76, 1)
 

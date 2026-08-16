@@ -23,6 +23,9 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Detachable pixel gore chunks with directional flight, wall collision, spin, settling and existing cleanup compatibility.
 - Fixed-direction pixel fake shadows for walls, players, enemies, weapons, shell casings, corpses and rotating door panels.
 - Window-aware wall-shadow breaks that preserve sightline and architectural light framing.
+- Sixteen original 8x8 environment and furnishing tiles for checkerboard, plank, carpet, stage, corridor, brick and bathroom surfaces plus sofas, tables and fixtures.
+- High-contrast Nightclub room zoning with bright architectural trim, distinct room identities and a dedicated furniture layer.
+- Fixed-offset object shadows for furniture and fixtures, matching the existing actor, weapon, casing and door shadow language.
 
 ### Changed
 
@@ -44,6 +47,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Nightclub completed a 600-physics-frame integration run without runtime errors or leaked time scale.
 - Gore-system regression verifies line/fan/radial patterns, lethal chunks, progressive pools, wound variants and the complete enemy-death wiring.
 - Fake-lighting regression verifies global visibility, window shadow breaks and fixed-offset shadows that follow rotating doors and weapons.
+- Interior-style regression verifies all seven Nightclub material zones, bright wall trim, furniture placement and synchronized object shadows.
 
 ## [v.0.0.1] - 2026-08-16
 

@@ -14,6 +14,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Abrupt combat-to-cleanup silence interface after the final kill
 - Weapon-shaped directional blood, progressively expanding death pools, modular corpse wounds and physics-driven pixel gore chunks
 - Globally visible stage lighting with fixed right-down pixel shadows and window-aware shadow breaks; no hue-cycling background
+- Original high-contrast Nightclub interior with room-specific floors, bright wall trim, dense furnishings and matching fake shadows
 
 ## Phase 1 foundation
 
@@ -64,8 +65,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 ## Implemented presentation
 
-- Imported 8×8 pixel-art tile atlas with concrete, wood, red carpet, dark tile and grass floor variants
-- Editable `TileMap` hierarchy with independent `Floor`, `Walls` and `Decoration` TileMapLayer nodes
+- Expanded original 8×8 pixel-art tile atlas with seven additional room materials and sixteen new environment/furnishing tiles overall
+- Editable `TileMap` hierarchy with independent `Floor`, `Walls`, `Decoration`, `Objects` and matching shadow layers
 - Grid-built rooms with open doorways, window sections and a stairwell marker
 - Wall/window TileSet physics that stops actors and projectiles
 - CanvasModulate night grading with four colored PointLight2D atmosphere pools
