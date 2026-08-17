@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource path="res://scripts/player.gd" type="Script" id="1_player"]
 [ext_resource path="res://scenes/gun.tscn" type="PackedScene" id="2_gun"]
 [ext_resource path="res://assets/player/player_16x16.png" type="Texture2D" id="3_player_texture"]
 [ext_resource path="res://scripts/effects/fake_sprite_shadow.gd" type="Script" id="4_shadow"]
+[ext_resource path="res://scripts/effects/melee_weapon_visual.gd" type="Script" id="5_melee_visual"]
 
 [sub_resource type="CircleShape2D" id="CircleShape_player"]
 radius = 5.0
@@ -30,6 +31,11 @@ modulate = Color(1.15, 1.15, 1.22, 1)
 
 [node name="MeleeTip" type="Marker2D" parent="UpperBody/BodySprite"]
 position = Vector2(7, 0)
+
+[node name="MeleeWeaponVisual" type="Node2D" parent="UpperBody/BodySprite"]
+visible = false
+z_index = 2
+script = ExtResource("5_melee_visual")
 
 [node name="FakeShadow" type="Sprite2D" parent="."]
 z_index = -1

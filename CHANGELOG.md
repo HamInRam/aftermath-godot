@@ -17,6 +17,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Additive-blended melee effects now brighten over dark floors and blood, with stable micro air particles, a six-step expanding cyan knife slash and a center-bulged dual-edge hot-pink bat sweep.
 - Layered player `UpperBody` presentation with code-driven wind-up, 4–6px strike thrust, weapon-specific rotational overshoot and sine-smoothed recovery, without disturbing root physics, aim or camera transforms.
 - BodySprite-attached `MeleeTip` global anchor now spawns root-level trails at the animated hand/weapon point; removed the duplicated 12px VFX offset and clamped knife/bat expansion inside the remaining physical reach.
+- Moved the held fist/knife/bat drawing from the aim-only Player root into `BodySprite/MeleeWeaponVisual`, so the weapon visibly inherits local wind-up, overshoot and recovery instead of only translating forward.
 
 - GunData-driven recoil, camera shake, muzzle-flash size/duration, bullet speed, knockback, hearing radius and lethal hit-stop tuning.
 - One-to-two-frame muzzle flash geometry with a short-lived PointLight2D for dark-room illumination.

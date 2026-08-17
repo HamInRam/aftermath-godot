@@ -16,6 +16,7 @@ const MELEE_DATA := {
 @onready var upper_body: Node2D = $UpperBody
 @onready var body_sprite: Sprite2D = $UpperBody/BodySprite
 @onready var melee_tip: Marker2D = $UpperBody/BodySprite/MeleeTip
+@onready var melee_weapon_visual: Node2D = $UpperBody/BodySprite/MeleeWeaponVisual
 @onready var gun = $UpperBody/Gun
 @onready var melee_shape: CollisionShape2D = $MeleeArea/CollisionShape2D
 var cleanup_mode := false
@@ -81,6 +82,8 @@ func _equip_weapon(mode: String) -> void:
 	equipped_mode = "gun" if mode == "gun" else "melee"
 	if mode != "gun": current_melee_type = mode
 	gun.visible = equipped_mode == "gun" and not cleanup_mode and not is_executing
+	melee_weapon_visual.visible = equipped_mode == "melee" and not cleanup_mode and not is_executing
+	if mode != "gun": melee_weapon_visual.set_weapon(current_melee_type)
 	queue_redraw()
 
 func _start_melee_attack() -> void:
@@ -196,6 +199,7 @@ func _start_execution_sequence(target: CharacterBody2D) -> void:
 	execution_target = target
 	velocity = Vector2.ZERO
 	gun.visible = false
+	melee_weapon_visual.visible = false
 	var approach := global_position.direction_to(target.global_position)
 	if approach.length_squared() < 0.001: approach = Vector2.RIGHT.rotated(rotation)
 	global_position = target.global_position - approach * 6.0
@@ -220,6 +224,7 @@ func _finish_execution() -> void:
 	is_executing = false
 	execution_target = null
 	gun.visible = equipped_mode == "gun" and not cleanup_mode
+	melee_weapon_visual.visible = equipped_mode == "melee" and not cleanup_mode
 	queue_redraw()
 
 func set_cleanup_mode(enabled: bool) -> void:
@@ -229,6 +234,7 @@ func set_cleanup_mode(enabled: bool) -> void:
 		is_melee_attacking = false
 		_reset_melee_pose()
 	gun.visible = not enabled and equipped_mode == "gun"
+	melee_weapon_visual.visible = not enabled and equipped_mode == "melee"
 	queue_redraw()
 
 func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
@@ -254,13 +260,3 @@ func _draw() -> void:
 		draw_arc(Vector2(6, 3), 3.0, -1.2, 1.2, 6, Color("ffd6c2"), 2.0)
 	if execution_pulse > 0.0:
 		draw_circle(Vector2(9, 0), 3.5, Color(1.0, 0.18, 0.25, execution_pulse / 0.11))
-	if equipped_mode == "melee" and not cleanup_mode:
-		var tint: Color = MELEE_DATA[current_melee_type].color
-		if current_melee_type == "fist":
-			draw_circle(Vector2(7, -2), 1.7, tint)
-			draw_circle(Vector2(7, 2), 1.7, tint)
-		elif current_melee_type == "knife":
-			draw_line(Vector2(4, 0), Vector2(12, 0), tint, 2.0)
-			draw_line(Vector2(4, 0), Vector2(2, 2), Color("412e46"), 2.0)
-		else:
-			draw_line(Vector2(3, 0), Vector2(13, 0), tint, 3.0)
