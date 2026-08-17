@@ -28,6 +28,9 @@ texture_filter = 1
 texture = ExtResource("3_player_texture")
 modulate = Color(1.15, 1.15, 1.22, 1)
 
+[node name="MeleeTip" type="Marker2D" parent="UpperBody/BodySprite"]
+position = Vector2(7, 0)
+
 [node name="FakeShadow" type="Sprite2D" parent="."]
 z_index = -1
 texture_filter = 1

@@ -15,6 +15,7 @@ const MELEE_DATA := {
 
 @onready var upper_body: Node2D = $UpperBody
 @onready var body_sprite: Sprite2D = $UpperBody/BodySprite
+@onready var melee_tip: Marker2D = $UpperBody/BodySprite/MeleeTip
 @onready var gun = $UpperBody/Gun
 @onready var melee_shape: CollisionShape2D = $MeleeArea/CollisionShape2D
 var cleanup_mode := false
@@ -108,6 +109,7 @@ func _perform_melee_attack(data: Dictionary) -> void:
 	var strike_tween := create_tween().set_parallel(true)
 	strike_tween.tween_property(body_sprite, "position", Vector2(thrust_distance, 0.0), 0.04).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	strike_tween.tween_property(body_sprite, "rotation", strike_rotation, 0.04).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	melee_tip.position = Vector2(6.0 if current_melee_type == "fist" else (8.0 if current_melee_type == "knife" else 10.0), 0.0)
 	_spawn_melee_trail(data)
 	if melee_shape.shape is CircleShape2D:
 		(melee_shape.shape as CircleShape2D).radius = float(data.range)
@@ -156,9 +158,11 @@ func _melee_blocked_by_geometry(target: CollisionObject2D) -> bool:
 func _spawn_melee_trail(data: Dictionary) -> void:
 	var trail = MELEE_TRAIL_SCENE.instantiate()
 	get_tree().current_scene.add_child(trail)
-	trail.global_position = global_position
-	trail.global_rotation = rotation
-	trail.setup(current_melee_type, float(data.range), deg_to_rad(float(data.angle)), float(data.duration), data.color)
+	trail.global_position = melee_tip.global_position
+	trail.global_rotation = melee_tip.global_rotation
+	var tip_distance := global_position.distance_to(melee_tip.global_position)
+	var remaining_visual_reach := maxf(2.0, float(data.range) - tip_distance)
+	trail.setup(current_melee_type, remaining_visual_reach, deg_to_rad(float(data.angle)), float(data.duration), data.color)
 
 func attempt_ground_execution() -> bool:
 	if is_executing or cleanup_mode or is_dead: return false

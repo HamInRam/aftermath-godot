@@ -27,7 +27,7 @@ func setup(new_type: String, new_radius: float, new_arc_angle: float, new_life: 
 		var t := randf_range(0.35, 1.0)
 		var angle := lerpf(-arc_angle * 0.5, arc_angle * 0.5, t)
 		air_motes.append({
-			"origin": Vector2(12.0, 0.0) + Vector2.RIGHT.rotated(angle) * radius * randf_range(0.72, 1.0),
+			"origin": Vector2.RIGHT.rotated(angle) * radius * randf_range(0.72, 1.0),
 			"velocity": Vector2.RIGHT.rotated(angle + randf_range(-0.12, 0.12)) * randf_range(12.0, 24.0),
 			"size": 1.0 if effect_type == "knife" else randf_range(1.0, 2.0),
 		})
@@ -44,7 +44,7 @@ func _draw() -> void:
 	var alpha := 1.0 - age / life
 	var start_angle := -arc_angle * 0.5
 	var end_angle := arc_angle * 0.5
-	var visual_offset := Vector2(12.0, 0.0)
+	var visual_offset := Vector2.ZERO
 	if effect_type == "fist":
 		var punch_color := Color(trail_color, alpha * 0.25)
 		draw_line(visual_offset + Vector2(0, -3), visual_offset + Vector2(radius, -3 + punch_jitter), punch_color, 1.0)
@@ -55,7 +55,7 @@ func _draw() -> void:
 		for index in range(7):
 			var t := float(index) / 6.0
 			var angle := lerpf(start_angle, end_angle, t)
-			var dynamic_radius := radius * (1.0 + t * 0.15)
+			var dynamic_radius := radius * (0.85 + t * 0.15)
 			knife_points.append(visual_offset + Vector2.RIGHT.rotated(angle) * dynamic_radius)
 		draw_polyline(knife_points, knife_color, 2.0)
 	else:
@@ -63,7 +63,8 @@ func _draw() -> void:
 		for index in range(13):
 			var t := float(index) / 12.0
 			var angle := lerpf(start_angle, end_angle, t)
-			var dynamic_radius := radius + sin(t * PI) * 6.0
+			var bulge := minf(2.0, radius * 0.18)
+			var dynamic_radius := radius - bulge + sin(t * PI) * bulge
 			bat_points.append(visual_offset + Vector2.RIGHT.rotated(angle) * dynamic_radius)
 		draw_polyline(bat_points, Color(trail_color, alpha * 0.35), 6.0)
 		draw_polyline(bat_points, Color(trail_color, alpha * 0.80), 1.5)
