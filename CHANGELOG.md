@@ -2,7 +2,7 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
-## [v.0.0.3] - Unreleased
+## [v.0.0.3] - 2026-08-17
 
 ### Added
 
