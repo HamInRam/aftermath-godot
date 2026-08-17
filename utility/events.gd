@@ -7,6 +7,7 @@ signal weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, weap
 signal combat_noise(world_position: Vector2, radius: float, source_kind: String)
 signal combat_ended
 signal door_impact(world_position: Vector2, intensity: float)
+signal glass_shattered(world_position: Vector2)
 
 func publish_ammo(current: int, maximum: int, is_reloading: bool) -> void:
 	ammo_updated.emit(current, maximum, is_reloading)

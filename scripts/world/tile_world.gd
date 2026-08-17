@@ -4,6 +4,7 @@ extends Node2D
 const TILE_SIZE := Vector2i(8, 8)
 const MAP_SIZE := Vector2i(48, 28)
 const ATLAS_TEXTURE := preload("res://assets/tiles/environment_tiles_8x8.png")
+const GLASS_SHARDS_SCENE := preload("res://scenes/effects/glass_shards.tscn")
 
 enum Tile { CONCRETE, WOOD, RED_CARPET, WALL, WINDOW, DARK_TILE, GRASS, STAIRS, CHECKER, BLACK_PLANK, TEAL_CARPET, CREAM, MAGENTA_STAGE, RED_BRICK, BATH_TILE, BRIGHT_WALL, SOFA, TABLE, TOILET, SINK, BED, TV, VENDING, PLANT }
 
@@ -224,3 +225,24 @@ func get_navigation_path(from_world: Vector2, to_world: Vector2) -> PackedVector
 	for index in range(1, id_path.size()):
 		world_path.append(floor_layer.to_global(floor_layer.map_to_local(id_path[index])))
 	return world_path
+
+func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
+	var cell := wall_layer.local_to_map(wall_layer.to_local(hit_position + flight_direction.normalized()))
+	if wall_layer.get_cell_atlas_coords(cell).x != Tile.WINDOW:
+		var found := false
+		for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var neighbor: Vector2i = cell + Vector2i(offset)
+			if wall_layer.get_cell_atlas_coords(neighbor).x == Tile.WINDOW:
+				cell = neighbor
+				found = true
+				break
+		if not found: return false
+	wall_layer.erase_cell(cell)
+	path_grid.set_point_solid(cell, false)
+	var shards = GLASS_SHARDS_SCENE.instantiate()
+	shards.global_position = hit_position
+	shards.setup(flight_direction)
+	var effect_parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
+	effect_parent.add_child(shards)
+	Events.glass_shattered.emit(hit_position)
+	return true

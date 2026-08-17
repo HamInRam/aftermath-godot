@@ -28,6 +28,10 @@ func _physics_process(delta: float) -> void:
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
 		var collider := collision.get_collider()
+		var tile_world = collider.get_parent() if collider is TileMapLayer else null
+		if tile_world != null and tile_world.has_method("shatter_glass_at") and tile_world.shatter_glass_at(collision.get_position(), direction):
+			global_position = collision.get_position() + direction * 9.0
+			return
 		if collider is CollisionObject2D and collider.get_collision_layer_value(3):
 			var sparks = WALL_SPARKS_SCENE.instantiate()
 			sparks.global_position = collision.get_position()

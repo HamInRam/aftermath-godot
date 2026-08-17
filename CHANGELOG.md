@@ -43,7 +43,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Investigation arrival behavior with a configurable 2.2-second multi-direction look-around before returning to patrol or sentry duty.
 - Explicit high-priority visual chase transition with 1.25x human pursuit speed and last-seen-position investigation after contact is lost.
 - Named Player, Enemy, Solid_Wall, Glass_Window, Projectile and Vision_Occluder physics layers with purpose-specific collision masks.
-- Glass now blocks actor movement while allowing projectile, vision and non-attenuated sound passage; solid walls and doors retain all relevant blocking behavior.
+- Glass blocks actor movement while passing vision and non-attenuated sound; the first projectile shatters and removes it, then continues through.
 - Red/green FOV debug feedback that changes immediately when raw visual contact is established.
 - Runtime `F3` toggle that enables or disables FOV visualization for every active enemy without requiring Inspector edits.
 - Larger 7–10px HUD typography, stronger muted-text contrast and a shorter control legend for legibility at the native 320x180 viewport.
@@ -66,6 +66,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Execution-specific camera trauma, final-frame hit stop, red flash, radial blood burst, gore chunks, corpse pool and normal combo credit.
 - Eight-particle 0.15-second metal spark bursts on Solid_Wall bullet impacts, emitted opposite the incoming trajectory.
 - Expanded lethal blood feedback with up to 60 directional mist droplets, a 48-particle death spray, 2–8 tissue/bone chunks and stronger kill trauma.
+- Destructible TileMap glass: Layer 4 impacts erase the window cell, clear its navigation obstacle, emit 52 directional cyan shards and a cool camera flash.
+- Projectiles continue nine pixels beyond shattered glass and retain their original direction, damage, owner and remaining lifetime for through-window kills.
 - Context-sensitive center-screen `[ SPACE ] EXECUTE` prompt near a knocked-down enemy.
 - Zero-input door activation: any moving player or enemy slide collision instantly starts the same fixed-speed slam.
 - One-way CLOSED → SLAM_OPENING → OPEN state machine; opened doors remain open and cannot fight with a close transition.

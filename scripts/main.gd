@@ -124,10 +124,15 @@ func _connect_events() -> void:
 	Events.reload_finished.connect(_on_reload_finished)
 	Events.weapon_fired.connect(_on_weapon_fired)
 	Events.door_impact.connect(_on_door_impact)
+	Events.glass_shattered.connect(_on_glass_shattered)
 
 func _on_door_impact(_world_position: Vector2, intensity: float) -> void:
 	trauma_camera.add_trauma(clampf(intensity * 0.13, 0.04, 0.24))
 	if intensity >= 1.4: _on_impact_flash_requested(Color(1.0, 0.92, 0.8, 0.18))
+
+func _on_glass_shattered(_world_position: Vector2) -> void:
+	trauma_camera.add_trauma(0.16)
+	_on_impact_flash_requested(Color(0.72, 0.92, 1.0, 0.12))
 
 func _on_ammo_updated(current: int, maximum: int, is_reloading: bool) -> void:
 	if phase == "cleanup": return

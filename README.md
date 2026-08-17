@@ -12,7 +12,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Corpse discovery interrupts idle duty, drives A* incident investigation and produces a timed multi-direction search at the scene
 - Confirmed sightings enter a faster 1.25x chase; lost targets are searched at their last known position before patrol resumes
 - Named physics layers separate players, enemies, solid walls, glass, projectiles and opaque vision blockers
-- Glass blocks movement but passes bullets, vision and full-strength sound; solid walls and doors block and attenuate the appropriate systems
+- Glass blocks movement, passes vision and full-strength sound, and shatters on the first bullet while allowing that projectile to continue
 - Optional FOV debug cones switch from red to green on raw visual contact
 - Press `F3` during gameplay to toggle every enemy FOV cone; no Inspector configuration is required
 - Enlarged high-contrast HUD typography remains pixel-crisp at the native resolution
@@ -104,6 +104,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - CanvasModulate night grading with four colored PointLight2D atmosphere pools
 - Bullet trails, firing flash and screen shake
 - Eight-particle reverse-direction metal sparks on solid-wall bullet impacts
+- Destructible Layer 4 glass tiles with 52 cyan shards, collision/navigation removal, a cool flash and projectile continuation
 - 40–60-droplet lethal blood fans with 48-particle death bursts and expanded tissue/bone gore chunks
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
 - Smooth bounded camera framing between the player and cursor for forward visibility
