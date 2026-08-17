@@ -8,9 +8,9 @@ signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction:
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
 const MELEE_DATA := {
-	"fist": {"range": 24.0, "angle": 40.0, "windup": 0.03, "cooldown": 0.20, "duration": 0.06, "lethal": false, "color": Color("ffffff")},
-	"knife": {"range": 32.0, "angle": 55.0, "windup": 0.02, "cooldown": 0.25, "duration": 0.05, "lethal": true, "color": Color("00ffff")},
-	"bat": {"range": 48.0, "angle": 140.0, "windup": 0.08, "cooldown": 0.45, "duration": 0.12, "lethal": true, "color": Color("ff007f")},
+	"fist": {"range": 12.0, "angle": 35.0, "windup": 0.03, "cooldown": 0.18, "duration": 0.06, "lethal": false, "color": Color("ffffff")},
+	"knife": {"range": 16.0, "angle": 45.0, "windup": 0.02, "cooldown": 0.22, "duration": 0.05, "lethal": true, "color": Color("00ffff")},
+	"bat": {"range": 28.0, "angle": 120.0, "windup": 0.08, "cooldown": 0.42, "duration": 0.12, "lethal": true, "color": Color("ff007f")},
 }
 
 @onready var gun = $Gun
@@ -94,7 +94,7 @@ func _perform_melee_attack(data: Dictionary) -> void:
 	_spawn_melee_trail(data)
 	if melee_shape.shape is CircleShape2D:
 		(melee_shape.shape as CircleShape2D).radius = float(data.range)
-	melee_shape.position = Vector2(float(data.range) * 0.3, 0.0)
+	melee_shape.position = Vector2(14.0, 0.0)
 	var forward := Vector2.RIGHT.rotated(rotation)
 	var half_angle := deg_to_rad(float(data.angle) * 0.5)
 	for body in _query_melee_bodies():

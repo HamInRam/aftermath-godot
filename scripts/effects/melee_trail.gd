@@ -26,17 +26,17 @@ func _draw() -> void:
 	var alpha := 1.0 - age / life
 	var start_angle := -arc_angle * 0.5
 	var end_angle := arc_angle * 0.5
+	var visual_offset := Vector2(12.0, 0.0)
 	if effect_type == "fist":
 		var punch_color := Color(trail_color, alpha * 0.20)
-		draw_line(Vector2(4, -1), Vector2.RIGHT.rotated(start_angle) * radius, punch_color, 1.0)
-		draw_line(Vector2(4, 1), Vector2.RIGHT.rotated(end_angle) * radius, punch_color, 1.0)
+		draw_line(visual_offset, visual_offset + Vector2.RIGHT.rotated(start_angle) * radius, punch_color, 1.0)
+		draw_line(visual_offset, visual_offset + Vector2.RIGHT.rotated(end_angle) * radius, punch_color, 1.0)
 	elif effect_type == "knife":
 		var knife_color := Color(trail_color, alpha * 0.90)
-		draw_arc(Vector2.ZERO, radius, start_angle, end_angle, 8, knife_color, 1.5)
-		draw_line(Vector2(4, 0), Vector2.RIGHT.rotated(end_angle) * radius, Color(trail_color, alpha * 0.55), 1.0)
+		draw_arc(visual_offset, radius, start_angle, end_angle, 6, knife_color, 1.0)
 	else:
-		var bat_fill := Color(trail_color, alpha * 0.30)
-		draw_arc(Vector2.ZERO, radius, start_angle, end_angle, 16, bat_fill, 5.0)
+		var bat_fill := Color(trail_color, alpha * 0.40)
+		draw_arc(visual_offset, radius, start_angle, end_angle, 12, bat_fill, 3.5)
 		var bat_edge := Color(trail_color, alpha * 0.72)
-		draw_line(Vector2(4, 0), Vector2.RIGHT.rotated(start_angle) * radius, bat_edge, 2.0)
-		draw_line(Vector2(4, 0), Vector2.RIGHT.rotated(end_angle) * radius, bat_edge, 2.0)
+		draw_line(visual_offset, visual_offset + Vector2.RIGHT.rotated(start_angle) * radius, bat_edge, 1.5)
+		draw_line(visual_offset, visual_offset + Vector2.RIGHT.rotated(end_angle) * radius, bat_edge, 1.5)
