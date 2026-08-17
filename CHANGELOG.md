@@ -2,7 +2,7 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
-## [v.0.0.4] - Unreleased
+## [v.0.0.3] - Unreleased
 
 ### Added
 
@@ -15,17 +15,6 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Cached execution targeting and event-driven enemy/cleanup counters.
 - Cleanup-registry and wall-occluded black-box AI regressions.
 - GitHub Actions workflow for Godot parsing and the full regression suite.
-
-### Changed
-
-- Events is now a pure signal bus; noise occlusion and priority are calculated once per listener.
-- Scene completion now requires removal of all evidence rather than blood alone.
-- CombatAudioDirector owns real combat and ambience players with an abrupt combat fade and cleanup ambience transition.
-
-## [v.0.0.2] - Unreleased
-
-### Added
-
 - Explicit SEARCH and ATTACK enemy states with short visible attack tells instead of firing or striking directly from movement logic.
 - Direction-aware multi-point searches around the player's last confirmed position, with per-enemy route variation and walkability filtering.
 - Distance- and occlusion-scaled sound uncertainty so guards investigate plausible nearby positions instead of receiving exact coordinates through walls.
@@ -44,6 +33,16 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Weapon-specific whiff recovery, melee noise propagation and three-stage execution noise that exposes committed players to nearby guards.
 - Upright in-world state glyphs for investigation, search, confirmed pursuit/attack and hold-position guard duty.
 - Noise-role and melee-balance regressions covering responder assignments, speed profiles, single-target edged attacks, capped bat crowds and miss recovery.
+
+### Changed
+
+- Events is now a pure signal bus; noise occlusion and priority are calculated once per listener.
+- Scene completion now requires removal of all evidence rather than blood alone.
+- CombatAudioDirector owns real combat and ambience players with an abrupt combat fade and cleanup ambience transition.
+
+## [v.0.0.2] - Unreleased
+
+### Added
 
 - Data-driven player melee arsenal with extreme close-contact fists (12px/35°), knife (16px/45°) and bat (28px/120°), each with distinct windup and cooldown.
 - Dynamic enemy-only MeleeArea broad phase followed by exact range/angle filtering and wall/glass ray occlusion, preventing attacks through geometry.

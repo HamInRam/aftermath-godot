@@ -2,7 +2,7 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
-## v0.0.4 architecture and cleanup
+## v0.0.3 architecture, tactics and cleanup
 
 - Pure `Events` signal bus with a dedicated `CombatDirector` for one-pass hearing evaluation and push/sweep/guard assignment
 - Central `CorpseIncidentRegistry` with transitive A–B–C incident merging

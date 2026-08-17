@@ -1,6 +1,6 @@
 # AFTERMATH Roadmap
 
-## v0.0.4 — Architecture and Cleanup Foundation
+## v0.0.3 — Squad Tactics, Architecture and Cleanup
 
 - Keep `Events` signal-only and route tactical hearing through `CombatDirector`.
 - Track transitive corpse incidents and every cleanup target through centralized registries.
@@ -15,9 +15,9 @@
 - Supply copyright-safe combat music and room ambience to the implemented audio transition players.
 - Add weapon pickups only after encounter and cleanup scoring are stable.
 
-## v0.0.3 — Squad Tactics and Combat Readability
+### Remaining encounter work
 
-The following features are intentionally deferred from v0.0.2:
+The following encounter-authoring features remain in the v0.0.3 scope:
 
 - Shared squad knowledge with explicit pursuit, guard and flank assignments.
 - Cover scoring, corner peeking and alternate-route selection for ranged guards.
