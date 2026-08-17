@@ -103,7 +103,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Wall/window TileSet physics that stops actors and projectiles
 - CanvasModulate night grading with four colored PointLight2D atmosphere pools
 - Bullet trails, firing flash and screen shake
-- Eight-particle reverse-direction metal sparks on solid-wall bullet impacts
+- Twelve-particle, 0.24-second reverse-direction metal sparks on StaticBody2D and TileMapLayer wall impacts
 - Destructible Layer 4 glass tiles with 52 cyan shards, collision/navigation removal, a cool flash and projectile continuation
 - 40–60-droplet lethal blood fans with 48-particle death bursts and expanded tissue/bone gore chunks
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma

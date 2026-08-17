@@ -64,7 +64,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Four-second door knockdowns with a sideways prone pose, disabled attacks and an alerted recovery transition.
 - Space-triggered 24px ground executions with nearest-target selection, full movement/fire/reload input lock and three timed impact beats.
 - Execution-specific camera trauma, final-frame hit stop, red flash, radial blood burst, gore chunks, corpse pool and normal combo credit.
-- Eight-particle 0.15-second metal spark bursts on Solid_Wall bullet impacts, emitted opposite the incoming trajectory.
+- Twelve-particle 0.24-second metal spark bursts on StaticBody2D and TileMapLayer wall impacts, emitted opposite the incoming trajectory and scaled for native-view visibility.
+- Fixed real level walls not producing sparks because TileMapLayer colliders were omitted from the solid-surface classifier.
 - Expanded lethal blood feedback with up to 60 directional mist droplets, a 48-particle death spray, 2–8 tissue/bone chunks and stronger kill trauma.
 - Destructible TileMap glass: Layer 4 impacts erase the window cell, clear its navigation obstacle, emit 52 directional cyan shards and a cool camera flash.
 - Projectiles continue nine pixels beyond shattered glass and retain their original direction, damage, owner and remaining lifetime for through-window kills.

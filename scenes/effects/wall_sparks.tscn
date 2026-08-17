@@ -6,20 +6,20 @@
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcess_sparks"]
 direction = Vector3(1, 0, 0)
 spread = 45.0
-initial_velocity_min = 150.0
-initial_velocity_max = 350.0
+initial_velocity_min = 60.0
+initial_velocity_max = 145.0
 gravity = Vector3(0, 0, 0)
 damping_min = 80.0
 damping_max = 140.0
-scale_min = 0.45
-scale_max = 0.9
-color = Color(1, 0.72, 0.05, 1)
+scale_min = 0.9
+scale_max = 1.5
+color = Color(1, 0.82, 0.08, 1)
 
 [node name="WallSparks" type="GPUParticles2D" groups=["wall_sparks"]]
 z_index = 9
 emitting = false
-amount = 8
-lifetime = 0.15
+amount = 12
+lifetime = 0.24
 one_shot = true
 explosiveness = 1.0
 randomness = 0.35
