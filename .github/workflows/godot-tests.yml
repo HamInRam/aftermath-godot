@@ -16,7 +16,10 @@ jobs:
           mv Godot_v4.7.1-stable_linux.x86_64 godot
           chmod +x godot
       - name: Parse project
-        run: ./godot --headless --editor --quit --path .
+        run: |
+          set -o pipefail
+          ./godot --headless --editor --quit --path . 2>&1 | tee parse.log
+          ! grep -E "SCRIPT ERROR|Parse Error|Compile Error|Failed to load script" parse.log
       - name: Run regression suite
         shell: bash
         run: |
@@ -27,6 +30,9 @@ jobs:
             tests/test_noise_roles.tscn \
             tests/test_melee_balance.tscn \
             tests/test_cleanup_registry.tscn \
+            tests/test_weapon_inventory.tscn \
             tests/test_ai_black_box.tscn; do
-            ./godot --headless --path . "$scene"
+            log_file="$(basename "$scene" .tscn).log"
+            ./godot --headless --path . "$scene" 2>&1 | tee "$log_file"
+            ! grep -E "SCRIPT ERROR|Parse Error|Compile Error|Failed to load script" "$log_file"
           done

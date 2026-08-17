@@ -216,16 +216,8 @@ func _physics_process(delta: float) -> void:
 		if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
 	if state == State.CHASE:
 		var holds_position := is_fixed_sentry or tactical_role == "guard"
-		velocity = Vector2.ZERO if holds_position else direction * move_speed * (1.9 if actor_type == "dog" else chase_speed_multiplier)
 		var tactical_distance := distance if has_visual_contact else target_distance
-		if holds_position:
-			velocity = Vector2.ZERO
-		elif enemy_type == "gunner" and reposition_time > 0.0:
-			velocity = direction.rotated(PI * 0.5 * reposition_sign) * move_speed * 0.82
-		elif enemy_type == "melee" and tactical_distance <= melee_range * 0.7:
-			velocity = Vector2.ZERO
-		elif enemy_type == "gunner" and tactical_distance < 28.0:
-			velocity = direction.rotated(PI * 0.5) * move_speed * 0.4 * strafe_sign
+		velocity = EnemyCombatController.chase_velocity(enemy_type, direction, move_speed, chase_speed_multiplier, actor_type, tactical_distance, melee_range, holds_position, reposition_time, reposition_sign, strafe_sign)
 	elif state in [State.INVESTIGATE, State.SEARCH] or distance > preferred_distance:
 		var speed_multiplier := (1.8 if actor_type == "dog" else chase_speed_multiplier) if state == State.CHASE else 1.0
 		velocity = direction * move_speed * speed_multiplier
@@ -233,6 +225,9 @@ func _physics_process(delta: float) -> void:
 		velocity = -direction * move_speed * 0.72
 	else:
 		velocity = direction.rotated(PI * 0.5) * move_speed * 0.32 * strafe_sign
+	if state in [State.CHASE, State.SEARCH, State.INVESTIGATE] and velocity.length_squared() > 1.0:
+		var separation := EnemyNavigation.crowd_separation(self)
+		velocity = (velocity + separation * move_speed * 0.32).limit_length(velocity.length())
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
@@ -249,7 +244,7 @@ func _physics_process(delta: float) -> void:
 					if blocked_shot_time >= 0.18 and not is_fixed_sentry and tactical_role != "guard":
 						blocked_shot_time = 0.0
 						reposition_time = 0.72
-						reposition_sign = -1.0 if int(get_instance_id()) % 2 == 0 else 1.0
+						reposition_sign = EnemyCombatController.choose_reposition_sign(self, player)
 		elif enemy_type == "melee" and distance <= melee_range and melee_cooldown <= 0.0:
 			_begin_attack()
 
@@ -339,7 +334,7 @@ func _execute_melee_attack() -> void:
 func _begin_attack() -> void:
 	if state == State.ATTACK: return
 	state = State.ATTACK
-	attack_windup_time = randf_range(0.1, 0.16) if enemy_type == "gunner" else randf_range(0.12, 0.18)
+	attack_windup_time = EnemyCombatController.attack_windup(enemy_type)
 	velocity = Vector2.ZERO
 	_reset_movement_progress()
 	queue_redraw()
@@ -364,11 +359,7 @@ func _update_attack(delta: float, to_player: Vector2, distance: float, has_visua
 	attack_windup_time = 0.0
 
 func _has_clear_shot() -> bool:
-	if not is_instance_valid(player): return false
-	var query := PhysicsRayQueryParameters2D.create(gun.global_position, player.global_position, 3)
-	query.exclude = [get_rid()]
-	var result := get_world_2d().direct_space_state.intersect_ray(query)
-	return not result.is_empty() and result.collider.is_in_group("player")
+	return EnemyCombatController.has_clear_shot(self, gun, player)
 
 func _update_sentry(delta: float) -> void:
 	velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)

@@ -6,6 +6,7 @@ const BULLET_SCENE := preload("res://scenes/bullet.tscn")
 const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
 const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/effects/muzzle_flash.tscn")
+const WEAPON_PICKUP_SCENE := preload("res://scenes/props/weapon_pickup.tscn")
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 142)
@@ -103,6 +104,9 @@ func _update_interaction_prompt() -> void:
 		return
 	if is_instance_valid(player.peek_nearby_execution_target()):
 		interaction_label.text = "[ SPACE ] EXECUTE"
+	elif is_instance_valid(player.get_nearby_weapon_pickup()):
+		var pickup = player.get_nearby_weapon_pickup()
+		interaction_label.text = "[ E ] PICK UP %s" % pickup.weapon_id.to_upper()
 	else:
 		interaction_label.text = ""
 
@@ -170,11 +174,15 @@ func _sync_ammo_ui() -> void:
 func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	var enemy = ENEMY_SCENE.instantiate()
 	enemy.projectile_requested.connect(_on_projectile_requested)
-	enemy.died_at.connect(_on_enemy_died)
+	enemy.died_at.connect(_on_enemy_died.bind(enemy))
 	enemies_container.add_child(enemy)
 	enemy.global_position = pos
 	enemy.debug_draw_vision = vision_debug_enabled
 	if patrol_index >= 0 and patrol_index < enemy_types.size(): enemy.configure_combat(enemy_types[patrol_index])
+	if enemy.enemy_type == "gunner":
+		var enemy_weapon_ids := ["pistol", "smg", "lmg"]
+		var enemy_weapon_id: String = enemy_weapon_ids[patrol_index % enemy_weapon_ids.size()]
+		enemy.gun.set_gun_data(AttackCatalog.get_gun_data(enemy_weapon_id), true)
 	if patrol_index in fixed_sentry_indices:
 		enemy.configure_fixed_sentry()
 	elif patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size():
@@ -209,7 +217,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	add_child(bullet)
 	trauma_camera.add_trauma(data.camera_shake * (0.1 if enemy_owned else 0.14))
 
-func _on_enemy_died(pos: Vector2, facing: float) -> void:
+func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) -> void:
 	enemies_killed += 1
 	remaining_enemies = maxi(0, remaining_enemies - 1)
 	combo += 1
@@ -220,8 +228,17 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power, pending_death_style)
 	add_child(corpse)
 	blood_system.spawn_death_pool(pos, pending_death_blood_power)
+	if is_instance_valid(defeated_enemy) and defeated_enemy.enemy_type == "gunner":
+		_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, maxi(1, defeated_enemy.gun.ammo))
 	pending_death_style = "firearm"
 	status_label.text = "TARGETS // %02d/%02d" % [enemies_killed, started_enemy_count]
+
+func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: int) -> void:
+	var pickup = WEAPON_PICKUP_SCENE.instantiate()
+	pickup.global_position = world_position + Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
+	pickup.rotation = randf_range(-PI, PI)
+	pickup.setup(weapon_id, rounds)
+	add_child(pickup)
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
 	blood_system.emit_hit(hit_position, direction, damage, weapon_id, travel_distance, lethal)
@@ -230,7 +247,7 @@ func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, we
 		pending_death_direction = direction
 		pending_death_knockback = data.knockback
 		pending_death_blood_power = data.blood_power
-		pending_death_style = "firearm"
+		pending_death_style = data.death_style
 		_trigger_hit_stop(data.hit_stop)
 
 func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction: Vector2, melee_type: String, lethal: bool) -> void:
@@ -250,12 +267,12 @@ func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction:
 	_trigger_hit_stop(float(profile.hit_stop))
 	target.take_damage(maxi(1, target.hp), hit_position - direction * 2.0)
 
-func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: bool) -> void:
-	var attack_id := "execution" if lethal else "fist"
+func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: bool, execution_type: String) -> void:
+	var attack_id := execution_type if lethal else "fist"
 	blood_system.emit_hit(hit_position, direction, 1, attack_id, 0.0, lethal)
 	trauma_camera.add_trauma(0.42 if lethal else 0.2)
 	if lethal:
-		var profile := AttackCatalog.get_impact_profile("execution")
+		var profile := AttackCatalog.get_impact_profile(execution_type)
 		pending_death_direction = direction
 		pending_death_knockback = float(profile.knockback)
 		pending_death_blood_power = float(profile.blood_power)

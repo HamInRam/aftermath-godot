@@ -4,12 +4,14 @@ var spin := 0.0
 var chunk_kind := 0
 var amount := 1.0
 var settled := false
+var attack_style := "firearm"
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
 
-func setup(flight_direction: Vector2, intensity: float, variant: int) -> void:
-	chunk_kind = variant % 4
+func setup(flight_direction: Vector2, intensity: float, variant: int, new_attack_style := "firearm") -> void:
+	attack_style = new_attack_style
+	chunk_kind = variant % (6 if attack_style in ["lmg", "bat", "execution", "execution_bat"] else 4)
 	velocity = flight_direction.normalized() * randf_range(22.0, 48.0) * clampf(intensity, 0.7, 2.0)
 	spin = randf_range(-9.0, 9.0)
 	rotation = randf_range(-PI, PI)
@@ -53,6 +55,13 @@ func _draw() -> void:
 	elif chunk_kind == 2:
 		draw_circle(Vector2.ZERO, 2.2, blood)
 		draw_rect(Rect2(0, -1, 2, 2), tissue)
-	else:
+	elif chunk_kind == 3:
 		draw_rect(Rect2(-2, -2, 4, 4), tissue)
 		draw_rect(Rect2(-1, -1, 2, 2), blood)
+	elif chunk_kind == 4:
+		draw_rect(Rect2(-4, -1, 8, 3), blood)
+		draw_rect(Rect2(-4, 0, 3, 1), bone)
+	else:
+		draw_circle(Vector2.ZERO, 3.0, blood)
+		draw_rect(Rect2(-1, -2, 3, 2), tissue)
+		draw_rect(Rect2(1, -1, 2, 1), bone)

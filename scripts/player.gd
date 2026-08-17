@@ -3,7 +3,7 @@ extends "res://scripts/actor.gd"
 signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 signal clean_requested(world_position: Vector2)
 signal died
-signal execution_impact(world_position: Vector2, direction: Vector2, lethal: bool)
+signal execution_impact(world_position: Vector2, direction: Vector2, lethal: bool, execution_type: String)
 signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction: Vector2, melee_type: String, lethal: bool)
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
@@ -34,6 +34,7 @@ var melee_cooldown := 0.0
 var is_melee_attacking := false
 var melee_animation_generation := 0
 var gun_index := 0
+var owned_gun_indices: Array[int] = [0]
 var cached_execution_target: CharacterBody2D
 var execution_query_cooldown := 0.0
 
@@ -63,6 +64,8 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("execute"):
 		attempt_ground_execution()
 		if is_executing: return
+	if Input.is_action_just_pressed("interact"):
+		attempt_weapon_pickup()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = input_direction * move_speed
 	var intended_velocity := velocity
@@ -101,9 +104,44 @@ func _equip_weapon(mode: String) -> void:
 	queue_redraw()
 
 func _cycle_gun() -> void:
-	gun_index = (gun_index + 1) % PLAYER_GUNS.size()
-	gun.set_gun_data(PLAYER_GUNS[gun_index], true)
+	if owned_gun_indices.is_empty(): return
+	var owned_position := owned_gun_indices.find(gun_index)
+	gun_index = owned_gun_indices[(owned_position + 1) % owned_gun_indices.size()]
+	gun.set_gun_data(PLAYER_GUNS[gun_index], false)
 	queue_redraw()
+
+func acquire_gun(weapon_id: String, rounds: int) -> bool:
+	var found_index := -1
+	for index in range(PLAYER_GUNS.size()):
+		if PLAYER_GUNS[index].weapon_id == weapon_id:
+			found_index = index
+			break
+	if found_index < 0: return false
+	if found_index not in owned_gun_indices: owned_gun_indices.append(found_index)
+	gun.set_weapon_ammo(weapon_id, gun.get_weapon_ammo(weapon_id) + rounds)
+	gun_index = found_index
+	equipped_mode = "gun"
+	gun.set_gun_data(PLAYER_GUNS[gun_index], false)
+	gun.visible = true
+	melee_weapon_visual.visible = false
+	queue_redraw()
+	return true
+
+func attempt_weapon_pickup() -> bool:
+	if cleanup_mode or is_dead or is_executing: return false
+	var nearest = get_nearby_weapon_pickup()
+	return is_instance_valid(nearest) and nearest.collect(self)
+
+func get_nearby_weapon_pickup() -> Node2D:
+	var nearest: Node2D = null
+	var nearest_distance := 18.0 * 18.0
+	for node in get_tree().get_nodes_in_group("weapon_pickup"):
+		if not node is Node2D: continue
+		var distance := global_position.distance_squared_to(node.global_position)
+		if distance <= nearest_distance:
+			nearest = node
+			nearest_distance = distance
+	return nearest
 
 func get_equipped_weapon_name() -> String:
 	return str(gun.gun_data.display_name) if equipped_mode == "gun" and gun.gun_data != null else current_melee_type.to_upper()
@@ -226,6 +264,7 @@ func _start_execution_sequence(target: CharacterBody2D) -> bool:
 	return true
 
 func _run_execution_sequence(impact_direction: Vector2) -> void:
+	var execution_type := "execution_knife" if equipped_mode == "melee" and current_melee_type == "knife" else ("execution_bat" if equipped_mode == "melee" and current_melee_type == "bat" else "execution")
 	for strike in range(3):
 		await get_tree().create_timer(0.18).timeout
 		if not is_executing or not is_instance_valid(execution_target):
@@ -234,7 +273,7 @@ func _run_execution_sequence(impact_direction: Vector2) -> void:
 		execution_pulse = 0.11
 		queue_redraw()
 		var lethal := strike == 2
-		execution_impact.emit(execution_target.global_position, impact_direction, lethal)
+		execution_impact.emit(execution_target.global_position, impact_direction, lethal, execution_type)
 		Events.publish_combat_noise(execution_target.global_position, 95.0 if lethal else 58.0, "execution")
 		if lethal: execution_target.execute_ground(global_position)
 	await get_tree().create_timer(0.18).timeout

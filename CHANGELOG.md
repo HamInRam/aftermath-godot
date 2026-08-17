@@ -33,6 +33,12 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Weapon-specific whiff recovery, melee noise propagation and three-stage execution noise that exposes committed players to nearby guards.
 - Upright in-world state glyphs for investigation, search, confirmed pursuit/attack and hold-position guard duty.
 - Noise-role and melee-balance regressions covering responder assignments, speed profiles, single-target edged attacks, capped bat crowds and miss recovery.
+- Enemy weapon drops with an `E` pickup prompt, pistol-only starting inventory and persistent per-weapon magazine state.
+- Distinct pistol/SMG/LMG enemy loadouts, layered audio tuning and an original 14x5 LMG pixel silhouette.
+- Weapon-specific firearm tearing, LMG disassembly, blade execution and blunt execution corpse states with up to twelve directional limb/tissue chunks.
+- EnemyCombatController extraction for attack timing, friendly-fire lanes, chase velocity and scored left/right firing-lane repositioning.
+- Local enemy crowd separation around searches, pursuits and narrow approaches.
+- Weapon-inventory regression coverage and explicit test audio teardown.
 
 ### Changed
 
@@ -40,7 +46,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Scene completion now requires removal of all evidence rather than blood alone.
 - CombatAudioDirector owns real combat and ambience players with an abrupt combat fade and cleanup ambience transition.
 
-## [v.0.0.2] - Unreleased
+## [v.0.0.2] - 2026-08-16
 
 ### Added
 

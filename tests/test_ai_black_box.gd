@@ -23,6 +23,9 @@ func _run() -> void:
 	wall.global_position = Vector2(35, 0)
 	var enemy = ENEMY_SCENE.instantiate()
 	add_child(enemy)
+	for actor in [player, enemy]:
+		for audio_node in actor.find_children("*", "AudioStreamPlayer", true, false):
+			(audio_node as AudioStreamPlayer).stream = null
 	enemy.global_position = Vector2.ZERO
 	enemy.rotation = 0.0
 	enemy.tile_world = null
@@ -37,7 +40,9 @@ func _run() -> void:
 	if failures == 0: print("AI black-box regression: PASS")
 	for actor in [enemy, player]:
 		for audio_node in actor.find_children("*", "AudioStreamPlayer", true, false):
-			(audio_node as AudioStreamPlayer).stop()
+			var audio := audio_node as AudioStreamPlayer
+			audio.stop()
+			audio.stream = null
 	enemy.queue_free()
 	player.queue_free()
 	await get_tree().process_frame

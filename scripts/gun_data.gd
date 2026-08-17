@@ -8,6 +8,10 @@ extends Resource
 @export var shot_stream: AudioStream
 @export var reload_stream: AudioStream
 @export var dry_fire_stream: AudioStream
+@export var death_style := "firearm"
+@export_range(-30.0, 6.0, 0.5) var shot_volume_db := -10.0
+@export_range(0.4, 1.6, 0.01) var mechanical_pitch := 1.0
+@export_range(0.4, 1.6, 0.01) var punch_pitch := 0.73
 @export_range(1, 999, 1) var ammo_capacity := 12
 @export_range(1, 100, 1) var damage := 1
 @export_range(0.03, 2.0, 0.01) var fire_interval := 0.1

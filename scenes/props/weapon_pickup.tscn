@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource path="res://scripts/props/weapon_pickup.gd" type="Script" id="1_pickup"]
+
+[sub_resource type="CircleShape2D" id="Circle_pickup"]
+radius = 7.0
+
+[node name="WeaponPickup" type="Area2D" groups=["weapon_pickup"]]
+z_index = 2
+collision_layer = 0
+collision_mask = 1
+monitoring = true
+script = ExtResource("1_pickup")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Circle_pickup")
+
+[node name="WeaponSprite" type="Sprite2D" parent="."]
+texture_filter = 1

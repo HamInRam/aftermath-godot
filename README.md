@@ -73,10 +73,13 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - `WASD` or arrow keys — move
 - Mouse — aim
 - `1` gun; press repeatedly to cycle pistol/SMG/LMG / `2` fists / `3` knife / `4` bat
+- The player starts with only a pistol; armed enemies drop their current gun and remaining magazine, and `E` collects it
+- Each owned gun preserves its own partially used magazine when cycling weapons
 - Left mouse — fire or melee attack / scrub during cleanup
 - Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails
 - `R` — reload; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
+- `E` — pick up a nearby dropped weapon
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
 - Hold `Shift` — extend the camera toward the cursor
 - `F3` — toggle enemy vision debug cones

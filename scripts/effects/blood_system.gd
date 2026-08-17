@@ -18,7 +18,7 @@ func emit_hit(hit_position: Vector2, projectile_direction: Vector2, damage: int,
 	_spawn_mist(hit_position, direction, intensity, cone)
 	_spawn_ground_splatter(hit_position, direction, intensity, pattern, cone)
 	_spawn_wall_splatter(hit_position, direction, intensity, float(profile.wall_reach), pattern, cone)
-	if lethal: _spawn_gore_chunks(hit_position, direction, intensity)
+	if lethal: _spawn_gore_chunks(hit_position, direction, intensity, weapon_id)
 
 func _spawn_mist(hit_position: Vector2, direction: Vector2, intensity: float, cone: float) -> void:
 	var mist = BLOOD_MIST_SCENE.instantiate()
@@ -47,10 +47,11 @@ func spawn_death_pool(world_position: Vector2, intensity := 1.0) -> void:
 	pool.global_position = world_position
 	pool.setup(clampf(intensity, 0.7, 2.2))
 
-func _spawn_gore_chunks(hit_position: Vector2, direction: Vector2, intensity: float) -> void:
-	var count := clampi(roundi(intensity * 2.6), 2, 8)
+func _spawn_gore_chunks(hit_position: Vector2, direction: Vector2, intensity: float, attack_id: String) -> void:
+	var violence_multiplier := 1.8 if attack_id in ["lmg", "bat", "execution", "execution_bat"] else 1.0
+	var count := clampi(roundi(intensity * 2.6 * violence_multiplier), 2, 12)
 	for index in range(count):
 		var chunk = GORE_CHUNK_SCENE.instantiate()
 		add_child(chunk)
 		chunk.global_position = hit_position + Vector2(randf_range(-2.0, 2.0), randf_range(-2.0, 2.0))
-		chunk.setup(direction.rotated(randf_range(-0.65, 0.65)), intensity, index)
+		chunk.setup(direction.rotated(randf_range(-0.65, 0.65)), intensity, index, attack_id)

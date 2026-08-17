@@ -79,6 +79,24 @@ func _draw() -> void:
 		draw_rect(Rect2(2, -2, 2, 2), tissue)
 		draw_rect(Rect2(5, 1, 2, 1), Color("f8d8cf"))
 		draw_rect(Rect2(7, -2, 1, 1), tissue)
+	elif death_style == "firearm_torn":
+		draw_rect(Rect2(-2, -3, 5, 6), blood)
+		draw_rect(Rect2(-1, -2, 2, 2), tissue)
+		draw_rect(Rect2(2, 1, 2, 1), Color("f8d8cf"))
+	elif death_style == "firearm_gib":
+		draw_rect(Rect2(-4, -3, 5, 6), blood)
+		draw_rect(Rect2(1, -2, 3, 2), tissue)
+		draw_rect(Rect2(3, 1, 3, 1), Color("f8d8cf"))
+		draw_line(Vector2(-5, 3), Vector2(3, -3), blood, 2.0)
+	elif death_style == "execution_blade":
+		draw_line(Vector2(-5, -3), Vector2(5, 3), Color("ff315d"), 3.0)
+		draw_circle(Vector2(5, 0), 2.6, blood)
+		draw_rect(Rect2(2, -1, 3, 1), tissue)
+	elif death_style in ["execution", "execution_blunt"]:
+		draw_circle(Vector2(4, 0), 4.0, blood)
+		draw_rect(Rect2(1, -3, 4, 3), tissue)
+		draw_rect(Rect2(5, 1, 3, 1), Color("f8d8cf"))
+		draw_rect(Rect2(-1, -1, 3, 2), blood)
 	elif wound_variant == 0:
 		draw_circle(Vector2(0, 0), 1.4 * wound_severity, blood)
 		draw_rect(Rect2(-1, -1, 3, 1), tissue)
