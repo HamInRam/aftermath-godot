@@ -60,7 +60,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 - `WASD` or arrow keys — move
 - Mouse — aim
-- Hold left mouse — fire / scrub during cleanup
+- `1` gun / `2` fists / `3` knife / `4` bat — switch weapon mode
+- Left mouse — fire or melee attack / scrub during cleanup
 - `R` — reload; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push

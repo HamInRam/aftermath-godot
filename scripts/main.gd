@@ -37,6 +37,7 @@ var combo_timer := 0.0
 var pending_death_direction := Vector2.RIGHT
 var pending_death_knockback := 20.0
 var pending_death_blood_power := 1.0
+var pending_death_style := "firearm"
 var hit_stop_generation := 0
 var transitioning_cleanup := false
 var vision_debug_enabled := false
@@ -107,7 +108,7 @@ func _create_ui() -> void:
 	interaction_label.size = Vector2(300, 14)
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var controls := _make_label(canvas, Vector2(10, 165), 7, Color("bdaebe"))
-	controls.text = "WASD // TOUCH DOORS // SPACE EXECUTE // LMB // R // ESC"
+	controls.text = "WASD // 1 GUN  2 FIST  3 KNIFE  4 BAT // LMB // SPACE"
 
 func _update_interaction_prompt() -> void:
 	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or run_over or phase != "combat" or player.is_executing:
@@ -167,6 +168,7 @@ func _start_run() -> void:
 	player.clean_requested.connect(_on_clean_requested)
 	player.died.connect(_on_player_died)
 	player.execution_impact.connect(_on_execution_impact)
+	player.melee_impact.connect(_on_melee_impact)
 	add_child(player)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
@@ -224,9 +226,10 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	trauma_camera.trigger_kill_effect(0.72, "red")
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.global_position = pos
-	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power)
+	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power, pending_death_style)
 	add_child(corpse)
 	blood_system.spawn_death_pool(pos, pending_death_blood_power)
+	pending_death_style = "firearm"
 	status_label.text = "TARGETS // %02d/%02d" % [enemies_killed, started_enemy_count]
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
@@ -236,7 +239,25 @@ func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, we
 		pending_death_direction = direction
 		pending_death_knockback = data.knockback
 		pending_death_blood_power = data.blood_power
+		pending_death_style = "firearm"
 		_trigger_hit_stop(data.hit_stop)
+
+func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction: Vector2, melee_type: String, lethal: bool) -> void:
+	if not is_instance_valid(target) or target.is_dead: return
+	if not lethal:
+		target.take_door_hit(direction, "knockdown")
+		trauma_camera.add_trauma(0.16)
+		return
+	var is_bat := melee_type == "bat"
+	pending_death_direction = direction
+	pending_death_knockback = 30.0 if is_bat else 15.0
+	pending_death_blood_power = 1.75 if is_bat else 1.35
+	pending_death_style = "blunt" if is_bat else "slash"
+	blood_system.emit_hit(hit_position, direction, 1, melee_type, 0.0, true)
+	trauma_camera.add_trauma(0.58 if is_bat else 0.34)
+	_on_impact_flash_requested(Color(1.0, 0.06, 0.35, 0.2 if is_bat else 0.13))
+	_trigger_hit_stop(0.055 if is_bat else 0.032)
+	target.take_damage(maxi(1, target.hp), hit_position - direction * 2.0)
 
 func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: bool) -> void:
 	var profile := "shotgun" if lethal else "smg"
@@ -246,6 +267,7 @@ func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: boo
 		pending_death_direction = direction
 		pending_death_knockback = 18.0
 		pending_death_blood_power = 1.85
+		pending_death_style = "blunt"
 		_on_impact_flash_requested(Color(0.9, 0.02, 0.12, 0.28))
 		_trigger_hit_stop(0.045)
 

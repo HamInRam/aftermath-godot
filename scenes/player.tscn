@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource path="res://scripts/player.gd" type="Script" id="1_player"]
 [ext_resource path="res://scenes/gun.tscn" type="PackedScene" id="2_gun"]
@@ -7,6 +7,9 @@
 
 [sub_resource type="CircleShape2D" id="CircleShape_player"]
 radius = 5.0
+
+[sub_resource type="CircleShape2D" id="CircleShape_melee"]
+radius = 65.0
 
 [node name="Player" type="CharacterBody2D" groups=["player"]]
 z_index = 5
@@ -32,3 +35,13 @@ script = ExtResource("4_shadow")
 
 [node name="Gun" parent="." instance=ExtResource("2_gun")]
 automatic = false
+
+[node name="MeleeArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+monitoring = true
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="MeleeArea"]
+shape = SubResource("CircleShape_melee")
+disabled = true
