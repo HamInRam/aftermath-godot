@@ -39,6 +39,8 @@ All notable project changes are recorded here. Version branches remain unrelease
 - EnemyCombatController extraction for attack timing, friendly-fire lanes, chase velocity and scored left/right firing-lane repositioning.
 - Local enemy crowd separation around searches, pursuits and narrow approaches.
 - Weapon-inventory regression coverage and explicit test audio teardown.
+- Blood contamination from corpses and floor blood, producing alternating pixel footprints for roughly 4.5 seconds with step-by-step fading.
+- Blood footprints as individually tracked cleanup evidence, with bounded generation and dedicated regression coverage.
 
 ### Changed
 

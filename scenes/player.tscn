@@ -1,10 +1,11 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource path="res://scripts/player.gd" type="Script" id="1_player"]
 [ext_resource path="res://scenes/gun.tscn" type="PackedScene" id="2_gun"]
 [ext_resource path="res://assets/player/player_16x16.png" type="Texture2D" id="3_player_texture"]
 [ext_resource path="res://scripts/effects/fake_sprite_shadow.gd" type="Script" id="4_shadow"]
 [ext_resource path="res://scripts/effects/melee_weapon_visual.gd" type="Script" id="5_melee_visual"]
+[ext_resource path="res://scripts/effects/blood_footprint_emitter.gd" type="Script" id="6_footprints"]
 
 [sub_resource type="CircleShape2D" id="CircleShape_player"]
 radius = 5.0
@@ -56,3 +57,6 @@ monitorable = false
 [node name="CollisionShape2D" type="CollisionShape2D" parent="MeleeArea"]
 shape = SubResource("CircleShape_melee")
 disabled = true
+
+[node name="BloodFootprintEmitter" type="Node" parent="."]
+script = ExtResource("6_footprints")

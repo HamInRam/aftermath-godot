@@ -7,6 +7,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Pure `Events` signal bus with a dedicated `CombatDirector` for one-pass hearing evaluation and push/sweep/guard assignment
 - Central `CorpseIncidentRegistry` with transitive A–B–C incident merging
 - Unified `CleanupRegistry` covering blood, pools, gore, corpses and shell casings
+- Corpse and blood-pool shoe contamination that leaves a short fading trail of alternating pixel footprints, each tracked as cleanup evidence
 - Data-driven Pistol, SMG and LMG fire mode, visuals, audio and blood behavior through `GunData` and `AttackCatalog`
 - Press `1` repeatedly while holding a gun to cycle Pistol → SMG → LMG
 - Enemy perception and directional search construction split into focused helper modules
