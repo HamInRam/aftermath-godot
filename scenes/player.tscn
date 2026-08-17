@@ -21,7 +21,9 @@ move_speed = 115.0
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape_player")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="UpperBody" type="Node2D" parent="."]
+
+[node name="BodySprite" type="Sprite2D" parent="UpperBody"]
 texture_filter = 1
 texture = ExtResource("3_player_texture")
 modulate = Color(1.15, 1.15, 1.22, 1)
@@ -33,7 +35,7 @@ modulate = Color(0.04, 0.025, 0.06, 0.48)
 texture = ExtResource("3_player_texture")
 script = ExtResource("4_shadow")
 
-[node name="Gun" parent="." instance=ExtResource("2_gun")]
+[node name="Gun" parent="UpperBody" instance=ExtResource("2_gun")]
 automatic = false
 
 [node name="MeleeArea" type="Area2D" parent="."]

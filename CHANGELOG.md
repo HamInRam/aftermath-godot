@@ -15,6 +15,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Synchronized each melee query circle and forward offset with its visible reach, plus distinct 60ms air-line fists, 50ms cyan knife flash and 120ms thick hot-pink bat arc.
 - Anchored melee detection 14px ahead and visual trails 12px ahead while retaining a player-centered absolute range clamp, preventing the forward anchor from secretly extending reach.
 - Additive-blended melee effects now brighten over dark floors and blood, with stable micro air particles, a six-step expanding cyan knife slash and a center-bulged dual-edge hot-pink bat sweep.
+- Layered player `UpperBody` presentation with code-driven wind-up, 4–6px strike thrust, weapon-specific rotational overshoot and sine-smoothed recovery, without disturbing root physics, aim or camera transforms.
 
 - GunData-driven recoil, camera shake, muzzle-flash size/duration, bullet speed, knockback, hearing radius and lethal hit-stop tuning.
 - One-to-two-frame muzzle flash geometry with a short-lived PointLight2D for dark-room illumination.

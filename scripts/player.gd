@@ -13,7 +13,9 @@ const MELEE_DATA := {
 	"bat": {"range": 28.0, "angle": 120.0, "windup": 0.08, "cooldown": 0.42, "duration": 0.12, "lethal": true, "color": Color("ff007f")},
 }
 
-@onready var gun = $Gun
+@onready var upper_body: Node2D = $UpperBody
+@onready var body_sprite: Sprite2D = $UpperBody/BodySprite
+@onready var gun = $UpperBody/Gun
 @onready var melee_shape: CollisionShape2D = $MeleeArea/CollisionShape2D
 var cleanup_mode := false
 var is_executing := false
@@ -23,6 +25,7 @@ var equipped_mode := "gun"
 var current_melee_type := "fist"
 var melee_cooldown := 0.0
 var is_melee_attacking := false
+var melee_animation_generation := 0
 
 func _ready() -> void:
 	super._ready()
@@ -87,10 +90,24 @@ func _start_melee_attack() -> void:
 	_perform_melee_attack(data)
 
 func _perform_melee_attack(data: Dictionary) -> void:
+	melee_animation_generation += 1
+	var generation := melee_animation_generation
+	var windup_rotation := -0.20 if current_melee_type == "bat" else -0.05
+	body_sprite.position = Vector2(-1.0, 0.0)
+	body_sprite.rotation = windup_rotation * 0.35
+	var windup_tween := create_tween().set_parallel(true)
+	windup_tween.tween_property(body_sprite, "position", Vector2(-3.0, 0.0), float(data.windup)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	windup_tween.tween_property(body_sprite, "rotation", windup_rotation, float(data.windup)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await get_tree().create_timer(float(data.windup)).timeout
-	if is_dead or cleanup_mode or equipped_mode == "gun":
+	if generation != melee_animation_generation or is_dead or cleanup_mode or equipped_mode == "gun":
+		_reset_melee_pose()
 		is_melee_attacking = false
 		return
+	var thrust_distance := 6.0 if current_melee_type == "bat" else 4.0
+	var strike_rotation := 0.40 if current_melee_type == "bat" else 0.15
+	var strike_tween := create_tween().set_parallel(true)
+	strike_tween.tween_property(body_sprite, "position", Vector2(thrust_distance, 0.0), 0.04).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	strike_tween.tween_property(body_sprite, "rotation", strike_rotation, 0.04).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_spawn_melee_trail(data)
 	if melee_shape.shape is CircleShape2D:
 		(melee_shape.shape as CircleShape2D).radius = float(data.range)
@@ -103,7 +120,22 @@ func _perform_melee_attack(data: Dictionary) -> void:
 		if offset.length() > float(data.range) or absf(forward.angle_to(offset.normalized())) > half_angle: continue
 		if _melee_blocked_by_geometry(body): continue
 		melee_impact.emit(body, body.global_position, forward, current_melee_type, bool(data.lethal))
-	is_melee_attacking = false
+	await get_tree().create_timer(0.04).timeout
+	if generation != melee_animation_generation:
+		return
+	var recover_time := maxf(0.06, float(data.cooldown) - float(data.windup) - 0.04)
+	var recover_tween := create_tween().set_parallel(true)
+	recover_tween.tween_property(body_sprite, "position", Vector2.ZERO, recover_time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	recover_tween.tween_property(body_sprite, "rotation", 0.0, recover_time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await recover_tween.finished
+	if generation == melee_animation_generation:
+		_reset_melee_pose()
+		is_melee_attacking = false
+
+func _reset_melee_pose() -> void:
+	if is_instance_valid(body_sprite):
+		body_sprite.position = Vector2.ZERO
+		body_sprite.rotation = 0.0
 
 func _query_melee_bodies() -> Array:
 	var query := PhysicsShapeQueryParameters2D.new()
@@ -188,6 +220,10 @@ func _finish_execution() -> void:
 
 func set_cleanup_mode(enabled: bool) -> void:
 	cleanup_mode = enabled
+	if enabled:
+		melee_animation_generation += 1
+		is_melee_attacking = false
+		_reset_melee_pose()
 	gun.visible = not enabled and equipped_mode == "gun"
 	queue_redraw()
 
@@ -195,6 +231,8 @@ func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damag
 	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
 
 func _on_actor_died(source_position: Vector2) -> void:
+	melee_animation_generation += 1
+	_reset_melee_pose()
 	if source_position != Vector2.ZERO:
 		velocity = (global_position - source_position).normalized() * 70.0
 	died.emit()
