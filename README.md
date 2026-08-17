@@ -62,6 +62,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Mouse — aim
 - `1` gun / `2` fists / `3` knife / `4` bat — switch weapon mode
 - Left mouse — fire or melee attack / scrub during cleanup
+- Melee is deliberately close-range: fists 24px, knife 32px and bat 48px, with visible arcs matching the physical reach
 - `R` — reload; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push

@@ -8,9 +8,9 @@ signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction:
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
 const MELEE_DATA := {
-	"fist": {"range": 30.0, "angle": 45.0, "windup": 0.05, "cooldown": 0.30, "lethal": false, "color": Color("fff5e8")},
-	"knife": {"range": 45.0, "angle": 60.0, "windup": 0.02, "cooldown": 0.25, "lethal": true, "color": Color("53f3ff")},
-	"bat": {"range": 65.0, "angle": 120.0, "windup": 0.10, "cooldown": 0.45, "lethal": true, "color": Color("ff4cce")},
+	"fist": {"range": 24.0, "angle": 40.0, "windup": 0.03, "cooldown": 0.20, "duration": 0.06, "lethal": false, "color": Color("ffffff")},
+	"knife": {"range": 32.0, "angle": 55.0, "windup": 0.02, "cooldown": 0.25, "duration": 0.05, "lethal": true, "color": Color("00ffff")},
+	"bat": {"range": 48.0, "angle": 140.0, "windup": 0.08, "cooldown": 0.45, "duration": 0.12, "lethal": true, "color": Color("ff007f")},
 }
 
 @onready var gun = $Gun
@@ -92,6 +92,9 @@ func _perform_melee_attack(data: Dictionary) -> void:
 		is_melee_attacking = false
 		return
 	_spawn_melee_trail(data)
+	if melee_shape.shape is CircleShape2D:
+		(melee_shape.shape as CircleShape2D).radius = float(data.range)
+	melee_shape.position = Vector2(float(data.range) * 0.3, 0.0)
 	var forward := Vector2.RIGHT.rotated(rotation)
 	var half_angle := deg_to_rad(float(data.angle) * 0.5)
 	for body in _query_melee_bodies():
@@ -105,7 +108,7 @@ func _perform_melee_attack(data: Dictionary) -> void:
 func _query_melee_bodies() -> Array:
 	var query := PhysicsShapeQueryParameters2D.new()
 	query.shape = melee_shape.shape
-	query.transform = global_transform
+	query.transform = melee_shape.global_transform
 	query.collision_mask = 2
 	query.exclude = [get_rid()]
 	var bodies: Array = []
@@ -123,7 +126,7 @@ func _spawn_melee_trail(data: Dictionary) -> void:
 	get_tree().current_scene.add_child(trail)
 	trail.global_position = global_position
 	trail.global_rotation = rotation
-	trail.setup(float(data.range), deg_to_rad(float(data.angle)), data.color)
+	trail.setup(current_melee_type, float(data.range), deg_to_rad(float(data.angle)), float(data.duration), data.color)
 
 func attempt_ground_execution() -> bool:
 	if is_executing or cleanup_mode or is_dead: return false
