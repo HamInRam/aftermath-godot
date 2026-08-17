@@ -1,9 +1,10 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource path="res://scripts/gun.gd" type="Script" id="1_gun"]
 [ext_resource path="res://resources/weapons/pistol.tres" type="Resource" id="2_pistol"]
 [ext_resource path="res://assets/weapons/ak_12x5.png" type="Texture2D" id="3_ak"]
 [ext_resource path="res://assets/weapons/pistol_10x4.png" type="Texture2D" id="4_pistol"]
+[ext_resource path="res://scripts/effects/fake_sprite_shadow.gd" type="Script" id="5_shadow"]
 
 [sub_resource type="Animation" id="Animation_reset"]
 resource_name = "RESET"
@@ -34,6 +35,13 @@ position = Vector2(3, 0)
 texture_filter = 1
 texture = ExtResource("4_pistol")
 
+[node name="FakeShadow" type="Sprite2D" parent="WeaponPivot"]
+z_index = -1
+texture_filter = 1
+modulate = Color(0.035, 0.02, 0.05, 0.52)
+texture = ExtResource("4_pistol")
+script = ExtResource("5_shadow")
+
 [node name="Muzzle" type="Marker2D" parent="WeaponPivot"]
 position = Vector2(6, 0)
 
@@ -52,3 +60,11 @@ volume_db = -10.0
 
 [node name="DryFireAudio" type="AudioStreamPlayer" parent="."]
 volume_db = -8.0
+
+[node name="MechanicalAudio" type="AudioStreamPlayer" parent="."]
+volume_db = -21.0
+max_polyphony = 8
+
+[node name="PunchAudio" type="AudioStreamPlayer" parent="."]
+volume_db = -17.0
+max_polyphony = 8

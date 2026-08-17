@@ -2,7 +2,137 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
-## [v.0.0.1] - Unreleased
+## [v.0.0.2] - Unreleased
+
+### Added
+
+- Data-driven player melee arsenal with extreme close-contact fists (12px/35°), knife (16px/45°) and bat (28px/120°), each with distinct windup and cooldown.
+- Dynamic enemy-only MeleeArea broad phase followed by exact range/angle filtering and wall/glass ray occlusion, preventing attacks through geometry.
+- 140ms neon weapon trails with white fist, cyan knife and magenta bat silhouettes; number keys 1–4 switch between gun and melee modes.
+- Nonlethal fist knockdowns plus lethal knife and bat chains integrated with existing combo, hit-stop, trauma, blood, gore, corpse and cleanup systems.
+- Distinct directional knife cuts and crushed red/white blunt trauma corpse rendering, with weapon-specific line versus radial blood profiles.
+- Fixed player melee filtering against the project's singular `enemy` group, restoring fist, knife and bat hit detection.
+- Synchronized each melee query circle and forward offset with its visible reach, plus distinct 60ms air-line fists, 50ms cyan knife flash and 120ms thick hot-pink bat arc.
+- Anchored melee detection 14px ahead and visual trails 12px ahead while retaining a player-centered absolute range clamp, preventing the forward anchor from secretly extending reach.
+- Additive-blended melee effects now brighten over dark floors and blood, with stable micro air particles, a six-step expanding cyan knife slash and a center-bulged dual-edge hot-pink bat sweep.
+- Layered player `UpperBody` presentation with code-driven wind-up, 4–6px strike thrust, weapon-specific rotational overshoot and sine-smoothed recovery, without disturbing root physics, aim or camera transforms.
+- BodySprite-attached `MeleeTip` global anchor now spawns root-level trails at the animated hand/weapon point; removed the duplicated 12px VFX offset and clamped knife/bat expansion inside the remaining physical reach.
+- Moved the held fist/knife/bat drawing from the aim-only Player root into `BodySprite/MeleeWeaponVisual`, so the weapon visibly inherits local wind-up, overshoot and recovery instead of only translating forward.
+
+- GunData-driven recoil, camera shake, muzzle-flash size/duration, bullet speed, knockback, hearing radius and lethal hit-stop tuning.
+- One-to-two-frame muzzle flash geometry with a short-lived PointLight2D for dark-room illumination.
+- Layered gunshot audio using transient, mechanical and low-pitched punch components with restrained pitch variation.
+- 35 ms lethal hit stop, directional corpse knockback and simple wall-aware corpse settling.
+- Predictable enemy IDLE, INVESTIGATE, CHASE and STAGGERED states.
+- 90-degree enemy vision with distance checks and wall/closed-door line-of-sight occlusion.
+- Gunshot and door-impact hearing events that send enemies to the sound position without revealing the player's live position.
+- Contact-driven door knockdown, impact noise and camera feedback.
+- Lightweight non-blurring scanline/grain overlay and brief player-death red flash.
+- CombatAudioDirector interface for future copyright-safe combat music and cleanup ambience.
+- Delayed 0.42-second Violence-to-Silence transition event before `CLEANUP REQUIRED`.
+- Weapon-profiled blood geometry: long line splashes for pistol, directional fans for SMG/LMG and a reusable radial profile for future shotgun attacks.
+- Slowly expanding corpse-centered blood pools that begin small and bloom over roughly 4–8 seconds.
+- Three modular firearm wound overlays for corpses with intensity-scaled blood/tissue pixels.
+- Detachable pixel gore chunks with directional flight, wall collision, spin, settling and existing cleanup compatibility.
+- Fixed-direction pixel fake shadows for walls, players, enemies, weapons, shell casings, corpses and rotating door panels.
+- Window-aware wall-shadow breaks that preserve sightline and architectural light framing.
+- Sixteen original 8x8 environment and furnishing tiles for checkerboard, plank, carpet, stage, corridor, brick and bathroom surfaces plus sofas, tables and fixtures.
+- High-contrast Nightclub room zoning with bright architectural trim, distinct room identities and a dedicated furniture layer.
+- Fixed-offset object shadows for furniture and fixtures, matching the existing actor, weapon, casing and door shadow language.
+- Position-driven camera tilt that mirrors across the room center, with a configurable center buffer, maximum angle and exponential smoothing.
+- Static deep-color exterior backdrop beneath the building, revealed by an unpainted perimeter floor band to create a layered architectural cutout.
+- Hold-Shift tactical look-ahead with a longer cursor-directed camera reach, while normal aiming uses a restrained 0.25 positional weight.
+- Enemy visual reaction delay randomized from 0.2–0.4 seconds, requiring continuous exposure before pursuit and firing begin.
+- Separate opaque-vision collision layer: walls and doors block sight while physical glass windows remain transparent to AI raycasts.
+- Optional per-enemy translucent FOV debug cone with range arc for angle and distance tuning.
+- Wall-aware instantaneous hearing: opaque geometry applies a 1.5x effective-distance penalty while glass does not attenuate sound.
+- Authored two-point idle patrol routes for spawned enemies, replaced immediately by investigation or chase targets when alerted.
+- Safer diagonal AStarGrid2D routing with 7–10 frame human refresh intervals and solid furniture included in navigation.
+- Reusable `human` / `dog` AI profile foundation with faster dog reaction, movement, path refresh and direct open-room pursuit.
+- Patrol micro-state machine with AStar-driven movement, randomized 0.5–1.5 second waypoint waits and separate level-authored 48–64px routes.
+- Automatic sentry fallback for missing or unreachable patrol routes, smoothly scanning ±45 degrees every 2–4 seconds.
+- Soft navigation clearance costs around walls and furniture, encouraging safer paths without sealing narrow two-tile doorways.
+- Corpse discovery checks for idle guards using the same distance, FOV and opaque-ray rules as player vision, triggering an incident investigation once per corpse.
+- Investigation arrival behavior with a configurable 2.2-second multi-direction look-around before returning to patrol or sentry duty.
+- Explicit high-priority visual chase transition with 1.25x human pursuit speed and last-seen-position investigation after contact is lost.
+- Named Player, Enemy, Solid_Wall, Glass_Window, Projectile and Vision_Occluder physics layers with purpose-specific collision masks.
+- Glass blocks actor movement while passing vision and non-attenuated sound; the first projectile shatters and removes it, then continues through.
+- Red/green FOV debug feedback that changes immediately when raw visual contact is established.
+- Runtime `F3` toggle that enables or disables FOV visualization for every active enemy without requiring Inspector edits.
+- Larger 7–10px HUD typography, stronger muted-text contrast and a shorter control legend for legibility at the native 320x180 viewport.
+- Configurable gunner/melee enemy combat roles, with two melee guards enabled in the default Nightclub encounter.
+- Direct 1.25x-speed CHASE rush whenever the opaque line to the player is clear, falling back to A* only while geometry blocks pursuit.
+- 1.5-second chase memory before last-known-position investigation, preventing instant disengagement when the player cuts a corner.
+- Short-range one-hit melee attacks with hidden firearms, independent cooldown and a brief visible swing arc.
+- Nearest-sampled full-screen CRT shader with restrained scanlines, vignette, curvature and chromatic separation, toggleable with `F4`.
+- Exterior-only HSV hue cycling over the architectural void, independently toggleable with `F5`.
+- Four low-energy scripted neon lights with sine-wave breathing and optional broken-tube flicker.
+- WorldEnvironment glow plus 1.3 contrast and 1.5 saturation grading, with the HUD rendered above screen distortion.
+- Ambient 0.005-radian camera drift and a reusable kill-effect interface combining trauma shake with short red/white flashes.
+- Dedicated four-room Tactical Lab selectable from the debug menu, built around four physical doors, internal glass firing lanes, blind corners and multiple routes.
+- Mixed Tactical Lab encounter with melee patrols, mobile gunners and two anti-bait fixed sentries that ignore sound investigation while retaining vision and attacks.
+- Frozen-until-contact physical doors with cast-shape continuous collision detection and an enlarged enemy-only sweep area.
+- Opening door sweeps apply a consistent four-second knockdown; door-specific stagger and lethal tiers were removed.
+- Directional door knockback, post-impact angular damping, high-energy white flash feedback and 30-piece pixel wood splinters.
+- Four-second door knockdowns with a sideways prone pose, disabled attacks and an alerted recovery transition.
+- Space-triggered 24px ground executions with nearest-target selection, full movement/fire/reload input lock and three timed impact beats.
+- Execution-specific camera trauma, final-frame hit stop, red flash, radial blood burst, gore chunks, corpse pool and normal combo credit.
+- Twelve-particle 0.24-second metal spark bursts on StaticBody2D and TileMapLayer wall impacts, emitted opposite the incoming trajectory and scaled for native-view visibility.
+- Fixed real level walls not producing sparks because TileMapLayer colliders were omitted from the solid-surface classifier.
+- Expanded lethal blood feedback with up to 60 directional mist droplets, a 48-particle death spray, 2–8 tissue/bone chunks and stronger kill trauma.
+- Destructible TileMap glass: Layer 4 impacts erase the window cell, clear its navigation obstacle, emit 52 directional cyan shards and a cool camera flash.
+- Projectiles continue nine pixels beyond shattered glass and retain their original direction, damage, owner and remaining lifetime for through-window kills.
+- Context-sensitive center-screen `[ SPACE ] EXECUTE` prompt near a knocked-down enemy.
+- Zero-input door activation: any moving player or enemy slide collision instantly starts the same fixed-speed slam.
+- One-way CLOSED → SLAM_OPENING → OPEN state machine; opened doors remain open and cannot fight with a close transition.
+- Door records its initiating actor and excludes that pusher from sweep damage, preventing enemies from knocking themselves down.
+- Contact speed splits opening into a quiet 8 rad/s non-damaging push below 81 px/s and a dangerous 25 rad/s slam at or above the threshold.
+- Corrected door-side math to use the panel normal, ensuring every E interaction swings away from the player instead of becoming body-blocked.
+- Door damage is evaluated only during real deterministic SLAM_OPENING rotation, so a stationary or fully open panel cannot knock down an enemy.
+- Door-panel collision is temporarily suppressed during the initial swing and restored only after the player leaves the sweep area, preventing depenetration jitter and body pinning.
+- Door rotation is deterministic at 22 rad/s with physical blocking disabled only during the roughly 0.07-second sweep and restored at the open endpoint.
+- Thirty-piece directional pixel splinter burst and stronger opening trauma on the first high-speed body impact.
+
+### Changed
+
+- Player movement is now immediate at 115 px/s with no acceleration or release inertia.
+- Projectile speed increased from 295 to a 650–720 px/s weapon-specific range.
+- Pistol is semi-automatic with 12 rounds, 0.15-second interval and 0.75-degree spread; SMG and LMG remain automatic.
+- Camera mouse lead remains approximately 30 pixels with whole-pixel smoothing and fast trauma decay.
+- Door opening uses a fixed 22 rad/s deterministic sweep instead of accumulated rigid-body acceleration.
+- Player/enemy/interaction colors were brightened for combat readability without changing the existing identity.
+- Environment lighting combines a readable global grade with restrained breathing PointLight2D accents; combat muzzle lights remain enabled.
+- Hue cycling is confined to the exterior void and can be disabled independently without altering interior art.
+- STAGGERED enemies ignore the door's own noise event, preventing impact feedback from being overwritten by INVESTIGATE in the same frame.
+- KNOCKED_DOWN enemies also ignore combat-noise state changes until their four-second recovery completes.
+- Player-driven door torque can no longer cross into the lethal tier; lethality requires a fresh 0.22-second projectile-impact authorization and is consumed by the first target.
+- Exterior void cells are excluded from AStar navigation so the visual background cannot become a traversable shortcut.
+- Enemy aim requires current line of sight; losing sight transitions to investigation at the last seen position.
+- Player death accepts immediate `R` restart with no fade, confirmation or loading screen.
+
+### Validation
+
+- v0.0.2 combat smoke test verifies movement, pistol tuning, projectile speed, muzzle flash, recoil, layered audio, hit stop, hearing, stagger and corpse knockback.
+- Vision regression verifies walls block sight while unobstructed targets remain detectable.
+- Nightclub completed a 600-physics-frame integration run without runtime errors or leaked time scale.
+- Gore-system regression verifies line/fan/radial patterns, lethal chunks, progressive pools, wound variants and the complete enemy-death wiring.
+- Fake-lighting regression verifies global visibility, window shadow breaks and fixed-offset shadows that follow rotating doors and weapons.
+- Interior-style regression verifies all seven Nightclub material zones, bright wall trim, furniture placement and synchronized object shadows.
+- Camera-tilt regression verifies a level center dead zone, mirrored left/right angles and the configured maximum rotation.
+- Orthographic-layer regression verifies the exterior underlay, transparent floor perimeter, solid navigation boundary, 0.25 normal look weight and Shift extended view.
+- Enemy-FOV regression verifies continuous reaction timing, exposure reset, distance/angle rejection, wall and door occlusion, and sight through physical windows.
+- Hearing/patrol/path regression verifies glass and wall propagation differences, patrol motion, furniture obstacles, diagonal routing and weapon-specific sound radii.
+- Patrol-cadence coverage verifies moving/waiting/sentry transitions, minimum route length and weighted obstacle clearance.
+- AI-state-network regression verifies corpse discovery, investigation targeting and scanning, reaction gating and aggressive chase configuration.
+- Physics-layer/glass regression fires real projectiles through a window and into an adjacent solid wall while verifying every named layer and mask.
+- Debug/UI regression verifies global F3 cone toggling, red/green-capable enemy flags and minimum readable HUD/theme font sizes.
+- Chase-combat regression verifies role configuration, direct-path rushing, wall-triggered A*, chase-memory expiration, shared gunfire and melee lethality.
+- Neon/shader/camera regression verifies Shader compilation, nearest sampling, post-processing values, light controllers, F4/F5 toggles, HUD isolation and kill flashes.
+- Tactical Lab regressions verify menu access, four-room layout, glass lanes, four one-way contact doors, fixed sentries, cross-room A*, knockdown sweeps and a 600-frame run.
+- Ground-execution regression verifies the Space action, four-second prone state, disabled enemy weapon, input lock, three-hit sequence, normal kill/combo credit, corpse generation and persistent blood output.
+- Door-state regression verifies player/enemy contact activation, fixed-speed sweep, one-way open state, collision restoration and range-gated Space execution prompts.
+
+## [v.0.0.1] - 2026-08-16
 
 ### Added
 

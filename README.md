@@ -2,6 +2,38 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.2 combat feel
+
+- Immediate 115 px/s movement and instant stopping
+- Semi-automatic high-precision pistol with near-instant 650 px/s projectiles
+- GunData-driven recoil, muzzle light, shake, knockback, hearing and lethal hit stop
+- Vision-cone and line-of-sight enemy detection with sound investigation instead of omniscience
+- Continuous 0.2–0.4 second visual reaction delay, opaque wall/door occlusion and sight through physical glass windows
+- Corpse discovery interrupts idle duty, drives A* incident investigation and produces a timed multi-direction search at the scene
+- Confirmed sightings enter a faster 1.25x chase; lost targets are searched at their last known position before patrol resumes
+- Named physics layers separate players, enemies, solid walls, glass, projectiles and opaque vision blockers
+- Glass blocks movement, passes vision and full-strength sound, and shatters on the first bullet while allowing that projectile to continue
+- Optional FOV debug cones switch from red to green on raw visual contact
+- Press `F3` during gameplay to toggle every enemy FOV cone; no Inspector configuration is required
+- Enlarged high-contrast HUD typography remains pixel-crisp at the native resolution
+- Gunner and melee enemy roles share the same perception/state network but use ranged or one-hit close combat
+- Clear CHASE sightlines produce an aggressive 1.25x direct rush; walls switch movement back to A* for a 1.5-second pursuit-memory window
+- Enemy gunfire reuses GunData, muzzle, spread, ammo/reload, audio-bus and projectile systems; melee guards hide firearms and display a swing arc
+- Nearest-sampled CRT/vignette/chromatic post-processing, WorldEnvironment glow/contrast/saturation and subtle ambient camera drift
+- HUD renders above post-processing so text remains undistorted
+- Frozen-until-contact physics doors with cast-shape CCD, a widened sweep detector and stable hinged rebound
+- Fixed-speed contact doors knock enemies down for four seconds during their brief opening sweep, with loud AI alerts and wood splinters
+- Four-second prone knockdowns create a Space-key execution window with three impact beats, locked controls and radial lethal gore
+- Directional corpse impact, strong death feedback and immediate restart
+- Subtle scanline/grain treatment that preserves pixel readability
+- Abrupt combat-to-cleanup silence interface after the final kill
+- Weapon-shaped directional blood, progressively expanding death pools, modular corpse wounds and physics-driven pixel gore chunks
+- Globally visible stage lighting with fixed right-down pixel shadows, window-aware breaks and restrained breathing neon accents
+- Original high-contrast Nightclub interior with room-specific floors, bright wall trim, dense furnishings and matching fake shadows
+- Subtle position-driven camera tilt with mirrored directions, a stable center dead zone and smoothed transitions
+- Layered architectural cutout over an exterior-only, independently toggleable HSV hue cycle
+- Mouse-directed 0.25-weight camera lead and hold-Shift tactical look-ahead
+
 ## Phase 1 foundation
 
 - Native `320x180` viewport, displayed at `960x540` with 3x viewport scaling
@@ -28,8 +60,16 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 - `WASD` or arrow keys — move
 - Mouse — aim
-- Hold left mouse — fire / scrub during cleanup
+- `1` gun / `2` fists / `3` knife / `4` bat — switch weapon mode
+- Left mouse — fire or melee attack / scrub during cleanup
+- Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails
 - `R` — reload; restart after death or completion
+- `Space` — execute a nearby knocked-down enemy
+- Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
+- Hold `Shift` — extend the camera toward the cursor
+- `F3` — toggle enemy vision debug cones
+- `F4` — toggle CRT/screen post-processing
+- `F5` — toggle exterior hue cycling
 - `Esc` — return to the debug room-select menu
 
 ## Game loop
@@ -43,25 +83,37 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 ## Levels and AI
 
-- Debug title menu loads the Nightclub or Sandwich Shop directly
+- Debug title menu loads the Nightclub, Sandwich Shop or Tactical Lab directly
+- Tactical Lab menu entry provides a focused four-room combat puzzle for door breaches, glass crossfire, blind corners, patrol baiting and fixed-sentry counterplay
 - Sandwich Shop has independent layered floors, walls, objects, lighting and spawn configuration
 - Enemy routes use an AStarGrid2D generated from solid wall cells
+- Enemy vision uses distance/angle broad-phase checks followed by an opaque-only 2D raycast; `debug_draw_vision` exposes the tuning cone
+- Weapon-specific circular hearing events propagate through walls at a 1.5x effective-distance penalty and send every in-range enemy to the same source point
+- Unalerted enemies follow two-point patrol routes; alerted enemies switch to frequently refreshed diagonal A* paths around walls and solid furniture
+- Patrol routes span 48–64px, use A* instead of blind straight-line motion, and pause 0.5–1.5 seconds at each waypoint
+- Unroutable guards become stationary sentries that smoothly scan ±45 degrees; soft obstacle costs reduce furniture and corner rubbing
+- Human/dog AI profiles support faster dog reaction and direct open-room pursuit when dedicated dog content is added
+- Fixed sentries ignore sound bait but still acquire and attack visible players; opening door sweeps knock enemies down without a lethal tier
 - Enemies outside detection range decelerate to rest instead of jittering toward the player
 - Ammo UI republishes the equipped gun state whenever a level finishes loading
 
 ## Implemented presentation
 
-- Imported 8×8 pixel-art tile atlas with concrete, wood, red carpet, dark tile and grass floor variants
-- Editable `TileMap` hierarchy with independent `Floor`, `Walls` and `Decoration` TileMapLayer nodes
+- Expanded original 8×8 pixel-art tile atlas with seven additional room materials and sixteen new environment/furnishing tiles overall
+- Editable `TileMap` hierarchy with independent `Floor`, `Walls`, `Decoration`, `Objects` and matching shadow layers
 - Grid-built rooms with open doorways, window sections and a stairwell marker
 - Wall/window TileSet physics that stops actors and projectiles
 - CanvasModulate night grading with four colored PointLight2D atmosphere pools
 - Bullet trails, firing flash and screen shake
+- Twelve-particle, 0.24-second reverse-direction metal sparks on StaticBody2D and TileMapLayer wall impacts
+- Destructible Layer 4 glass tiles with 52 cyan shards, collision/navigation removal, a cool flash and projectile continuation
+- 40–60-droplet lethal blood fans with 48-particle death bursts and expanded tissue/bone gore chunks
 - Trauma/noise Camera2D shake with configurable decay, offsets and octaves; dry fire does not add trauma
 - Smooth bounded camera framing between the player and cursor for forward visibility
-- Pixel-snapped positional screen shake without blur-inducing camera rotation
+- Static deep-color exterior backdrop visible through unpainted space around the room structure
+- Pixel-snapped positional screen shake plus a separate restrained 1.4-degree location-driven camera tilt
 - Standalone global-coordinate death particles that remain independent of actor rotation
-- Hinged RigidBody2D doors with static frames, PinJoint2D anchors and actor/projectile push impulses
+- Hinged RigidBody2D doors with static frames, PinJoint2D anchors, actor/projectile torque, CCD and enlarged enemy sweep areas
 - Corpses, directional persistent blood pools and wall splatter
 - Modular weapon-aware blood mist and animated impact droplets
 - Field-recorded CC0 blood-splat audio on lethal impact stains

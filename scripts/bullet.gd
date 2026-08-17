@@ -1,8 +1,10 @@
 extends CharacterBody2D
 
+const WALL_SPARKS_SCENE := preload("res://scenes/effects/wall_sparks.tscn")
+
 signal blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool)
 
-@export var speed := 295.0
+@export var speed := 650.0
 var direction := Vector2.RIGHT
 var enemy_owned := false
 var damage := 1
@@ -11,12 +13,13 @@ var weapon_id := "pistol"
 var spawn_position := Vector2.ZERO
 var travel_distance := 0.0
 
-func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO) -> void:
+func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0) -> void:
 	direction = dir.normalized()
 	enemy_owned = is_enemy_bullet
 	damage = hit_damage
 	weapon_id = source_weapon
 	spawn_position = origin
+	speed = projectile_speed
 	rotation = direction.angle()
 	velocity = direction * speed
 
@@ -25,6 +28,17 @@ func _physics_process(delta: float) -> void:
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
 		var collider := collision.get_collider()
+		var tile_world = collider.get_parent() if collider is TileMapLayer else null
+		if tile_world != null and tile_world.has_method("shatter_glass_at") and tile_world.shatter_glass_at(collision.get_position(), direction):
+			global_position = collision.get_position() + direction * 9.0
+			return
+		var hit_solid_surface: bool = collider is TileMapLayer or (collider is CollisionObject2D and collider.get_collision_layer_value(3))
+		if hit_solid_surface:
+			var sparks = WALL_SPARKS_SCENE.instantiate()
+			sparks.global_position = collision.get_position()
+			sparks.setup(direction)
+			var effect_parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
+			effect_parent.add_child(sparks)
 		if collider is Node and collider.has_method("receive_projectile_impact"):
 			collider.receive_projectile_impact(velocity, collision.get_position())
 		if collider is Node and collider.has_method("take_damage"):

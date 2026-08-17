@@ -8,22 +8,31 @@ var streaks: Array[Dictionary] = []
 var configured := false
 var wall_stain := false
 var base_intensity := 1.0
+var pattern_id := "fan"
 
 func _ready() -> void:
 	if not configured:
 		setup(Vector2.RIGHT.rotated(randf_range(0.0, TAU)), 1.0, false, false)
 
-func setup(spray_direction: Vector2, intensity: float, on_wall: bool, play_splat := false) -> void:
+func setup(spray_direction: Vector2, intensity: float, on_wall: bool, play_splat := false, pattern := "fan", cone := 0.72) -> void:
 	configured = true
 	wall_stain = on_wall
 	base_intensity = clampf(intensity, 0.5, 2.8)
+	pattern_id = pattern
 	var direction := spray_direction.normalized()
 	rotation = direction.angle()
 	var lobe_count := clampi(roundi(9.0 + base_intensity * 7.0), 10, 28)
 	for i in range(lobe_count):
-		var forward := pow(randf(), 0.62) * (8.0 + base_intensity * 8.0)
-		var side := randfn(0.0, 2.0 + base_intensity * 1.9) * (0.55 if wall_stain else 1.0)
-		var position := Vector2(forward, side)
+		var position := Vector2.ZERO
+		if pattern_id == "radial":
+			var radial_angle := randf_range(-cone, cone)
+			position = Vector2.RIGHT.rotated(radial_angle) * pow(randf(), 0.48) * (14.0 + base_intensity * 10.0)
+		elif pattern_id == "line":
+			position = Vector2(pow(randf(), 0.48) * (18.0 + base_intensity * 10.0), randfn(0.0, 1.1 + cone * 2.0))
+		else:
+			var fan_angle := randf_range(-cone, cone)
+			position = Vector2.RIGHT.rotated(fan_angle) * pow(randf(), 0.58) * (11.0 + base_intensity * 9.0)
+		if wall_stain: position.y *= 0.55
 		var radius := randf_range(0.45, 1.45) * lerpf(0.75, 1.35, base_intensity / 2.8)
 		lobes.append({"position": position, "radius": radius, "dark": i % 5 == 0})
 		if i % 3 == 0:

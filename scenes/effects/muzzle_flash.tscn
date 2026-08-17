@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scripts/effects/muzzle_flash.gd" type="Script" id="1_flash"]
+
+[node name="MuzzleFlash" type="Node2D"]
+z_index = 12
+script = ExtResource("1_flash")
+
+[node name="PointLight2D" type="PointLight2D" parent="."]
+energy = 1.8
+color = Color(1, 0.58, 0.2, 1)

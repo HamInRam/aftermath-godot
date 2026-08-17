@@ -1,0 +1,31 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource path="res://scenes/main.tscn" type="PackedScene" id="1_main"]
+[ext_resource path="res://scenes/props/swing_door.tscn" type="PackedScene" id="2_door"]
+
+[node name="TacticalLab" instance=ExtResource("1_main")]
+level_title = "TACTICAL LAB"
+player_spawn = Vector2(52, 184)
+enemy_spawns = PackedVector2Array(180, 60, 216, 60, 276, 88, 84, 72, 148, 176, 260, 176, 332, 176)
+enemy_patrol_offsets = PackedVector2Array(0, 56, 48, 0, 0, 48, 56, 0, 48, 0, 0, -48, -56, 0)
+enemy_types = PackedStringArray("melee", "gunner", "gunner", "melee", "gunner", "melee", "gunner")
+fixed_sentry_indices = PackedInt32Array(2, 6)
+
+[node name="TileMap" parent="." index="0"]
+layout_id = "tactical_lab"
+
+[node name="WestRoomDoor" parent="Doors" index="0"]
+position = Vector2(196, 56)
+
+[node name="LobbyDoor" parent="Doors" index="1"]
+position = Vector2(80, 116)
+
+[node name="SouthDoor" parent="Doors" index="2" instance=ExtResource("2_door")]
+position = Vector2(196, 152)
+
+[node name="EastDoor" parent="Doors" index="3" instance=ExtResource("2_door")]
+position = Vector2(280, 116)
+rotation = -1.5708
+
+[node name="CanvasModulate" parent="." index="1"]
+color = Color(0.62, 0.57, 0.68, 1)

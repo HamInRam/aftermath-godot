@@ -3,6 +3,7 @@ extends Control
 func _ready() -> void:
 	$Panel/VBox/NightclubButton.pressed.connect(_open_level.bind("res://scenes/main.tscn"))
 	$Panel/VBox/SandwichButton.pressed.connect(_open_level.bind("res://scenes/levels/sandwich_shop.tscn"))
+	$Panel/VBox/TacticalLabButton.pressed.connect(_open_level.bind("res://scenes/levels/tactical_lab.tscn"))
 	$Panel/VBox/QuitButton.pressed.connect(get_tree().quit)
 	$Panel/VBox/NightclubButton.grab_focus()
 

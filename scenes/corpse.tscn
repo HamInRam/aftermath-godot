@@ -1,7 +1,22 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource path="res://scripts/corpse.gd" type="Script" id="1_corpse"]
+[ext_resource path="res://scripts/effects/fake_polygon_shadow.gd" type="Script" id="2_shadow"]
 
-[node name="Corpse" type="Node2D" groups=["corpse"]]
+[sub_resource type="RectangleShape2D" id="RectangleShape_corpse"]
+size = Vector2(9, 5)
+
+[node name="Corpse" type="CharacterBody2D" groups=["corpse"]]
 z_index = 2
+collision_layer = 0
+collision_mask = 4
 script = ExtResource("1_corpse")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape_corpse")
+
+[node name="FakeShadow" type="Polygon2D" parent="."]
+z_index = -1
+polygon = PackedVector2Array(-6, -3, 6, -3, 6, 3, -6, 3)
+color = Color(0.035, 0.02, 0.05, 0.48)
+script = ExtResource("2_shadow")
