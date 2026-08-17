@@ -112,7 +112,7 @@ func try_fire(direction: Vector2) -> bool:
 	var origin := muzzle.global_position
 	fired.emit(origin, normalized_direction, enemy_owned, projectile_damage, weapon_id)
 	Events.weapon_fired.emit(origin, normalized_direction, enemy_owned, weapon_id)
-	Events.combat_noise.emit(origin, hearing_radius, "gunshot")
+	Events.publish_combat_noise(origin, hearing_radius, "gunshot")
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	return true
 

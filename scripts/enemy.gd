@@ -19,6 +19,11 @@ signal died_at(world_position: Vector2, facing: float)
 @export_range(1.0, 2.0, 0.05) var chase_speed_multiplier := 1.25
 @export_range(0.5, 5.0, 0.1) var investigation_scan_duration := 2.2
 @export_range(0.05, 1.0, 0.05) var corpse_scan_interval := 0.2
+@export_range(8.0, 48.0, 1.0) var search_radius := 22.0
+@export_range(0.2, 1.5, 0.05) var search_point_pause := 0.55
+@export_range(2.0, 12.0, 0.5) var search_duration_limit := 6.0
+@export_range(0.4, 2.0, 0.1) var stuck_timeout := 1.0
+@export_range(0.5, 6.0, 0.5) var stuck_minimum_progress := 2.0
 @export_group("Combat")
 @export_enum("gunner", "melee") var enemy_type := "gunner"
 @export_range(8.0, 40.0, 1.0) var melee_range := 17.0
@@ -26,7 +31,7 @@ signal died_at(world_position: Vector2, facing: float)
 @export_range(0.2, 4.0, 0.1) var chase_memory_duration := 1.5
 @onready var gun = $Gun
 
-enum State { IDLE, INVESTIGATE, CHASE, STAGGERED, KNOCKED_DOWN }
+enum State { IDLE, INVESTIGATE, SEARCH, CHASE, ATTACK, STAGGERED, KNOCKED_DOWN }
 enum PatrolMode { MOVING, WAITING, SENTRY }
 
 var player: CharacterBody2D
@@ -53,10 +58,27 @@ var corpse_scan_time := 0.0
 var discovered_corpses := {}
 var player_in_sight := false
 var chase_lost_time := 0.0
+var last_seen_direction := Vector2.RIGHT
+var search_points := PackedVector2Array()
+var search_index := 0
+var search_wait := 0.0
+var search_time_remaining := 0.0
+var search_timer_started := false
+var claimed_corpse: Node2D
+var attack_windup_time := 0.0
 var melee_cooldown := 0.0
 var melee_swing_time := 0.0
 var is_fixed_sentry := false
 var knockdown_time := 0.0
+var progress_anchor := Vector2.ZERO
+var progress_elapsed := 0.0
+var stuck_recovery_attempts := 0
+var tactical_role := "none"
+var guard_alert_time := 0.0
+var guard_facing := 0.0
+var blocked_shot_time := 0.0
+var reposition_time := 0.0
+var reposition_sign := 1.0
 const KNOCKDOWN_DURATION := 4.0
 
 func _ready() -> void:
@@ -72,12 +94,16 @@ func _ready() -> void:
 	gun.cooldown = randf_range(0.25, 0.9)
 	gun.fired.connect(_on_gun_fired)
 	actor_died.connect(_on_actor_died)
-	Events.combat_noise.connect(_on_combat_noise)
+	progress_anchor = global_position
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
 	melee_cooldown = maxf(0.0, melee_cooldown - delta)
 	melee_swing_time = maxf(0.0, melee_swing_time - delta)
+	reposition_time = maxf(0.0, reposition_time - delta)
+	guard_alert_time = maxf(0.0, guard_alert_time - delta)
+	if tactical_role == "guard" and guard_alert_time <= 0.0: tactical_role = "none"
+	queue_redraw()
 	if melee_swing_time > 0.0: queue_redraw()
 	if is_dead or not is_instance_valid(player) or player.is_dead:
 		velocity = velocity.move_toward(Vector2.ZERO, 125.0 * delta)
@@ -102,27 +128,49 @@ func _physics_process(delta: float) -> void:
 		velocity = velocity.move_toward(Vector2.ZERO, 260.0 * delta)
 		if knockdown_time <= 0.0:
 			_set_knockdown_visual(false)
-			_begin_investigation(player.global_position, 0.72)
+			_begin_search(global_position, Vector2.RIGHT.rotated(rotation))
 		return
 	var has_visual_contact := _can_see_player(distance, to_player)
-	var has_direct_line := _has_direct_line_to_player()
 	player_in_sight = has_visual_contact
 	var sees_player := _update_visual_reaction(has_visual_contact, delta)
 	if debug_draw_vision: queue_redraw()
-	if sees_player or (state == State.CHASE and has_direct_line):
-		state = State.CHASE
+	# Initial acquisition requires the reaction delay. Once alerted, raw visual
+	# contact is enough to keep tracking, but a clear ray outside the FOV is not.
+	if sees_player or (state in [State.CHASE, State.ATTACK] and has_visual_contact):
+		_release_corpse_claim()
+		if tactical_role == "none": tactical_role = "push"
+		if state not in [State.CHASE, State.ATTACK]:
+			state = State.CHASE
+			_reset_movement_progress()
 		alertness = 1.0
 		investigation_target = player.global_position
+		last_seen_direction = player.velocity.normalized() if player.velocity.length_squared() > 1.0 else to_player.normalized()
 		chase_lost_time = 0.0
-	elif state == State.CHASE:
+	elif state in [State.CHASE, State.ATTACK]:
+		if state == State.ATTACK:
+			state = State.CHASE
+			attack_windup_time = 0.0
 		chase_lost_time += delta
-		if chase_lost_time >= chase_memory_duration or distance > detection_range * 1.5:
-			_begin_investigation(investigation_target, 0.8)
-	if state == State.IDLE: _scan_for_corpses(delta)
+		if chase_lost_time >= chase_memory_duration:
+			_begin_search(investigation_target, last_seen_direction)
+	if state in [State.IDLE, State.INVESTIGATE, State.SEARCH]: _scan_for_corpses(delta)
 	if state == State.IDLE:
 		_update_patrol(delta)
 		return
-	var target_position := player.global_position if state == State.CHASE else investigation_target
+	if state == State.ATTACK:
+		_update_attack(delta, to_player, distance, has_visual_contact)
+		return
+	if state == State.SEARCH:
+		if search_timer_started:
+			search_time_remaining -= delta
+			if search_time_remaining <= 0.0:
+				_finish_search()
+				return
+	var target_position := investigation_target
+	if state == State.CHASE:
+		target_position = player.global_position if has_visual_contact else investigation_target
+	elif state == State.SEARCH and search_index < search_points.size():
+		target_position = search_points[search_index]
 	var to_target := target_position - global_position
 	var target_distance := to_target.length()
 	if state == State.INVESTIGATE and target_distance < 7.0:
@@ -135,15 +183,28 @@ func _physics_process(delta: float) -> void:
 			investigation_look_time = randf_range(0.35, 0.7)
 		rotation = lerp_angle(rotation, investigation_look_rotation, 1.0 - exp(-3.2 * delta))
 		if investigation_wait >= investigation_scan_duration:
-			state = State.IDLE
-			alertness = 0.0
-			investigation_wait = 0.0
+			_complete_corpse_investigation()
+			_begin_search(investigation_target, Vector2.RIGHT.rotated(rotation))
+		return
+	if state == State.SEARCH and target_distance < 7.0:
+		if not search_timer_started:
+			search_timer_started = true
+			search_time_remaining = search_duration_limit
+		search_wait += delta
+		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
+		move_and_slide()
+		investigation_look_time -= delta
+		if investigation_look_time <= 0.0:
+			investigation_look_rotation = rotation + randf_range(-1.2, 1.2)
+			investigation_look_time = randf_range(0.22, 0.48)
+		rotation = lerp_angle(rotation, investigation_look_rotation, 1.0 - exp(-5.0 * delta))
+		if search_wait >= search_point_pause:
+			_advance_search()
 		return
 	var direction := to_target.normalized()
-	var aim_direction := to_player.normalized()
 	rotation = lerp_angle(rotation, direction.angle(), 1.0 - exp(-10.0 * delta))
 	path_refresh -= delta
-	var direct_chase := state == State.CHASE and has_direct_line
+	var direct_chase := state == State.CHASE and has_visual_contact
 	if direct_chase:
 		path_points.clear()
 	elif path_refresh <= 0.0 and is_instance_valid(tile_world):
@@ -154,12 +215,18 @@ func _physics_process(delta: float) -> void:
 			path_points.remove_at(0)
 		if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
 	if state == State.CHASE:
-		velocity = direction * move_speed * (1.9 if actor_type == "dog" else chase_speed_multiplier)
-		if enemy_type == "melee" and distance <= melee_range * 0.7:
+		var holds_position := is_fixed_sentry or tactical_role == "guard"
+		velocity = Vector2.ZERO if holds_position else direction * move_speed * (1.9 if actor_type == "dog" else chase_speed_multiplier)
+		var tactical_distance := distance if has_visual_contact else target_distance
+		if holds_position:
 			velocity = Vector2.ZERO
-		elif enemy_type == "gunner" and distance < 28.0:
+		elif enemy_type == "gunner" and reposition_time > 0.0:
+			velocity = direction.rotated(PI * 0.5 * reposition_sign) * move_speed * 0.82
+		elif enemy_type == "melee" and tactical_distance <= melee_range * 0.7:
+			velocity = Vector2.ZERO
+		elif enemy_type == "gunner" and tactical_distance < 28.0:
 			velocity = direction.rotated(PI * 0.5) * move_speed * 0.4 * strafe_sign
-	elif state == State.INVESTIGATE or distance > preferred_distance:
+	elif state in [State.INVESTIGATE, State.SEARCH] or distance > preferred_distance:
 		var speed_multiplier := (1.8 if actor_type == "dog" else chase_speed_multiplier) if state == State.CHASE else 1.0
 		velocity = direction * move_speed * speed_multiplier
 	elif distance < preferred_distance * 0.62:
@@ -169,14 +236,30 @@ func _physics_process(delta: float) -> void:
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
-	if state == State.CHASE and has_direct_line:
+	_update_movement_progress(delta, intended_velocity.length_squared() > 1.0)
+	if state == State.CHASE and has_visual_contact:
 		if enemy_type == "gunner" and distance <= shoot_range:
 			if gun.ammo <= 0 and not gun.is_reloading: gun.reload()
-			if gun.try_fire(aim_direction): gun.cooldown += randf_range(0.35, 0.75)
-		elif enemy_type == "melee" and distance <= melee_range:
-			_execute_melee_attack()
+			elif gun.cooldown <= 0.0 and not gun.is_reloading:
+				if _has_clear_shot():
+					blocked_shot_time = 0.0
+					_begin_attack()
+				else:
+					blocked_shot_time += delta
+					if blocked_shot_time >= 0.18 and not is_fixed_sentry and tactical_role != "guard":
+						blocked_shot_time = 0.0
+						reposition_time = 0.72
+						reposition_sign = -1.0 if int(get_instance_id()) % 2 == 0 else 1.0
+		elif enemy_type == "melee" and distance <= melee_range and melee_cooldown <= 0.0:
+			_begin_attack()
 
 func _update_patrol(delta: float) -> void:
+	if tactical_role == "guard" and guard_alert_time > 0.0:
+		velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
+		move_and_slide()
+		rotation = lerp_angle(rotation, guard_facing, 1.0 - exp(-8.0 * delta))
+		_reset_movement_progress()
+		return
 	if patrol_waypoints.size() < 2:
 		patrol_mode = PatrolMode.SENTRY
 		_update_sentry(delta)
@@ -218,6 +301,7 @@ func _update_patrol(delta: float) -> void:
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
+	_update_movement_progress(delta, intended_velocity.length_squared() > 1.0)
 
 func configure_patrol(points: PackedVector2Array) -> void:
 	patrol_waypoints = points
@@ -225,10 +309,19 @@ func configure_patrol(points: PackedVector2Array) -> void:
 	patrol_mode = PatrolMode.MOVING if points.size() >= 2 else PatrolMode.SENTRY
 	path_points.clear()
 	path_refresh = 0.0
+	_reset_movement_progress()
 
 func configure_combat(type_name: String) -> void:
 	enemy_type = type_name if type_name in ["gunner", "melee"] else "gunner"
 	var uses_gun := enemy_type == "gunner"
+	if uses_gun:
+		move_speed = 42.0
+		chase_speed_multiplier = 1.35
+		preferred_distance = 68.0
+	else:
+		move_speed = 62.0
+		chase_speed_multiplier = 1.48
+		preferred_distance = melee_range
 	gun.visible = uses_gun
 	gun.set_process(uses_gun)
 
@@ -242,6 +335,40 @@ func _execute_melee_attack() -> void:
 	melee_swing_time = 0.14
 	queue_redraw()
 	player.take_damage(1, global_position)
+
+func _begin_attack() -> void:
+	if state == State.ATTACK: return
+	state = State.ATTACK
+	attack_windup_time = randf_range(0.1, 0.16) if enemy_type == "gunner" else randf_range(0.12, 0.18)
+	velocity = Vector2.ZERO
+	_reset_movement_progress()
+	queue_redraw()
+
+func _update_attack(delta: float, to_player: Vector2, distance: float, has_visual_contact: bool) -> void:
+	velocity = velocity.move_toward(Vector2.ZERO, 240.0 * delta)
+	move_and_slide()
+	if not has_visual_contact:
+		state = State.CHASE
+		attack_windup_time = 0.0
+		return
+	rotation = lerp_angle(rotation, to_player.angle(), 1.0 - exp(-18.0 * delta))
+	attack_windup_time -= delta
+	queue_redraw()
+	if attack_windup_time > 0.0: return
+	if enemy_type == "gunner":
+		if distance <= shoot_range and _has_clear_shot() and gun.try_fire(to_player.normalized()):
+			gun.cooldown += randf_range(0.35, 0.75)
+	elif distance <= melee_range:
+		_execute_melee_attack()
+	state = State.CHASE
+	attack_windup_time = 0.0
+
+func _has_clear_shot() -> bool:
+	if not is_instance_valid(player): return false
+	var query := PhysicsRayQueryParameters2D.create(gun.global_position, player.global_position, 3)
+	query.exclude = [get_rid()]
+	var result := get_world_2d().direct_space_state.intersect_ray(query)
+	return not result.is_empty() and result.collider.is_in_group("player")
 
 func _update_sentry(delta: float) -> void:
 	velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
@@ -265,6 +392,7 @@ func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
 	return has_visual_contact and visual_exposure >= reaction_time
 
 func _scan_for_corpses(delta: float) -> void:
+	if is_fixed_sentry or is_instance_valid(claimed_corpse): return
 	corpse_scan_time -= delta
 	if corpse_scan_time > 0.0: return
 	corpse_scan_time = corpse_scan_interval
@@ -279,19 +407,146 @@ func _scan_for_corpses(delta: float) -> void:
 		var query := PhysicsRayQueryParameters2D.create(global_position, corpse_node.global_position, 32)
 		query.exclude = [get_rid()]
 		if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): continue
+		if not corpse_node.has_method("try_claim_investigation") or not corpse_node.try_claim_investigation(self):
+			if corpse_node.has_method("is_investigation_complete") and corpse_node.is_investigation_complete():
+				discovered_corpses[corpse_id] = true
+			continue
 		discovered_corpses[corpse_id] = true
-		_begin_investigation(corpse_node.global_position, 0.78)
+		claimed_corpse = corpse_node
+		_begin_investigation(corpse_node.global_position, 0.78, true)
 		return
 
-func _begin_investigation(target: Vector2, new_alertness: float) -> void:
+func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_claim := false) -> void:
+	if not keep_corpse_claim: _release_corpse_claim()
 	state = State.INVESTIGATE
 	investigation_target = target
 	investigation_wait = 0.0
 	investigation_look_rotation = rotation
 	investigation_look_time = 0.0
 	alertness = maxf(alertness, new_alertness)
+	search_points.clear()
+	search_index = 0
+	search_wait = 0.0
+	search_time_remaining = 0.0
+	search_timer_started = false
+	attack_windup_time = 0.0
 	path_points.clear()
 	path_refresh = 0.0
+	_reset_movement_progress()
+
+func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
+	if is_fixed_sentry:
+		state = State.IDLE
+		alertness = 0.0
+		return
+	state = State.SEARCH
+	search_points.clear()
+	search_index = 0
+	search_wait = 0.0
+	search_time_remaining = 0.0
+	search_timer_started = false
+	attack_windup_time = 0.0
+	var direction := likely_direction.normalized()
+	if direction.length_squared() < 0.001: direction = Vector2.RIGHT.rotated(rotation)
+	var side := direction.rotated(PI * 0.5 * strafe_sign)
+	var distance_scale := 0.85 + float(get_instance_id() % 4) * 0.1
+	_append_search_point(origin)
+	_append_search_point(origin + direction * search_radius * distance_scale)
+	_append_search_point(origin + side * search_radius)
+	_append_search_point(origin - side * search_radius * 0.75)
+	if search_points.is_empty():
+		state = State.IDLE
+		alertness = 0.0
+		return
+	investigation_target = search_points[0]
+	investigation_look_time = 0.0
+	path_points.clear()
+	path_refresh = 0.0
+	_reset_movement_progress()
+
+func _append_search_point(candidate: Vector2) -> void:
+	if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable"):
+		if not tile_world.is_navigation_position_walkable(candidate): return
+	search_points.append(candidate)
+
+func _advance_search() -> void:
+	search_index += 1
+	search_wait = 0.0
+	investigation_look_time = 0.0
+	path_points.clear()
+	path_refresh = 0.0
+	_reset_movement_progress()
+	if search_index >= search_points.size():
+		_finish_search()
+		return
+	investigation_target = search_points[search_index]
+
+func _finish_search() -> void:
+	state = State.IDLE
+	tactical_role = "none"
+	alertness = 0.0
+	search_points.clear()
+	search_index = 0
+	search_wait = 0.0
+	search_time_remaining = 0.0
+	search_timer_started = false
+	path_points.clear()
+	path_refresh = 0.0
+	_reset_movement_progress()
+
+func _complete_corpse_investigation() -> void:
+	if not is_instance_valid(claimed_corpse):
+		claimed_corpse = null
+		return
+	if claimed_corpse.has_method("complete_investigation"):
+		claimed_corpse.complete_investigation(self)
+	claimed_corpse = null
+
+func _release_corpse_claim() -> void:
+	if not is_instance_valid(claimed_corpse):
+		claimed_corpse = null
+		return
+	if claimed_corpse.has_method("release_investigation"):
+		claimed_corpse.release_investigation(self)
+	claimed_corpse = null
+
+func _reset_movement_progress() -> void:
+	progress_anchor = global_position
+	progress_elapsed = 0.0
+	stuck_recovery_attempts = 0
+
+func _update_movement_progress(delta: float, expected_to_move: bool) -> void:
+	if not expected_to_move:
+		progress_anchor = global_position
+		progress_elapsed = 0.0
+		stuck_recovery_attempts = 0
+		return
+	if global_position.distance_to(progress_anchor) >= stuck_minimum_progress:
+		_reset_movement_progress()
+		return
+	progress_elapsed += delta
+	if progress_elapsed < stuck_timeout: return
+	progress_anchor = global_position
+	progress_elapsed = 0.0
+	stuck_recovery_attempts += 1
+	path_points.clear()
+	path_refresh = 0.0
+	if stuck_recovery_attempts < 2: return
+	stuck_recovery_attempts = 0
+	match state:
+		State.SEARCH:
+			_advance_search()
+		State.INVESTIGATE:
+			_release_corpse_claim()
+			state = State.IDLE
+			tactical_role = "none"
+			alertness = 0.0
+		State.CHASE:
+			strafe_sign *= -1.0
+			reposition_sign *= -1.0
+		State.IDLE:
+			if patrol_waypoints.size() >= 2:
+				patrol_index = (patrol_index + 1) % patrol_waypoints.size()
 
 func _can_see_player(distance: float, to_player: Vector2) -> bool:
 	if distance > detection_range: return false
@@ -301,35 +556,57 @@ func _can_see_player(distance: float, to_player: Vector2) -> bool:
 	query.exclude = [get_rid()]
 	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
-func _has_direct_line_to_player() -> bool:
-	if not is_instance_valid(player): return false
-	var query := PhysicsRayQueryParameters2D.create(global_position, player.global_position, 32)
-	query.exclude = [get_rid()]
-	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
-
-func _on_combat_noise(world_position: Vector2, radius: float, _source_kind: String) -> void:
-	if is_dead or state in [State.CHASE, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry: return
+func get_noise_response_priority(world_position: Vector2, radius: float) -> float:
+	if is_dead or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry: return INF
 	var effective_distance := global_position.distance_to(world_position)
-	if effective_distance > radius: return
+	if effective_distance > radius: return INF
 	var query := PhysicsRayQueryParameters2D.create(global_position, world_position, 32)
 	query.exclude = [get_rid()]
-	if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): effective_distance *= 1.5
-	if effective_distance > radius: return
-	_begin_investigation(world_position, 0.55)
+	var occluded := not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+	if occluded: effective_distance *= 1.5
+	return effective_distance if effective_distance <= radius else INF
+
+func receive_combat_noise(world_position: Vector2, radius: float, _source_kind: String, role: String) -> bool:
+	var effective_distance := get_noise_response_priority(world_position, radius)
+	if not is_finite(effective_distance): return false
+	tactical_role = role
+	if role == "guard":
+		guard_alert_time = 3.5
+		guard_facing = global_position.direction_to(world_position).angle()
+		alertness = maxf(alertness, 0.48)
+		queue_redraw()
+		return true
+	var occlusion_query := PhysicsRayQueryParameters2D.create(global_position, world_position, 32)
+	occlusion_query.exclude = [get_rid()]
+	var occluded := not get_world_2d().direct_space_state.intersect_ray(occlusion_query).is_empty()
+	var distance_ratio := clampf(effective_distance / maxf(radius, 1.0), 0.0, 1.0)
+	var uncertainty := lerpf(2.0, 15.0, distance_ratio) + (9.0 if occluded else 0.0)
+	var perceived_position := world_position + Vector2.RIGHT.rotated(randf_range(0.0, TAU)) * randf_range(0.0, uncertainty)
+	if role == "sweep":
+		var approach := global_position.direction_to(world_position)
+		perceived_position += approach.rotated(PI * 0.5 * strafe_sign) * search_radius * 1.4
+	if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable"):
+		if not tile_world.is_navigation_position_walkable(perceived_position): perceived_position = world_position
+	_begin_investigation(perceived_position, 0.55)
+	return true
 
 func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	if is_dead: return
+	_release_corpse_claim()
 	state = State.STAGGERED
+	_reset_movement_progress()
 	stagger_time = duration
 	velocity = push_direction.normalized() * 62.0
 	gun.cooldown = maxf(gun.cooldown, duration)
 
 func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 	if is_dead: return
+	_release_corpse_claim()
 	if hit_type == "kill":
 		take_damage(1, global_position - hit_direction)
 		return
 	state = State.KNOCKED_DOWN
+	_reset_movement_progress()
 	knockdown_time = KNOCKDOWN_DURATION
 	velocity = hit_direction.normalized() * 150.0
 	gun.cooldown = maxf(gun.cooldown, knockdown_time)
@@ -353,6 +630,7 @@ func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damag
 	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
 
 func _on_actor_died(source_position: Vector2) -> void:
+	_release_corpse_claim()
 	collision_layer = 0
 	collision_mask = 0
 	set_physics_process(false)
@@ -372,6 +650,9 @@ func _on_actor_died(source_position: Vector2) -> void:
 func _draw() -> void:
 	if melee_swing_time > 0.0:
 		draw_arc(Vector2.ZERO, melee_range, -0.65, 0.65, 10, Color("ffd0a8"), 2.0)
+	if state == State.ATTACK and attack_windup_time > 0.0:
+		draw_arc(Vector2.ZERO, 9.0, -0.48, 0.48, 8, Color("ffe56b"), 1.5)
+		draw_circle(Vector2(7, 0), 1.2, Color("fff3b0"))
 	if debug_draw_vision:
 		var half_fov := deg_to_rad(vision_fov_degrees * 0.5)
 		var vision_color := Color(0.2, 1.0, 0.45, 0.16) if player_in_sight else Color(1.0, 0.2, 0.32, 0.09)
@@ -383,4 +664,17 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, detection_range, -half_fov, half_fov, 24, Color(vision_color, 0.5), 1.0)
 		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(-half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
 		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
-	if alertness > 0.65: draw_circle(Vector2(-1, -7), 1.0, Color("ff385f"))
+	draw_set_transform(Vector2.ZERO, -rotation, Vector2.ONE)
+	if state == State.INVESTIGATE:
+		draw_arc(Vector2(0, -10), 2.4, -PI * 0.85, PI * 0.35, 7, Color("ffd166"), 1.0)
+		draw_circle(Vector2(0, -6.5), 0.8, Color("ffd166"))
+	elif state == State.SEARCH:
+		draw_arc(Vector2(0, -9), 3.0, -PI * 0.2, PI * 1.3, 9, Color("66e0ff"), 1.0)
+		draw_line(Vector2(2, -7), Vector2(4, -5), Color("66e0ff"), 1.0)
+	elif state in [State.CHASE, State.ATTACK]:
+		draw_line(Vector2(0, -12), Vector2(0, -8), Color("ff385f"), 1.5)
+		draw_circle(Vector2(0, -6.5), 0.9, Color("ff385f"))
+	elif tactical_role == "guard" and guard_alert_time > 0.0:
+		draw_line(Vector2(-3, -9), Vector2(3, -9), Color("9cf7c8"), 1.0)
+		draw_line(Vector2(-3, -9), Vector2(0, -6), Color("9cf7c8"), 1.0)
+		draw_line(Vector2(3, -9), Vector2(0, -6), Color("9cf7c8"), 1.0)

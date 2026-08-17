@@ -10,7 +10,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Vision-cone and line-of-sight enemy detection with sound investigation instead of omniscience
 - Continuous 0.2–0.4 second visual reaction delay, opaque wall/door occlusion and sight through physical glass windows
 - Corpse discovery interrupts idle duty, drives A* incident investigation and produces a timed multi-direction search at the scene
-- Confirmed sightings enter a faster 1.25x chase; lost targets are searched at their last known position before patrol resumes
+- Confirmed sightings enter role-tuned pursuit, with 1.35x gunners and 1.48x melee guards; lost targets are searched at their last known position before patrol resumes
+- Arrival-gated multi-point searches inspect the last-known direction for up to six seconds, with stuck replanning and unreachable-point skipping
 - Named physics layers separate players, enemies, solid walls, glass, projectiles and opaque vision blockers
 - Glass blocks movement, passes vision and full-strength sound, and shatters on the first bullet while allowing that projectile to continue
 - Optional FOV debug cones switch from red to green on raw visual contact
@@ -88,7 +89,9 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Sandwich Shop has independent layered floors, walls, objects, lighting and spawn configuration
 - Enemy routes use an AStarGrid2D generated from solid wall cells
 - Enemy vision uses distance/angle broad-phase checks followed by an opaque-only 2D raycast; `debug_draw_vision` exposes the tuning cone
-- Weapon-specific circular hearing events propagate through walls at a 1.5x effective-distance penalty and send every in-range enemy to the same source point
+- Weapon-specific circular hearing events propagate through walls at a 1.5x effective-distance penalty with distance- and occlusion-scaled uncertainty
+- Centralized hearing assigns the two nearest guards to push, a third to sweep an offset lane and remaining listeners to hold position instead of abandoning the whole floor
+- Melee hits and executions create their own alert radii, making committed close-range actions audible risks
 - Unalerted enemies follow two-point patrol routes; alerted enemies switch to frequently refreshed diagonal A* paths around walls and solid furniture
 - Patrol routes span 48–64px, use A* instead of blind straight-line motion, and pause 0.5–1.5 seconds at each waypoint
 - Unroutable guards become stationary sentries that smoothly scan ±45 degrees; soft obstacle costs reduce furniture and corner rubbing

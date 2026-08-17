@@ -75,6 +75,10 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 		tile_data.set_collision_polygon_points(0, 0, PackedVector2Array([
 			Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
 		]))
+		tile_data.add_collision_polygon(2)
+		tile_data.set_collision_polygon_points(2, 0, PackedVector2Array([
+			Vector2(-4, -4), Vector2(4, -4), Vector2(4, 4), Vector2(-4, 4)
+		]))
 	return tile_set
 
 func _set_tile(layer: TileMapLayer, cell: Vector2i, tile: Tile) -> void:
@@ -225,6 +229,10 @@ func get_navigation_path(from_world: Vector2, to_world: Vector2) -> PackedVector
 	for index in range(1, id_path.size()):
 		world_path.append(floor_layer.to_global(floor_layer.map_to_local(id_path[index])))
 	return world_path
+
+func is_navigation_position_walkable(world_position: Vector2) -> bool:
+	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
+	return path_grid.is_in_boundsv(cell) and not path_grid.is_point_solid(cell)
 
 func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
 	var cell := wall_layer.local_to_map(wall_layer.to_local(hit_position + flight_direction.normalized()))

@@ -6,6 +6,25 @@ All notable project changes are recorded here. Version branches remain unrelease
 
 ### Added
 
+- Explicit SEARCH and ATTACK enemy states with short visible attack tells instead of firing or striking directly from movement logic.
+- Direction-aware multi-point searches around the player's last confirmed position, with per-enemy route variation and walkability filtering.
+- Distance- and occlusion-scaled sound uncertainty so guards investigate plausible nearby positions instead of receiving exact coordinates through walls.
+- Friendly-fire ray checks that prevent gunners from wasting shots into allies standing between them and the player.
+- Opaque vision collision for solid furniture, keeping sight, navigation, projectile and actor blocking rules consistent.
+- Corpse-incident claims that merge bodies within 48px and assign only one active investigator, with automatic release when that guard is interrupted or killed.
+- A six-second hard limit for area searches so guards reliably resume their authored patrol or sentry behavior.
+- A standalone corpse-coordination regression covering exclusive claims, nearby incident merging, independent distant incidents and completed-scene propagation.
+- Arrival-gated search budgets that begin only when a guard reaches the first scene-search point, preserving the full six-second inspection window regardless of travel time.
+- Movement-progress watchdogs with forced replanning, unreachable search-point skipping, abandoned investigation recovery and patrol-route fallback.
+- A standalone enemy-search regression covering travel-time exclusion, arrival activation and two-stage stuck recovery.
+- Centralized noise dispatch that sorts eligible guards by effective heard distance, assigns two PUSH responders, one offset SWEEP responder and hold-position GUARD roles to the remainder.
+- Role-specific human movement tuning with 42px/s gunners and 62px/s melee guards, plus stronger but still sub-player chase multipliers.
+- Blocked-fire repositioning that makes rear gunners sidestep for a new firing lane instead of waiting indefinitely behind an ally.
+- Player melee target caps: fists and knives strike only the nearest valid enemy, while the bat retains a three-target crowd-control niche.
+- Weapon-specific whiff recovery, melee noise propagation and three-stage execution noise that exposes committed players to nearby guards.
+- Upright in-world state glyphs for investigation, search, confirmed pursuit/attack and hold-position guard duty.
+- Noise-role and melee-balance regressions covering responder assignments, speed profiles, single-target edged attacks, capped bat crowds and miss recovery.
+
 - Data-driven player melee arsenal with extreme close-contact fists (12px/35°), knife (16px/45°) and bat (28px/120°), each with distinct windup and cooldown.
 - Dynamic enemy-only MeleeArea broad phase followed by exact range/angle filtering and wall/glass ray occlusion, preventing attacks through geometry.
 - 140ms neon weapon trails with white fist, cyan knife and magenta bat silhouettes; number keys 1–4 switch between gun and melee modes.
@@ -95,6 +114,12 @@ All notable project changes are recorded here. Version branches remain unrelease
 
 ### Changed
 
+- Confirmed guards now require real FOV contact to keep tracking or attack; losing sight transitions through pursuit memory into a directional area search.
+- Fixed sentries remain physically fixed during combat while retaining visual acquisition and ranged attacks.
+- Solid furniture collision is enabled for players, enemies and projectiles.
+- Pursuit memory now follows only the last confirmed player position; knockdown recovery searches locally instead of receiving the player's live coordinates.
+- Lost-sight chase spacing and disengagement decisions now use last-known information rather than the player's live hidden distance.
+- Gunshots no longer pull every hearing guard off duty; surplus listeners face the incident and hold their patrol position for 3.5 seconds.
 - Player movement is now immediate at 115 px/s with no acceleration or release inertia.
 - Projectile speed increased from 295 to a 650–720 px/s weapon-specific range.
 - Pistol is semi-automatic with 12 rounds, 0.15-second interval and 0.75-degree spread; SMG and LMG remain automatic.
@@ -112,6 +137,11 @@ All notable project changes are recorded here. Version branches remain unrelease
 
 ### Validation
 
+- Godot 4.7.1 editor parsing completed without errors after the AI state expansion.
+- Nightclub, Sandwich Shop and Tactical Lab each completed a 600-frame headless integration run with the enhanced AI.
+- Corpse-coordination regression passes under Godot 4.7.1, followed by clean editor parsing and fresh 600-frame runs of all three maps.
+- Enemy-search regression passes under the normal project/autoload environment; all three maps then completed another clean 600-frame run.
+- Noise-role and melee-balance regressions pass, followed by clean corpse/search reruns and 600-frame Nightclub, Sandwich Shop and Tactical Lab integrations.
 - v0.0.2 combat smoke test verifies movement, pistol tuning, projectile speed, muzzle flash, recoil, layered audio, hit stop, hearing, stagger and corpse knockback.
 - Vision regression verifies walls block sight while unobstructed targets remain detectable.
 - Nightclub completed a 600-physics-frame integration run without runtime errors or leaked time scale.

@@ -119,12 +119,27 @@ func _perform_melee_attack(data: Dictionary) -> void:
 	melee_shape.position = Vector2(14.0, 0.0)
 	var forward := Vector2.RIGHT.rotated(rotation)
 	var half_angle := deg_to_rad(float(data.angle) * 0.5)
+	var valid_targets: Array[CharacterBody2D] = []
 	for body in _query_melee_bodies():
 		if not body is CharacterBody2D or not body.is_in_group("enemy") or body.is_dead: continue
+		if body.has_method("is_knocked_down") and body.is_knocked_down(): continue
 		var offset: Vector2 = body.global_position - global_position
 		if offset.length() > float(data.range) or absf(forward.angle_to(offset.normalized())) > half_angle: continue
 		if _melee_blocked_by_geometry(body): continue
-		melee_impact.emit(body, body.global_position, forward, current_melee_type, bool(data.lethal))
+		valid_targets.append(body)
+	valid_targets.sort_custom(func(a: CharacterBody2D, b: CharacterBody2D) -> bool:
+		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
+	)
+	var hit_limit: int = mini(3, valid_targets.size()) if current_melee_type == "bat" else mini(1, valid_targets.size())
+	for index in range(hit_limit):
+		var target: CharacterBody2D = valid_targets[index]
+		melee_impact.emit(target, target.global_position, forward, current_melee_type, bool(data.lethal))
+	if hit_limit == 0:
+		var miss_penalty := 0.08 if current_melee_type == "fist" else (0.12 if current_melee_type == "knife" else 0.18)
+		melee_cooldown += miss_penalty
+	else:
+		var noise_radius := 48.0 if current_melee_type == "fist" else (62.0 if current_melee_type == "knife" else 90.0)
+		Events.publish_combat_noise(global_position, noise_radius, "melee")
 	await get_tree().create_timer(0.04).timeout
 	if generation != melee_animation_generation:
 		return
@@ -171,8 +186,7 @@ func attempt_ground_execution() -> bool:
 	if is_executing or cleanup_mode or is_dead: return false
 	var nearest := get_nearby_execution_target()
 	if not is_instance_valid(nearest): return false
-	_start_execution_sequence(nearest)
-	return true
+	return _start_execution_sequence(nearest)
 
 func get_nearby_execution_target() -> CharacterBody2D:
 	if is_executing or cleanup_mode or is_dead: return null
@@ -188,23 +202,50 @@ func get_nearby_execution_target() -> CharacterBody2D:
 	for result in get_world_2d().direct_space_state.intersect_shape(query, 8):
 		var candidate = result.collider
 		if candidate is CharacterBody2D and candidate.has_method("is_knocked_down") and candidate.is_knocked_down():
+			if _execution_blocked_by_geometry(candidate): continue
 			var distance := global_position.distance_squared_to(candidate.global_position)
 			if distance < nearest_distance:
 				nearest = candidate
 				nearest_distance = distance
 	return nearest
 
-func _start_execution_sequence(target: CharacterBody2D) -> void:
+func _execution_blocked_by_geometry(target: CollisionObject2D) -> bool:
+	var query := PhysicsRayQueryParameters2D.create(global_position, target.global_position, 44)
+	query.exclude = [get_rid(), target.get_rid()]
+	return not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+
+func _find_safe_execution_position(target: CharacterBody2D, approach: Vector2) -> Dictionary:
+	var body_shape := CircleShape2D.new()
+	body_shape.radius = 5.0
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = body_shape
+	query.collision_mask = 14
+	query.exclude = [get_rid(), target.get_rid()]
+	for angle_offset in [0.0, -PI * 0.25, PI * 0.25, -PI * 0.5, PI * 0.5, PI]:
+		var candidate := target.global_position - approach.rotated(angle_offset) * 11.0
+		query.transform = Transform2D(0.0, candidate)
+		if not get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty(): continue
+		var travel_query := PhysicsRayQueryParameters2D.create(global_position, candidate, 46)
+		travel_query.exclude = [get_rid(), target.get_rid()]
+		if get_world_2d().direct_space_state.intersect_ray(travel_query).is_empty():
+			return {"found": true, "position": candidate}
+	return {"found": false}
+
+func _start_execution_sequence(target: CharacterBody2D) -> bool:
+	var approach := global_position.direction_to(target.global_position)
+	if approach.length_squared() < 0.001: approach = Vector2.RIGHT.rotated(rotation)
+	var placement := _find_safe_execution_position(target, approach)
+	if not placement.found: return false
 	is_executing = true
 	execution_target = target
 	velocity = Vector2.ZERO
 	gun.visible = false
 	melee_weapon_visual.visible = false
-	var approach := global_position.direction_to(target.global_position)
-	if approach.length_squared() < 0.001: approach = Vector2.RIGHT.rotated(rotation)
-	global_position = target.global_position - approach * 6.0
-	rotation = approach.angle()
-	_run_execution_sequence(approach)
+	global_position = placement.position
+	var impact_direction := global_position.direction_to(target.global_position)
+	rotation = impact_direction.angle()
+	_run_execution_sequence(impact_direction)
+	return true
 
 func _run_execution_sequence(impact_direction: Vector2) -> void:
 	for strike in range(3):
@@ -216,6 +257,7 @@ func _run_execution_sequence(impact_direction: Vector2) -> void:
 		queue_redraw()
 		var lethal := strike == 2
 		execution_impact.emit(execution_target.global_position, impact_direction, lethal)
+		Events.publish_combat_noise(execution_target.global_position, 95.0 if lethal else 58.0, "execution")
 		if lethal: execution_target.execute_ground(global_position)
 	await get_tree().create_timer(0.18).timeout
 	_finish_execution()

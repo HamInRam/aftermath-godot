@@ -60,7 +60,7 @@ func _begin_open(pusher_node: Node2D, pusher_position: Vector2, pusher_velocity:
 	if is_dangerous:
 		_spawn_splinters(-side_normal * side)
 		Events.door_impact.emit(global_position, 1.55)
-		Events.combat_noise.emit(global_position, 100.0, "door")
+		Events.publish_combat_noise(global_position, 100.0, "door")
 
 func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -> void:
 	var source_position := world_point - impact_velocity.normalized() * 4.0
