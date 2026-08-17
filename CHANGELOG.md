@@ -11,6 +11,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 - 140ms neon weapon trails with white fist, cyan knife and magenta bat silhouettes; number keys 1–4 switch between gun and melee modes.
 - Nonlethal fist knockdowns plus lethal knife and bat chains integrated with existing combo, hit-stop, trauma, blood, gore, corpse and cleanup systems.
 - Distinct directional knife cuts and crushed red/white blunt trauma corpse rendering, with weapon-specific line versus radial blood profiles.
+- Fixed player melee filtering against the project's singular `enemy` group, restoring fist, knife and bat hit detection.
 
 - GunData-driven recoil, camera shake, muzzle-flash size/duration, bullet speed, knockback, hearing radius and lethal hit-stop tuning.
 - One-to-two-frame muzzle flash geometry with a short-lived PointLight2D for dark-room illumination.

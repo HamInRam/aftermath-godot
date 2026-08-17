@@ -92,18 +92,26 @@ func _perform_melee_attack(data: Dictionary) -> void:
 		is_melee_attacking = false
 		return
 	_spawn_melee_trail(data)
-	melee_shape.disabled = false
-	await get_tree().physics_frame
 	var forward := Vector2.RIGHT.rotated(rotation)
 	var half_angle := deg_to_rad(float(data.angle) * 0.5)
-	for body in $MeleeArea.get_overlapping_bodies():
-		if not body is CharacterBody2D or not body.is_in_group("enemies") or body.is_dead: continue
+	for body in _query_melee_bodies():
+		if not body is CharacterBody2D or not body.is_in_group("enemy") or body.is_dead: continue
 		var offset: Vector2 = body.global_position - global_position
 		if offset.length() > float(data.range) or absf(forward.angle_to(offset.normalized())) > half_angle: continue
 		if _melee_blocked_by_geometry(body): continue
 		melee_impact.emit(body, body.global_position, forward, current_melee_type, bool(data.lethal))
-	melee_shape.disabled = true
 	is_melee_attacking = false
+
+func _query_melee_bodies() -> Array:
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = melee_shape.shape
+	query.transform = global_transform
+	query.collision_mask = 2
+	query.exclude = [get_rid()]
+	var bodies: Array = []
+	for result in get_world_2d().direct_space_state.intersect_shape(query, 32):
+		bodies.append(result.collider)
+	return bodies
 
 func _melee_blocked_by_geometry(target: CollisionObject2D) -> bool:
 	var query := PhysicsRayQueryParameters2D.create(global_position, target.global_position, 44)
