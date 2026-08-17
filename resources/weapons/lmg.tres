@@ -1,11 +1,20 @@
-[gd_resource type="Resource" script_class="GunData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="GunData" load_steps=6 format=3]
 
 [ext_resource path="res://scripts/gun_data.gd" type="Script" id="1_data"]
+[ext_resource path="res://assets/weapons/ak_12x5.png" type="Texture2D" id="2_texture"]
+[ext_resource path="res://assets/audio/sfx/pistol_shot.wav" type="AudioStream" id="3_shot"]
+[ext_resource path="res://assets/audio/sfx/pistol_reload.wav" type="AudioStream" id="4_reload"]
+[ext_resource path="res://assets/audio/sfx/dry_fire.wav" type="AudioStream" id="5_dry"]
 
 [resource]
 script = ExtResource("1_data")
 weapon_id = "lmg"
 display_name = "LMG"
+automatic = true
+weapon_texture = ExtResource("2_texture")
+shot_stream = ExtResource("3_shot")
+reload_stream = ExtResource("4_reload")
+dry_fire_stream = ExtResource("5_dry")
 ammo_capacity = 60
 damage = 3
 fire_interval = 0.085
@@ -15,6 +24,10 @@ reload_duration = 2.8
 pitch_min = 0.84
 pitch_max = 0.96
 blood_power = 1.65
+blood_range = 175.0
+blood_wall_reach = 58.0
+blood_pattern = "fan"
+blood_cone = 0.68
 recoil_strength = 0.65
 camera_shake = 0.5
 muzzle_flash_size = 34.0

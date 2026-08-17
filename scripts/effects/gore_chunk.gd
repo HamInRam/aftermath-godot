@@ -5,6 +5,9 @@ var chunk_kind := 0
 var amount := 1.0
 var settled := false
 
+func _ready() -> void:
+	CleanupRegistry.register_target(self)
+
 func setup(flight_direction: Vector2, intensity: float, variant: int) -> void:
 	chunk_kind = variant % 4
 	velocity = flight_direction.normalized() * randf_range(22.0, 48.0) * clampf(intensity, 0.7, 2.0)
@@ -30,6 +33,12 @@ func clean_step() -> void:
 	amount -= 0.2
 	if amount <= 0.02: queue_free()
 	else: queue_redraw()
+
+func get_cleanup_type() -> String:
+	return "gore"
+
+func get_cleanup_cost() -> int:
+	return 5
 
 func _draw() -> void:
 	var blood := Color(0.64, 0.005, 0.04, amount)

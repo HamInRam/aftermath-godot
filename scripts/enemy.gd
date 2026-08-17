@@ -400,13 +400,7 @@ func _scan_for_corpses(delta: float) -> void:
 		if not is_instance_valid(corpse_node): continue
 		var corpse_id := corpse_node.get_instance_id()
 		if discovered_corpses.has(corpse_id): continue
-		var to_corpse: Vector2 = corpse_node.global_position - global_position
-		if to_corpse.length() > detection_range * 0.8: continue
-		var facing := Vector2.RIGHT.rotated(rotation)
-		if absf(rad_to_deg(facing.angle_to(to_corpse.normalized()))) > vision_fov_degrees * 0.5: continue
-		var query := PhysicsRayQueryParameters2D.create(global_position, corpse_node.global_position, 32)
-		query.exclude = [get_rid()]
-		if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): continue
+		if not EnemyPerception.can_see_position(self, corpse_node.global_position, detection_range * 0.8, vision_fov_degrees, 32): continue
 		if not corpse_node.has_method("try_claim_investigation") or not corpse_node.try_claim_investigation(self):
 			if corpse_node.has_method("is_investigation_complete") and corpse_node.is_investigation_complete():
 				discovered_corpses[corpse_id] = true
@@ -448,12 +442,9 @@ func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
 	attack_windup_time = 0.0
 	var direction := likely_direction.normalized()
 	if direction.length_squared() < 0.001: direction = Vector2.RIGHT.rotated(rotation)
-	var side := direction.rotated(PI * 0.5 * strafe_sign)
 	var distance_scale := 0.85 + float(get_instance_id() % 4) * 0.1
-	_append_search_point(origin)
-	_append_search_point(origin + direction * search_radius * distance_scale)
-	_append_search_point(origin + side * search_radius)
-	_append_search_point(origin - side * search_radius * 0.75)
+	for point in EnemyNavigation.build_directional_search(tile_world, origin, direction, search_radius, distance_scale, strafe_sign):
+		search_points.append(point)
 	if search_points.is_empty():
 		state = State.IDLE
 		alertness = 0.0
@@ -463,11 +454,6 @@ func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
 	path_points.clear()
 	path_refresh = 0.0
 	_reset_movement_progress()
-
-func _append_search_point(candidate: Vector2) -> void:
-	if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable"):
-		if not tile_world.is_navigation_position_walkable(candidate): return
-	search_points.append(candidate)
 
 func _advance_search() -> void:
 	search_index += 1
@@ -549,26 +535,24 @@ func _update_movement_progress(delta: float, expected_to_move: bool) -> void:
 				patrol_index = (patrol_index + 1) % patrol_waypoints.size()
 
 func _can_see_player(distance: float, to_player: Vector2) -> bool:
-	if distance > detection_range: return false
-	var facing := Vector2.RIGHT.rotated(rotation)
-	if absf(rad_to_deg(facing.angle_to(to_player.normalized()))) > vision_fov_degrees * 0.5: return false
-	var query := PhysicsRayQueryParameters2D.create(global_position, player.global_position, 32)
-	query.exclude = [get_rid()]
-	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+	if distance > detection_range or to_player.length_squared() < 0.001: return false
+	return EnemyPerception.can_see_target(self, player, detection_range, vision_fov_degrees, 32)
 
 func get_noise_response_priority(world_position: Vector2, radius: float) -> float:
-	if is_dead or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry: return INF
-	var effective_distance := global_position.distance_to(world_position)
-	if effective_distance > radius: return INF
-	var query := PhysicsRayQueryParameters2D.create(global_position, world_position, 32)
-	query.exclude = [get_rid()]
-	var occluded := not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
-	if occluded: effective_distance *= 1.5
-	return effective_distance if effective_distance <= radius else INF
+	var response := evaluate_noise_response(world_position, radius)
+	return float(response.priority) if bool(response.eligible) else INF
+
+func evaluate_noise_response(world_position: Vector2, radius: float) -> Dictionary:
+	if is_dead or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
+		return {"eligible": false, "priority": INF, "occluded": false}
+	return EnemyPerception.evaluate_noise(self, world_position, radius, 32)
 
 func receive_combat_noise(world_position: Vector2, radius: float, _source_kind: String, role: String) -> bool:
-	var effective_distance := get_noise_response_priority(world_position, radius)
-	if not is_finite(effective_distance): return false
+	return receive_combat_noise_result(world_position, radius, _source_kind, role, evaluate_noise_response(world_position, radius))
+
+func receive_combat_noise_result(world_position: Vector2, radius: float, _source_kind: String, role: String, response: Dictionary) -> bool:
+	if not bool(response.get("eligible", false)): return false
+	var effective_distance := float(response.priority)
 	tactical_role = role
 	if role == "guard":
 		guard_alert_time = 3.5
@@ -576,9 +560,7 @@ func receive_combat_noise(world_position: Vector2, radius: float, _source_kind: 
 		alertness = maxf(alertness, 0.48)
 		queue_redraw()
 		return true
-	var occlusion_query := PhysicsRayQueryParameters2D.create(global_position, world_position, 32)
-	occlusion_query.exclude = [get_rid()]
-	var occluded := not get_world_2d().direct_space_state.intersect_ray(occlusion_query).is_empty()
+	var occluded := bool(response.get("occluded", false))
 	var distance_ratio := clampf(effective_distance / maxf(radius, 1.0), 0.0, 1.0)
 	var uncertainty := lerpf(2.0, 15.0, distance_ratio) + (9.0 if occluded else 0.0)
 	var perceived_position := world_position + Vector2.RIGHT.rotated(randf_range(0.0, TAU)) * randf_range(0.0, uncertainty)

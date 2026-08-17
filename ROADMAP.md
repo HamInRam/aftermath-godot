@@ -1,5 +1,20 @@
 # AFTERMATH Roadmap
 
+## v0.0.4 — Architecture and Cleanup Foundation
+
+- Keep `Events` signal-only and route tactical hearing through `CombatDirector`.
+- Track transitive corpse incidents and every cleanup target through centralized registries.
+- Drive gun behavior, presentation and blood response from one data source.
+- Split perception, search construction and HUD presentation out of core gameplay scripts.
+- Run white-box and black-box regression coverage automatically in GitHub Actions.
+
+## Next — Encounter Authoring
+
+- Author role limits and room-specific guard responses using the new coordinator boundary.
+- Add cleanup scoring by target type, time and evidence left behind.
+- Supply copyright-safe combat music and room ambience to the implemented audio transition players.
+- Add weapon pickups only after encounter and cleanup scoring are stable.
+
 ## v0.0.3 — Squad Tactics and Combat Readability
 
 The following features are intentionally deferred from v0.0.2:

@@ -11,6 +11,7 @@ var base_intensity := 1.0
 var pattern_id := "fan"
 
 func _ready() -> void:
+	CleanupRegistry.register_target(self)
 	if not configured:
 		setup(Vector2.RIGHT.rotated(randf_range(0.0, TAU)), 1.0, false, false)
 
@@ -48,6 +49,12 @@ func clean_step() -> void:
 	amount -= 0.12
 	if amount <= 0.02: queue_free()
 	else: queue_redraw()
+
+func get_cleanup_type() -> String:
+	return "blood"
+
+func get_cleanup_cost() -> int:
+	return 9
 
 func _draw() -> void:
 	var blood := Color(0.62, 0.005, 0.035, 0.82 * amount)

@@ -3,15 +3,12 @@ extends Node2D
 
 signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 
-const SHOT_STREAM := preload("res://assets/audio/sfx/pistol_shot.wav")
-const RELOAD_STREAM := preload("res://assets/audio/sfx/pistol_reload.wav")
 const DRY_FIRE_STREAM := preload("res://assets/audio/sfx/dry_fire.wav")
 const PISTOL_TEXTURE := preload("res://assets/weapons/pistol_10x4.png")
-const AK_TEXTURE := preload("res://assets/weapons/ak_12x5.png")
 
 @export var gun_data: Resource
 @export var enemy_owned := false
-@export var automatic := true
+var automatic := false
 
 var fire_interval := 0.1
 var fire_interval_variance := 0.018
@@ -48,22 +45,14 @@ var recoil := 0.0
 var is_reloading := false
 
 func _ready() -> void:
-	_apply_gun_data()
-	ammo = max_ammo
-	shot_audio.stream = SHOT_STREAM
-	reload_audio.stream = RELOAD_STREAM
-	dry_fire_audio.stream = DRY_FIRE_STREAM
-	mechanical_audio.stream = DRY_FIRE_STREAM
-	punch_audio.stream = SHOT_STREAM
-	weapon_sprite.texture = AK_TEXTURE if weapon_id in ["smg", "lmg"] else PISTOL_TEXTURE
-	weapon_shadow.texture = weapon_sprite.texture
-	muzzle.position.x = weapon_sprite.texture.get_width() * 0.5 + 1.0
+	set_gun_data(gun_data, true)
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	queue_redraw()
 
 func _apply_gun_data() -> void:
 	if gun_data == null: return
+	automatic = gun_data.automatic
 	weapon_id = gun_data.weapon_id
 	max_ammo = gun_data.ammo_capacity
 	projectile_damage = gun_data.damage
@@ -81,6 +70,25 @@ func _apply_gun_data() -> void:
 	knockback = gun_data.knockback
 	hearing_radius = gun_data.hearing_radius
 	hit_stop = gun_data.hit_stop
+
+func set_gun_data(data: Resource, refill := true) -> void:
+	if data == null: return
+	gun_data = data
+	_apply_gun_data()
+	if refill: ammo = max_ammo
+	is_reloading = false
+	if is_instance_valid(reload_timer): reload_timer.stop()
+	if is_instance_valid(shot_audio):
+		shot_audio.stream = gun_data.shot_stream
+		reload_audio.stream = gun_data.reload_stream
+		dry_fire_audio.stream = gun_data.dry_fire_stream if gun_data.dry_fire_stream != null else DRY_FIRE_STREAM
+		mechanical_audio.stream = dry_fire_audio.stream
+		punch_audio.stream = shot_audio.stream
+		weapon_sprite.texture = gun_data.weapon_texture if gun_data.weapon_texture != null else PISTOL_TEXTURE
+		weapon_shadow.texture = weapon_sprite.texture
+		muzzle.position.x = weapon_sprite.texture.get_width() * 0.5 + 1.0
+		if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
+	queue_redraw()
 
 func _process(delta: float) -> void:
 	cooldown = maxf(0.0, cooldown - delta)

@@ -3,6 +3,11 @@ extends Resource
 
 @export var weapon_id := "pistol"
 @export var display_name := "PISTOL"
+@export var automatic := false
+@export var weapon_texture: Texture2D
+@export var shot_stream: AudioStream
+@export var reload_stream: AudioStream
+@export var dry_fire_stream: AudioStream
 @export_range(1, 999, 1) var ammo_capacity := 12
 @export_range(1, 100, 1) var damage := 1
 @export_range(0.03, 2.0, 0.01) var fire_interval := 0.1
@@ -12,6 +17,10 @@ extends Resource
 @export_range(0.5, 1.5, 0.01) var pitch_min := 0.91
 @export_range(0.5, 1.5, 0.01) var pitch_max := 1.09
 @export_range(0.1, 3.0, 0.05) var blood_power := 1.0
+@export_range(16.0, 240.0, 1.0) var blood_range := 150.0
+@export_range(8.0, 96.0, 1.0) var blood_wall_reach := 48.0
+@export_enum("line", "fan", "radial") var blood_pattern := "line"
+@export_range(0.05, 1.5, 0.01) var blood_cone := 0.24
 @export_range(0.0, 3.0, 0.05) var recoil_strength := 0.7
 @export_range(0.0, 3.0, 0.05) var camera_shake := 0.7
 @export_range(8.0, 48.0, 1.0) var muzzle_flash_size := 26.0

@@ -6,18 +6,9 @@ const BLOOD_MIST_SCENE := preload("res://scenes/effects/blood_mist.tscn")
 const BLOOD_POOL_SCENE := preload("res://scenes/effects/blood_pool.tscn")
 const GORE_CHUNK_SCENE := preload("res://scenes/effects/gore_chunk.tscn")
 
-const WEAPON_PROFILES := {
-	"pistol": {"blood_power": 1.0, "range": 150.0, "wall_reach": 48.0, "pattern": "line", "cone": 0.24},
-	"smg": {"blood_power": 0.72, "range": 125.0, "wall_reach": 38.0, "pattern": "fan", "cone": 0.48},
-	"lmg": {"blood_power": 1.65, "range": 175.0, "wall_reach": 58.0, "pattern": "fan", "cone": 0.68},
-	"shotgun": {"blood_power": 1.85, "range": 92.0, "wall_reach": 64.0, "pattern": "radial", "cone": 1.05},
-	"knife": {"blood_power": 1.35, "range": 54.0, "wall_reach": 52.0, "pattern": "line", "cone": 0.38},
-	"bat": {"blood_power": 1.75, "range": 48.0, "wall_reach": 42.0, "pattern": "radial", "cone": 0.95},
-}
-
 func emit_hit(hit_position: Vector2, projectile_direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
 	var direction := projectile_direction.normalized()
-	var profile: Dictionary = WEAPON_PROFILES.get(weapon_id, WEAPON_PROFILES.pistol)
+	var profile := AttackCatalog.get_blood_profile(weapon_id)
 	var distance_ratio := clampf(travel_distance / float(profile.range), 0.0, 1.0)
 	var distance_force := lerpf(1.18, 0.72, distance_ratio)
 	var lethal_force := 1.28 if lethal else 0.78

@@ -14,10 +14,12 @@ var settled := false
 var launch_speed := 0.0
 var played_bounce := false
 var allow_bounce := false
+var cleanup_amount := 1.0
 
 @onready var clink_audio: AudioStreamPlayer2D = $ClinkAudio
 
 func _ready() -> void:
+	CleanupRegistry.register_target(self)
 	clink_audio.stream = CLINK_STREAMS.pick_random()
 
 func setup(shot_direction: Vector2, enemy_owned: bool) -> void:
@@ -49,3 +51,14 @@ func _play_clink(volume: float, pitch_low: float, pitch_high: float) -> void:
 	clink_audio.volume_db = volume + randf_range(-1.5, 1.0)
 	clink_audio.pitch_scale = randf_range(pitch_low, pitch_high)
 	clink_audio.play()
+
+func clean_step() -> void:
+	cleanup_amount -= 0.5
+	modulate.a = clampf(cleanup_amount, 0.15, 1.0)
+	if cleanup_amount <= 0.02: queue_free()
+
+func get_cleanup_type() -> String:
+	return "shell"
+
+func get_cleanup_cost() -> int:
+	return 2

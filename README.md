@@ -2,7 +2,18 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
-## v0.0.2 combat feel
+## v0.0.4 architecture and cleanup
+
+- Pure `Events` signal bus with a dedicated `CombatDirector` for one-pass hearing evaluation and push/sweep/guard assignment
+- Central `CorpseIncidentRegistry` with transitive A–B–C incident merging
+- Unified `CleanupRegistry` covering blood, pools, gore, corpses and shell casings
+- Data-driven Pistol, SMG and LMG fire mode, visuals, audio and blood behavior through `GunData` and `AttackCatalog`
+- Press `1` repeatedly while holding a gun to cycle Pistol → SMG → LMG
+- Enemy perception and directional search construction split into focused helper modules
+- Cached execution targeting, enemy-count tracking and cleanup registration replace repeated frame-wide queries
+- Automated Godot parsing plus unit and black-box regressions in GitHub Actions
+
+## Combat feel
 
 - Immediate 115 px/s movement and instant stopping
 - Semi-automatic high-precision pistol with near-instant 650 px/s projectiles
@@ -61,7 +72,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 - `WASD` or arrow keys — move
 - Mouse — aim
-- `1` gun / `2` fists / `3` knife / `4` bat — switch weapon mode
+- `1` gun; press repeatedly to cycle pistol/SMG/LMG / `2` fists / `3` knife / `4` bat
 - Left mouse — fire or melee attack / scrub during cleanup
 - Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails
 - `R` — reload; restart after death or completion
@@ -80,7 +91,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 3. Chain kills before the combo timer expires.
 4. Survive the one-hit lethality.
 5. When combat ends, switch to cleanup mode.
-6. Remove every procedurally shaped blood pool.
+6. Remove every blood stain, pool, gore chunk, corpse and shell casing.
 
 ## Levels and AI
 

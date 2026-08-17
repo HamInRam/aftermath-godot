@@ -7,6 +7,11 @@ signal execution_impact(world_position: Vector2, direction: Vector2, lethal: boo
 signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction: Vector2, melee_type: String, lethal: bool)
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
+const PLAYER_GUNS := [
+	preload("res://resources/weapons/pistol.tres"),
+	preload("res://resources/weapons/smg.tres"),
+	preload("res://resources/weapons/lmg.tres"),
+]
 const MELEE_DATA := {
 	"fist": {"range": 12.0, "angle": 35.0, "windup": 0.03, "cooldown": 0.18, "duration": 0.06, "lethal": false, "color": Color("ffffff")},
 	"knife": {"range": 16.0, "angle": 45.0, "windup": 0.02, "cooldown": 0.22, "duration": 0.05, "lethal": true, "color": Color("00ffff")},
@@ -28,6 +33,9 @@ var current_melee_type := "fist"
 var melee_cooldown := 0.0
 var is_melee_attacking := false
 var melee_animation_generation := 0
+var gun_index := 0
+var cached_execution_target: CharacterBody2D
+var execution_query_cooldown := 0.0
 
 func _ready() -> void:
 	super._ready()
@@ -38,6 +46,10 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	melee_cooldown = maxf(0.0, melee_cooldown - delta)
 	execution_pulse = maxf(0.0, execution_pulse - delta)
+	execution_query_cooldown -= delta
+	if execution_query_cooldown <= 0.0 and not is_executing and not cleanup_mode and not is_dead:
+		execution_query_cooldown = 0.12
+		cached_execution_target = _query_execution_target()
 	if execution_pulse > 0.0: queue_redraw()
 	if is_dead:
 		velocity = velocity.move_toward(Vector2.ZERO, 220.0 * delta)
@@ -73,7 +85,9 @@ func _physics_process(delta: float) -> void:
 
 func _handle_weapon_selection() -> void:
 	if cleanup_mode or is_executing or is_melee_attacking: return
-	if Input.is_action_just_pressed("equip_gun"): _equip_weapon("gun")
+	if Input.is_action_just_pressed("equip_gun"):
+		if equipped_mode == "gun": _cycle_gun()
+		else: _equip_weapon("gun")
 	elif Input.is_action_just_pressed("equip_fist"): _equip_weapon("fist")
 	elif Input.is_action_just_pressed("equip_knife"): _equip_weapon("knife")
 	elif Input.is_action_just_pressed("equip_bat"): _equip_weapon("bat")
@@ -85,6 +99,14 @@ func _equip_weapon(mode: String) -> void:
 	melee_weapon_visual.visible = equipped_mode == "melee" and not cleanup_mode and not is_executing
 	if mode != "gun": melee_weapon_visual.set_weapon(current_melee_type)
 	queue_redraw()
+
+func _cycle_gun() -> void:
+	gun_index = (gun_index + 1) % PLAYER_GUNS.size()
+	gun.set_gun_data(PLAYER_GUNS[gun_index], true)
+	queue_redraw()
+
+func get_equipped_weapon_name() -> String:
+	return str(gun.gun_data.display_name) if equipped_mode == "gun" and gun.gun_data != null else current_melee_type.to_upper()
 
 func _start_melee_attack() -> void:
 	if is_melee_attacking or melee_cooldown > 0.0 or is_dead or cleanup_mode: return
@@ -120,12 +142,12 @@ func _perform_melee_attack(data: Dictionary) -> void:
 	var forward := Vector2.RIGHT.rotated(rotation)
 	var half_angle := deg_to_rad(float(data.angle) * 0.5)
 	var valid_targets: Array[CharacterBody2D] = []
-	for body in _query_melee_bodies():
+	for body in MeleeController.query_bodies(self, melee_shape):
 		if not body is CharacterBody2D or not body.is_in_group("enemy") or body.is_dead: continue
 		if body.has_method("is_knocked_down") and body.is_knocked_down(): continue
 		var offset: Vector2 = body.global_position - global_position
 		if offset.length() > float(data.range) or absf(forward.angle_to(offset.normalized())) > half_angle: continue
-		if _melee_blocked_by_geometry(body): continue
+		if MeleeController.blocked_by_geometry(self, body): continue
 		valid_targets.append(body)
 	valid_targets.sort_custom(func(a: CharacterBody2D, b: CharacterBody2D) -> bool:
 		return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position)
@@ -157,22 +179,6 @@ func _reset_melee_pose() -> void:
 		body_sprite.position = Vector2.ZERO
 		body_sprite.rotation = 0.0
 
-func _query_melee_bodies() -> Array:
-	var query := PhysicsShapeQueryParameters2D.new()
-	query.shape = melee_shape.shape
-	query.transform = melee_shape.global_transform
-	query.collision_mask = 2
-	query.exclude = [get_rid()]
-	var bodies: Array = []
-	for result in get_world_2d().direct_space_state.intersect_shape(query, 32):
-		bodies.append(result.collider)
-	return bodies
-
-func _melee_blocked_by_geometry(target: CollisionObject2D) -> bool:
-	var query := PhysicsRayQueryParameters2D.create(global_position, target.global_position, 44)
-	query.exclude = [get_rid(), target.get_rid()]
-	return not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
-
 func _spawn_melee_trail(data: Dictionary) -> void:
 	var trail = MELEE_TRAIL_SCENE.instantiate()
 	get_tree().current_scene.add_child(trail)
@@ -189,47 +195,19 @@ func attempt_ground_execution() -> bool:
 	return _start_execution_sequence(nearest)
 
 func get_nearby_execution_target() -> CharacterBody2D:
-	if is_executing or cleanup_mode or is_dead: return null
-	var circle := CircleShape2D.new()
-	circle.radius = 24.0
-	var query := PhysicsShapeQueryParameters2D.new()
-	query.shape = circle
-	query.transform = global_transform
-	query.collision_mask = 2
-	query.exclude = [get_rid()]
-	var nearest: CharacterBody2D = null
-	var nearest_distance := INF
-	for result in get_world_2d().direct_space_state.intersect_shape(query, 8):
-		var candidate = result.collider
-		if candidate is CharacterBody2D and candidate.has_method("is_knocked_down") and candidate.is_knocked_down():
-			if _execution_blocked_by_geometry(candidate): continue
-			var distance := global_position.distance_squared_to(candidate.global_position)
-			if distance < nearest_distance:
-				nearest = candidate
-				nearest_distance = distance
-	return nearest
+	cached_execution_target = _query_execution_target()
+	execution_query_cooldown = 0.12
+	return cached_execution_target
 
-func _execution_blocked_by_geometry(target: CollisionObject2D) -> bool:
-	var query := PhysicsRayQueryParameters2D.create(global_position, target.global_position, 44)
-	query.exclude = [get_rid(), target.get_rid()]
-	return not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+func peek_nearby_execution_target() -> CharacterBody2D:
+	return cached_execution_target if is_instance_valid(cached_execution_target) else null
+
+func _query_execution_target() -> CharacterBody2D:
+	if is_executing or cleanup_mode or is_dead: return null
+	return ExecutionController.query_target(self)
 
 func _find_safe_execution_position(target: CharacterBody2D, approach: Vector2) -> Dictionary:
-	var body_shape := CircleShape2D.new()
-	body_shape.radius = 5.0
-	var query := PhysicsShapeQueryParameters2D.new()
-	query.shape = body_shape
-	query.collision_mask = 14
-	query.exclude = [get_rid(), target.get_rid()]
-	for angle_offset in [0.0, -PI * 0.25, PI * 0.25, -PI * 0.5, PI * 0.5, PI]:
-		var candidate := target.global_position - approach.rotated(angle_offset) * 11.0
-		query.transform = Transform2D(0.0, candidate)
-		if not get_world_2d().direct_space_state.intersect_shape(query, 1).is_empty(): continue
-		var travel_query := PhysicsRayQueryParameters2D.create(global_position, candidate, 46)
-		travel_query.exclude = [get_rid(), target.get_rid()]
-		if get_world_2d().direct_space_state.intersect_ray(travel_query).is_empty():
-			return {"found": true, "position": candidate}
-	return {"found": false}
+	return ExecutionController.find_safe_position(self, target, approach)
 
 func _start_execution_sequence(target: CharacterBody2D) -> bool:
 	var approach := global_position.direction_to(target.global_position)

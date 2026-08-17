@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.4] - Unreleased
+
+### Added
+
+- Dedicated CombatDirector, CleanupRegistry and CorpseIncidentRegistry boundaries.
+- Transitive corpse-cluster ownership and completion across chained nearby bodies.
+- Cleanup contracts for blood stains, pools, gore chunks, corpses and shell casings.
+- Data-driven gun automatic mode, texture and audio streams plus a shared AttackCatalog for blood and death response.
+- Real player Pistol/SMG/LMG cycling on repeated `1` input.
+- EnemyPerception and EnemyNavigation helpers plus a standalone HUD controller.
+- Cached execution targeting and event-driven enemy/cleanup counters.
+- Cleanup-registry and wall-occluded black-box AI regressions.
+- GitHub Actions workflow for Godot parsing and the full regression suite.
+
+### Changed
+
+- Events is now a pure signal bus; noise occlusion and priority are calculated once per listener.
+- Scene completion now requires removal of all evidence rather than blood alone.
+- CombatAudioDirector owns real combat and ambience players with an abrupt combat fade and cleanup ambience transition.
+
 ## [v.0.0.2] - Unreleased
 
 ### Added

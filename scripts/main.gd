@@ -6,12 +6,6 @@ const BULLET_SCENE := preload("res://scenes/bullet.tscn")
 const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
 const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/effects/muzzle_flash.tscn")
-const UI_DEFAULTS := preload("res://utility/scripts/ui_defaults.gd")
-const WEAPON_DATA := {
-	"pistol": preload("res://resources/weapons/pistol.tres"),
-	"smg": preload("res://resources/weapons/smg.tres"),
-	"lmg": preload("res://resources/weapons/lmg.tres")
-}
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 142)
@@ -28,8 +22,11 @@ var detail_label: Label
 var ammo_label: Label
 var combo_label: Label
 var interaction_label: Label
+var hud: HudController
+var combat_feedback: CombatFeedback
 var enemies_killed := 0
 var started_enemy_count := 0
+var remaining_enemies := 0
 var run_over := false
 var elapsed := 0.0
 var combo := 0
@@ -38,7 +35,6 @@ var pending_death_direction := Vector2.RIGHT
 var pending_death_knockback := 20.0
 var pending_death_blood_power := 1.0
 var pending_death_style := "firearm"
-var hit_stop_generation := 0
 var transitioning_cleanup := false
 var vision_debug_enabled := false
 var screen_effects_enabled := true
@@ -51,6 +47,9 @@ func _ready() -> void:
 	randomize()
 	RenderingServer.set_default_clear_color(Color("0e0c10"))
 	_create_ui()
+	combat_feedback = CombatFeedback.new()
+	add_child(combat_feedback)
+	combat_feedback.configure($DeathPresentation/Flash)
 	_connect_events()
 	trauma_camera.impact_flash_requested.connect(_on_impact_flash_requested)
 	_start_run()
@@ -60,18 +59,18 @@ func _process(delta: float) -> void:
 	elapsed += delta
 	combo_timer -= delta
 	if combo_timer <= 0.0: combo = 0
-	combo_label.text = ("x%d" % combo) if combo > 1 else ""
+	hud.set_combo(combo)
 	_update_interaction_prompt()
 	if run_over: return
-	if phase == "combat" and not transitioning_cleanup and get_tree().get_nodes_in_group("enemy").is_empty():
+	if phase == "combat" and not transitioning_cleanup and remaining_enemies <= 0:
 		_begin_cleanup_transition()
 	elif phase == "cleanup":
-		var stains := get_tree().get_nodes_in_group("blood")
-		if stains.is_empty():
+		var remaining_cleanup := CleanupRegistry.get_remaining_count()
+		if remaining_cleanup == 0:
 			run_over = true
 			status_label.text = "SCENE CLEAN"
 			detail_label.text = "%.1fs  //  R RESTART" % elapsed
-		else: status_label.text = "CLEAN // %02d" % stains.size()
+		else: status_label.text = "CLEAN // %02d" % remaining_cleanup
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
@@ -89,32 +88,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if run_over and event.is_action_pressed("reload"):
 		get_tree().reload_current_scene()
 
-func _make_label(canvas: CanvasLayer, pos: Vector2, size: int, color: Color) -> Label:
-	var label := Label.new()
-	label.position = pos
-	UI_DEFAULTS.apply_label(label, size, color)
-	canvas.add_child(label)
-	return label
-
 func _create_ui() -> void:
-	var canvas := CanvasLayer.new()
-	canvas.layer = 30
-	add_child(canvas)
-	status_label = _make_label(canvas, Vector2(10, 7), 9, Color("fff1f7"))
-	detail_label = _make_label(canvas, Vector2(10, 20), 7, Color("e2cedd"))
-	ammo_label = _make_label(canvas, Vector2(270, 158), 8, Color("ffe5a8"))
-	combo_label = _make_label(canvas, Vector2(266, 11), 10, Color("ff3d78"))
-	interaction_label = _make_label(canvas, Vector2(10, 145), 9, Color("fff0a8"))
-	interaction_label.size = Vector2(300, 14)
-	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var controls := _make_label(canvas, Vector2(10, 165), 7, Color("bdaebe"))
-	controls.text = "WASD // 1 GUN  2 FIST  3 KNIFE  4 BAT // LMB // SPACE"
+	hud = HudController.new()
+	add_child(hud)
+	status_label = hud.status_label
+	detail_label = hud.detail_label
+	ammo_label = hud.ammo_label
+	combo_label = hud.combo_label
+	interaction_label = hud.interaction_label
 
 func _update_interaction_prompt() -> void:
 	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or run_over or phase != "combat" or player.is_executing:
 		if is_instance_valid(interaction_label): interaction_label.text = ""
 		return
-	if is_instance_valid(player.get_nearby_execution_target()):
+	if is_instance_valid(player.peek_nearby_execution_target()):
 		interaction_label.text = "[ SPACE ] EXECUTE"
 	else:
 		interaction_label.text = ""
@@ -146,7 +133,7 @@ func _on_reload_finished(_current: int, _maximum: int) -> void:
 	if phase != "cleanup": detail_label.text = "NO WITNESSES."
 
 func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, weapon_id: String) -> void:
-	var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
+	var data := AttackCatalog.get_gun_data(weapon_id)
 	var casing = SHELL_CASING_SCENE.instantiate()
 	add_child(casing)
 	var perpendicular := direction.rotated(PI * 0.5)
@@ -159,6 +146,8 @@ func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, we
 	add_child(flash)
 
 func _start_run() -> void:
+	CleanupRegistry.reset()
+	CorpseIncidentRegistry.reset()
 	status_label.text = "AFTERMATH // " + level_title
 	detail_label.text = "NO WITNESSES."
 	if not doors_enabled and has_node("Doors"): $Doors.queue_free()
@@ -172,6 +161,7 @@ func _start_run() -> void:
 	add_child(player)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
+	remaining_enemies = started_enemy_count
 
 func _sync_ammo_ui() -> void:
 	if is_instance_valid(player) and is_instance_valid(player.gun):
@@ -211,7 +201,7 @@ func _toggle_hue_cycle() -> void:
 
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if phase != "combat" or run_over: return
-	var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
+	var data := AttackCatalog.get_gun_data(weapon_id)
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = origin
 	bullet.blood_impact.connect(_on_blood_impact)
@@ -221,6 +211,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 
 func _on_enemy_died(pos: Vector2, facing: float) -> void:
 	enemies_killed += 1
+	remaining_enemies = maxi(0, remaining_enemies - 1)
 	combo += 1
 	combo_timer = 2.2
 	trauma_camera.trigger_kill_effect(0.72, "red")
@@ -235,7 +226,7 @@ func _on_enemy_died(pos: Vector2, facing: float) -> void:
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
 	blood_system.emit_hit(hit_position, direction, damage, weapon_id, travel_distance, lethal)
 	if lethal:
-		var data = WEAPON_DATA.get(weapon_id, WEAPON_DATA.pistol)
+		var data := AttackCatalog.get_gun_data(weapon_id)
 		pending_death_direction = direction
 		pending_death_knockback = data.knockback
 		pending_death_blood_power = data.blood_power
@@ -248,36 +239,32 @@ func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction:
 		target.take_door_hit(direction, "knockdown")
 		trauma_camera.add_trauma(0.16)
 		return
-	var is_bat := melee_type == "bat"
+	var profile := AttackCatalog.get_impact_profile(melee_type)
 	pending_death_direction = direction
-	pending_death_knockback = 30.0 if is_bat else 15.0
-	pending_death_blood_power = 1.75 if is_bat else 1.35
-	pending_death_style = "blunt" if is_bat else "slash"
+	pending_death_knockback = float(profile.knockback)
+	pending_death_blood_power = float(profile.blood_power)
+	pending_death_style = str(profile.style)
 	blood_system.emit_hit(hit_position, direction, 1, melee_type, 0.0, true)
-	trauma_camera.add_trauma(0.58 if is_bat else 0.34)
-	_on_impact_flash_requested(Color(1.0, 0.06, 0.35, 0.2 if is_bat else 0.13))
-	_trigger_hit_stop(0.055 if is_bat else 0.032)
+	trauma_camera.add_trauma(float(profile.trauma))
+	_on_impact_flash_requested(Color(1.0, 0.06, 0.35, 0.2 if melee_type == "bat" else 0.13))
+	_trigger_hit_stop(float(profile.hit_stop))
 	target.take_damage(maxi(1, target.hp), hit_position - direction * 2.0)
 
 func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: bool) -> void:
-	var profile := "shotgun" if lethal else "smg"
-	blood_system.emit_hit(hit_position, direction, 1, profile, 0.0, lethal)
+	var attack_id := "execution" if lethal else "fist"
+	blood_system.emit_hit(hit_position, direction, 1, attack_id, 0.0, lethal)
 	trauma_camera.add_trauma(0.42 if lethal else 0.2)
 	if lethal:
+		var profile := AttackCatalog.get_impact_profile("execution")
 		pending_death_direction = direction
-		pending_death_knockback = 18.0
-		pending_death_blood_power = 1.85
-		pending_death_style = "blunt"
+		pending_death_knockback = float(profile.knockback)
+		pending_death_blood_power = float(profile.blood_power)
+		pending_death_style = str(profile.style)
 		_on_impact_flash_requested(Color(0.9, 0.02, 0.12, 0.28))
-		_trigger_hit_stop(0.045)
+		_trigger_hit_stop(float(profile.hit_stop))
 
 func _trigger_hit_stop(duration: float) -> void:
-	if duration <= 0.0: return
-	hit_stop_generation += 1
-	var generation := hit_stop_generation
-	Engine.time_scale = 0.05
-	await get_tree().create_timer(duration, true, false, true).timeout
-	if generation == hit_stop_generation: Engine.time_scale = 1.0
+	combat_feedback.trigger_hit_stop(duration)
 
 func _on_player_died() -> void:
 	run_over = true
@@ -293,13 +280,10 @@ func _on_impact_flash_requested(color: Color) -> void:
 	_show_flash(color, 0.12)
 
 func _show_flash(color: Color, duration: float) -> void:
-	var flash := $DeathPresentation/Flash as ColorRect
-	flash.color = color
-	var tween := create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS).set_ignore_time_scale(true)
-	tween.tween_property(flash, "color", Color(color.r, color.g, color.b, 0.0), duration)
+	combat_feedback.show_flash(color, duration)
 
 func _exit_tree() -> void:
-	Engine.time_scale = 1.0
+	if is_instance_valid(combat_feedback): combat_feedback.reset()
 
 func _enter_cleanup_phase() -> void:
 	phase = "cleanup"
@@ -319,11 +303,5 @@ func _begin_cleanup_transition() -> void:
 func _on_clean_requested(world_position: Vector2) -> void:
 	if phase != "cleanup" or run_over: return
 	if player.global_position.distance_to(world_position) > 33.0: return
-	var best_stain: Node2D = null
-	var best_distance := 99999.0
-	for stain in get_tree().get_nodes_in_group("blood"):
-		var distance: float = stain.global_position.distance_to(world_position)
-		if distance < 15.0 and distance < best_distance:
-			best_stain = stain
-			best_distance = distance
-	if best_stain != null: best_stain.clean_step()
+	var target := CleanupRegistry.get_nearest_target(world_position, 15.0)
+	if is_instance_valid(target): target.clean_step()

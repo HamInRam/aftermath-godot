@@ -1,0 +1,32 @@
+name: Godot regression tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.7.1
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip
+          unzip -q Godot_v4.7.1-stable_linux.x86_64.zip
+          mv Godot_v4.7.1-stable_linux.x86_64 godot
+          chmod +x godot
+      - name: Parse project
+        run: ./godot --headless --editor --quit --path .
+      - name: Run regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scene in \
+            tests/test_corpse_coordination.tscn \
+            tests/test_enemy_search.tscn \
+            tests/test_noise_roles.tscn \
+            tests/test_melee_balance.tscn \
+            tests/test_cleanup_registry.tscn \
+            tests/test_ai_black_box.tscn; do
+            ./godot --headless --path . "$scene"
+          done
