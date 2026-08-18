@@ -7,6 +7,7 @@ const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
 const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/effects/muzzle_flash.tscn")
 const WEAPON_PICKUP_SCENE := preload("res://scenes/props/weapon_pickup.tscn")
+const THROWN_WEAPON_SCENE := preload("res://scenes/props/thrown_weapon.tscn")
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 142)
@@ -116,7 +117,7 @@ func _update_interaction_prompt() -> void:
 	else:
 		var pickup = player.get_nearby_weapon_pickup()
 		if not is_instance_valid(pickup):
-			interaction_label.text = ""
+			interaction_label.text = "[ Q ] THROW %s" % player.get_equipped_weapon_name() if player.equipped_mode == "gun" else ""
 			return
 		interaction_label.text = "[ E ] PICK UP %s" % pickup.weapon_id.to_upper()
 
@@ -172,6 +173,7 @@ func _start_run() -> void:
 	player.died.connect(_on_player_died)
 	player.execution_impact.connect(_on_execution_impact)
 	player.melee_impact.connect(_on_melee_impact)
+	player.weapon_throw_requested.connect(_on_weapon_throw_requested)
 	add_child(player)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
@@ -191,7 +193,7 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	if patrol_index >= 0 and patrol_index < enemy_types.size(): enemy.configure_combat(enemy_types[patrol_index])
 	if enemy.enemy_type == "gunner":
 		var enemy_weapon_ids := ["pistol", "smg", "lmg"]
-		var enemy_weapon_id: String = enemy_weapon_ids[patrol_index % enemy_weapon_ids.size()]
+		var enemy_weapon_id: String = enemy.default_weapon_id if not enemy.default_weapon_id.is_empty() else enemy_weapon_ids[patrol_index % enemy_weapon_ids.size()]
 		enemy.gun.set_gun_data(AttackCatalog.get_gun_data(enemy_weapon_id), true)
 	if patrol_index in fixed_sentry_indices:
 		enemy.configure_fixed_sentry()
@@ -251,6 +253,13 @@ func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: in
 	pickup.rotation = randf_range(-PI, PI)
 	pickup.setup(weapon_id, rounds)
 	add_child(pickup)
+
+func _on_weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int) -> void:
+	if phase != "combat" or run_over: return
+	var thrown_weapon := THROWN_WEAPON_SCENE.instantiate()
+	thrown_weapon.global_position = origin
+	thrown_weapon.setup(direction, weapon_id, rounds)
+	add_child(thrown_weapon)
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
 	blood_system.emit_hit(hit_position, direction, damage, weapon_id, travel_distance, lethal)

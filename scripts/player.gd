@@ -5,6 +5,7 @@ signal clean_requested(world_position: Vector2)
 signal died
 signal execution_impact(world_position: Vector2, direction: Vector2, lethal: bool, execution_type: String)
 signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction: Vector2, melee_type: String, lethal: bool)
+signal weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int)
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
 const PLAYER_GUNS := [
@@ -91,6 +92,8 @@ func _physics_process(delta: float) -> void:
 			gun.try_fire(Vector2.RIGHT.rotated(rotation))
 	if Input.is_action_just_pressed("reload") and not cleanup_mode and equipped_mode == "gun":
 		gun.reload()
+	if Input.is_action_just_pressed("throw_weapon"):
+		throw_equipped_gun(Vector2.RIGHT.rotated(rotation))
 
 func _handle_weapon_selection() -> void:
 	if cleanup_mode or is_executing or is_melee_attacking: return
@@ -164,6 +167,27 @@ func _handle_cleanup_tool_selection() -> void:
 func select_cleanup_tool(tool_name: String) -> bool:
 	if tool_name not in CLEANUP_TOOLS: return false
 	current_cleanup_tool = tool_name
+	queue_redraw()
+	return true
+
+func throw_equipped_gun(direction: Vector2) -> bool:
+	if cleanup_mode or is_dead or is_executing or equipped_mode != "gun" or gun.gun_data == null or direction.length_squared() < 0.001: return false
+	var thrown_weapon_id: String = gun.weapon_id
+	var thrown_rounds: int = gun.ammo
+	var thrown_index := gun_index
+	owned_gun_indices.erase(thrown_index)
+	gun.ammo_by_weapon.erase(thrown_weapon_id)
+	weapon_throw_requested.emit(global_position + direction.normalized() * 9.0, direction.normalized(), thrown_weapon_id, thrown_rounds)
+	if owned_gun_indices.is_empty():
+		equipped_mode = "melee"
+		current_melee_type = "fist"
+		gun.visible = false
+		melee_weapon_visual.visible = true
+		melee_weapon_visual.set_weapon(current_melee_type)
+		Events.publish_ammo(0, 0, false)
+	else:
+		gun_index = owned_gun_indices[0]
+		gun.set_gun_data(PLAYER_GUNS[gun_index], false)
 	queue_redraw()
 	return true
 

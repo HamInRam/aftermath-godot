@@ -27,11 +27,13 @@ jobs:
           for scene in \
             tests/test_corpse_coordination.tscn \
             tests/test_enemy_search.tscn \
+            tests/test_enemy_archetypes.tscn \
             tests/test_noise_roles.tscn \
             tests/test_melee_balance.tscn \
             tests/test_cleanup_registry.tscn \
             tests/test_cleanup_tools.tscn \
             tests/test_weapon_inventory.tscn \
+            tests/test_weapon_throw.tscn \
             tests/test_blood_footprints.tscn \
             tests/test_combat_audio_director.tscn \
             tests/test_tactical_alert.tscn \

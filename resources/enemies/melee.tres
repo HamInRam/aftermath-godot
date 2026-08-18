@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyProfile" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/enemy_profile.gd" type="Script" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+archetype_id = "melee"
+combat_type = "melee"
+display_name = "RUSHER"
+move_speed = 62.0
+chase_speed_multiplier = 1.48
+preferred_distance = 17.0
+reaction_time_min = 0.16
+reaction_time_max = 0.3
+melee_interval = 0.64
+sprite_modulate = Color(1.32, 0.72, 0.82, 1)

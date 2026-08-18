@@ -87,6 +87,10 @@ var reposition_time := 0.0
 var reposition_sign := 1.0
 var home_position := Vector2.ZERO
 var return_target := Vector2.ZERO
+var archetype_id := "gunner"
+var default_weapon_id := ""
+var attack_windup_multiplier := 1.0
+var knockdown_resistance := 0.0
 const KNOCKDOWN_DURATION := 4.0
 
 func _ready() -> void:
@@ -322,18 +326,27 @@ func configure_patrol(points: PackedVector2Array) -> void:
 	if not points.is_empty(): home_position = points[0]
 
 func configure_combat(type_name: String) -> void:
-	enemy_type = type_name if type_name in ["gunner", "melee"] else "gunner"
+	var profile := EnemyCatalog.get_profile(type_name)
+	archetype_id = profile.archetype_id
+	enemy_type = profile.combat_type
+	actor_type = profile.actor_type
+	default_weapon_id = profile.default_weapon_id
+	move_speed = profile.move_speed
+	chase_speed_multiplier = profile.chase_speed_multiplier
+	preferred_distance = profile.preferred_distance
+	detection_range = profile.detection_range
+	vision_fov_degrees = profile.vision_fov_degrees
+	reaction_time_min = profile.reaction_time_min
+	reaction_time_max = profile.reaction_time_max
+	reaction_time = randf_range(reaction_time_min, maxf(reaction_time_min, reaction_time_max))
+	melee_range = profile.melee_range
+	melee_interval = profile.melee_interval
+	attack_windup_multiplier = profile.attack_windup_multiplier
+	knockdown_resistance = profile.knockdown_resistance
 	var uses_gun := enemy_type == "gunner"
-	if uses_gun:
-		move_speed = 42.0
-		chase_speed_multiplier = 1.35
-		preferred_distance = 68.0
-	else:
-		move_speed = 62.0
-		chase_speed_multiplier = 1.48
-		preferred_distance = melee_range
 	gun.visible = uses_gun
 	gun.set_process(uses_gun)
+	$Sprite2D.modulate = profile.sprite_modulate
 
 func configure_fixed_sentry() -> void:
 	is_fixed_sentry = true
@@ -350,7 +363,7 @@ func _execute_melee_attack() -> void:
 func _begin_attack() -> void:
 	if state == State.ATTACK: return
 	state = State.ATTACK
-	attack_windup_time = EnemyCombatController.attack_windup(enemy_type)
+	attack_windup_time = EnemyCombatController.attack_windup(enemy_type) * attack_windup_multiplier
 	velocity = Vector2.ZERO
 	_reset_movement_progress()
 	queue_redraw()
@@ -708,6 +721,9 @@ func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 	_release_corpse_claim()
 	if hit_type == "kill":
 		take_damage(1, global_position - hit_direction)
+		return
+	if knockdown_resistance >= 1.0:
+		apply_stagger(hit_direction, 0.24)
 		return
 	state = State.KNOCKED_DOWN
 	_reset_movement_progress()

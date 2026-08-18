@@ -2,6 +2,13 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.5 combat expansion
+
+- Data-driven Gunner, Rusher, Assault, Heavy and Hound archetypes
+- Assault enemies push quickly with SMGs; Heavies carry LMGs and resist ordinary knockdowns; Hounds attack with extreme speed and wide perception
+- Press `Q` to throw the equipped gun, knock down a normal enemy and recover the same weapon with its remaining magazine
+- `After Hours` now mixes all advanced archetypes with the complete combat-to-cleanup loop
+
 ## v0.0.3 architecture, tactics and cleanup
 
 - Pure `Events` signal bus with a dedicated `CombatDirector` for one-pass hearing evaluation and push/sweep/guard assignment
@@ -81,6 +88,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - `R` — reload; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
 - `E` — pick up a nearby dropped weapon
+- `Q` — throw the equipped gun; the weapon remains recoverable with its current magazine
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
 - Hold `Shift` — extend the camera toward the cursor
 - `F3` — toggle enemy vision debug cones

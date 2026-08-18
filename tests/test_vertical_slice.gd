@@ -15,6 +15,12 @@ func _run() -> void:
 	_expect(level.started_enemy_count == 10 and level.remaining_enemies == 10, "vertical slice should start with ten active enemies")
 	_expect(is_instance_valid(level.player), "vertical slice should spawn a playable character")
 	_expect(level.get_node("Doors").get_child_count() >= 5, "vertical slice should exercise multi-door tactics")
+	var archetype_counts := {}
+	for enemy in level.get_node("Enemies").get_children():
+		archetype_counts[enemy.archetype_id] = int(archetype_counts.get(enemy.archetype_id, 0)) + 1
+	_expect(int(archetype_counts.get("dog", 0)) == 2, "vertical slice should include two Hounds")
+	_expect(int(archetype_counts.get("heavy", 0)) == 2, "vertical slice should include two Heavies")
+	_expect(int(archetype_counts.get("assault", 0)) == 2, "vertical slice should include two Assault responders")
 	if failures == 0: print("vertical slice regression: PASS")
 	for audio_node in level.find_children("*", "AudioStreamPlayer", true, false):
 		var audio := audio_node as AudioStreamPlayer

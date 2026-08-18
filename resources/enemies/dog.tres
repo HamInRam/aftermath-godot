@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="EnemyProfile" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/enemy_profile.gd" type="Script" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+archetype_id = "dog"
+combat_type = "melee"
+actor_type = "dog"
+display_name = "HOUND"
+move_speed = 76.0
+chase_speed_multiplier = 1.72
+preferred_distance = 13.0
+detection_range = 185.0
+vision_fov_degrees = 125.0
+reaction_time_min = 0.08
+reaction_time_max = 0.16
+melee_range = 13.0
+melee_interval = 0.52
+attack_windup_multiplier = 0.72
+sprite_modulate = Color(0.76, 0.48, 0.42, 1)

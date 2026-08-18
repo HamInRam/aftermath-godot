@@ -21,7 +21,7 @@ func _ready() -> void:
 	interaction_label.size = Vector2(300, 14)
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var controls := _make_label(Vector2(10, 165), 7, Color("bdaebe"))
-	controls.text = "WASD // 1 OWNED GUNS  2 FIST  3 KNIFE  4 BAT // E PICKUP"
+	controls.text = "WASD // 1 GUN  2 FIST  3 KNIFE  4 BAT // E USE // Q THROW"
 
 func set_combo(combo: int) -> void:
 	combo_label.text = ("x%d" % combo) if combo > 1 else ""

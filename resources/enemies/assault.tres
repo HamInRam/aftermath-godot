@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyProfile" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/enemy_profile.gd" type="Script" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+archetype_id = "assault"
+default_weapon_id = "smg"
+display_name = "ASSAULT"
+move_speed = 50.0
+chase_speed_multiplier = 1.5
+preferred_distance = 52.0
+detection_range = 220.0
+vision_fov_degrees = 100.0
+reaction_time_min = 0.12
+reaction_time_max = 0.24
+attack_windup_multiplier = 0.88
+sprite_modulate = Color(1.35, 0.62, 0.76, 1)

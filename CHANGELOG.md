@@ -2,6 +2,18 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.5] - In development
+
+### Added
+
+- Data-driven Gunner, Rusher, Assault, Heavy and Hound enemy profiles with distinct perception, movement, weapons and attack timing.
+- Heavy enemies resist ordinary knockdowns while Hounds trade firearms for extreme speed and a wide vision cone.
+- `Q` weapon throwing that knocks down normal enemies, staggers resistant enemies and preserves the thrown magazine in a recoverable pickup.
+
+### Tests
+
+- Added enemy-archetype and weapon-throw regression scenes to CI.
+
 ## [v.0.0.4] - In development
 
 ### Added
