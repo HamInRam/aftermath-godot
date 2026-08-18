@@ -8,6 +8,7 @@ var detail_label: Label
 var ammo_label: Label
 var combo_label: Label
 var interaction_label: Label
+var objective_label: Label
 
 func _init() -> void:
 	layer = 30
@@ -15,6 +16,8 @@ func _init() -> void:
 func _ready() -> void:
 	status_label = _make_label(Vector2(10, 7), 9, Color("fff1f7"))
 	detail_label = _make_label(Vector2(10, 20), 7, Color("e2cedd"))
+	objective_label = _make_label(Vector2(10, 30), 7, Color("73f7e4"))
+	objective_label.size = Vector2(300, 12)
 	ammo_label = _make_label(Vector2(270, 158), 8, Color("ffe5a8"))
 	combo_label = _make_label(Vector2(266, 11), 10, Color("ff3d78"))
 	interaction_label = _make_label(Vector2(10, 145), 9, Color("fff0a8"))
@@ -28,6 +31,9 @@ func set_combo(combo: int) -> void:
 
 func set_interaction(text: String) -> void:
 	interaction_label.text = text
+
+func set_objective(text: String) -> void:
+	objective_label.text = text
 
 func _make_label(pos: Vector2, size: int, color: Color) -> Label:
 	var label := Label.new()

@@ -38,6 +38,22 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	CleanupRegistry.reset()
+	var alarmed_level = LEVEL_SCENE.instantiate()
+	add_child(alarmed_level)
+	for enemy in alarmed_level.get_node("Enemies").get_children(): enemy.set_physics_process(false)
+	alarmed_level.phase = "cleanup"
+	alarmed_level.mission_tracker.record_alarm_trigger()
+	alarmed_level._finish_run(false)
+	_expect(alarmed_level.final_grade == "A", "an otherwise perfect mission with an alarm should lose the S grade")
+	_expect("1 ALARMS" in alarmed_level.detail_label.text, "mission result should disclose alarm count")
+	for audio_node in alarmed_level.find_children("*", "AudioStreamPlayer", true, false):
+		var audio := audio_node as AudioStreamPlayer
+		audio.stop()
+		audio.stream = null
+	alarmed_level.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	CleanupRegistry.reset()
 	get_tree().quit(failures)
 
 func _expect(condition: bool, message: String) -> void:

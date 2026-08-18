@@ -7,6 +7,7 @@ signal execution_impact(world_position: Vector2, direction: Vector2, lethal: boo
 signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction: Vector2, melee_type: String, lethal: bool)
 signal weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int)
 signal extraction_requested
+signal world_interaction_requested
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
 const PLAYER_GUNS := [
@@ -72,7 +73,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("interact"):
 		if cleanup_mode:
 			if not attempt_corpse_drag(): extraction_requested.emit()
-		else: attempt_weapon_pickup()
+		elif not attempt_weapon_pickup(): world_interaction_requested.emit()
 	if cleanup_mode: _handle_cleanup_tool_selection()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var drag_multiplier := 0.72 if is_instance_valid(dragged_corpse) else 1.0

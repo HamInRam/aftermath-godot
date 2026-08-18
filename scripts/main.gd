@@ -18,6 +18,7 @@ const EXTRACTION_ZONE_SCENE := preload("res://scenes/props/extraction_zone.tscn"
 @export var fixed_sentry_indices := PackedInt32Array()
 @export var doors_enabled := true
 @export var extraction_position := Vector2.ZERO
+@export var mission_profile: MissionProfile
 
 var phase := "combat"
 var player: CharacterBody2D
@@ -44,6 +45,7 @@ var vision_debug_enabled := false
 var screen_effects_enabled := true
 var hue_cycle_enabled := true
 var extraction_zone: ExtractionZone
+var mission_tracker := MissionTracker.new()
 var final_score := 0
 var final_grade := ""
 @onready var blood_system = $BloodSystem
@@ -69,7 +71,8 @@ func _process(delta: float) -> void:
 	hud.set_combo(combo)
 	_update_interaction_prompt()
 	if run_over: return
-	if phase == "combat" and not transitioning_cleanup and remaining_enemies <= 0:
+	if phase == "combat": _update_combat_objective_hud()
+	if phase == "combat" and not transitioning_cleanup and mission_tracker.are_combat_objectives_complete():
 		_begin_cleanup_transition()
 	elif phase == "cleanup":
 		ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
@@ -123,10 +126,14 @@ func _update_interaction_prompt() -> void:
 		interaction_label.text = "[ SPACE ] EXECUTE"
 	else:
 		var pickup = player.get_nearby_weapon_pickup()
-		if not is_instance_valid(pickup):
-			interaction_label.text = "[ Q ] THROW %s" % player.get_equipped_weapon_name() if player.equipped_mode == "gun" else ""
+		if is_instance_valid(pickup):
+			interaction_label.text = "[ E ] PICK UP %s" % pickup.weapon_id.to_upper()
 			return
-		interaction_label.text = "[ E ] PICK UP %s" % pickup.weapon_id.to_upper()
+		var security_device := _get_nearby_security_device()
+		if is_instance_valid(security_device):
+			interaction_label.text = security_device.get_interaction_prompt()
+			return
+		interaction_label.text = "[ Q ] THROW %s" % player.get_equipped_weapon_name() if player.equipped_mode == "gun" else ""
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)
@@ -182,6 +189,7 @@ func _start_run() -> void:
 	player.melee_impact.connect(_on_melee_impact)
 	player.weapon_throw_requested.connect(_on_weapon_throw_requested)
 	player.extraction_requested.connect(_on_extraction_requested)
+	player.world_interaction_requested.connect(_on_world_interaction_requested)
 	add_child(player)
 	extraction_zone = EXTRACTION_ZONE_SCENE.instantiate() as ExtractionZone
 	extraction_zone.global_position = player_spawn if extraction_position == Vector2.ZERO else extraction_position
@@ -190,6 +198,13 @@ func _start_run() -> void:
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
 	remaining_enemies = started_enemy_count
+	var security_devices := _get_security_devices()
+	for device in security_devices:
+		device.alarm_triggered.connect(_on_security_alarm)
+		device.disabled.connect(_on_security_disabled)
+	mission_tracker.configure(_get_mission_profile(), started_enemy_count, security_devices.size())
+	detail_label.text = mission_tracker.profile.briefing
+	_update_combat_objective_hud()
 
 func _sync_ammo_ui() -> void:
 	if is_instance_valid(player) and is_instance_valid(player.gun):
@@ -244,6 +259,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) -> void:
 	enemies_killed += 1
 	remaining_enemies = maxi(0, remaining_enemies - 1)
+	mission_tracker.record_enemy_eliminated()
 	combo += 1
 	combo_timer = 2.2
 	trauma_camera.trigger_kill_effect(0.72, "red")
@@ -257,7 +273,54 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 		if remaining_rounds > 0:
 			_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, remaining_rounds)
 	pending_death_style = "firearm"
-	status_label.text = "TARGETS // %02d/%02d" % [enemies_killed, started_enemy_count]
+	_update_combat_objective_hud()
+
+func _get_mission_profile() -> MissionProfile:
+	if mission_profile != null: return mission_profile
+	var fallback := MissionProfile.new()
+	fallback.display_name = level_title
+	return fallback
+
+func _get_security_devices() -> Array[SecurityCamera]:
+	var devices: Array[SecurityCamera] = []
+	for node in get_tree().get_nodes_in_group("security_device"):
+		if node is SecurityCamera and is_ancestor_of(node): devices.append(node)
+	return devices
+
+func _get_nearby_security_device() -> SecurityCamera:
+	if not is_instance_valid(player): return null
+	var nearest: SecurityCamera
+	var nearest_distance := INF
+	for device in _get_security_devices():
+		if device.is_offline: continue
+		var distance := player.global_position.distance_squared_to(device.global_position)
+		if distance <= device.interaction_range * device.interaction_range and distance <= nearest_distance:
+			nearest = device
+			nearest_distance = distance
+	return nearest
+
+func _on_world_interaction_requested() -> void:
+	if phase != "combat" or run_over: return
+	var device := _get_nearby_security_device()
+	if is_instance_valid(device): device.interact(player)
+
+func _on_security_alarm(_camera: SecurityCamera, _player_position: Vector2) -> void:
+	if phase != "combat" or run_over: return
+	mission_tracker.record_alarm_trigger()
+	detail_label.text = "SECURITY BREACH // POSITION COMPROMISED"
+	trauma_camera.add_trauma(0.22)
+	_on_impact_flash_requested(Color(1.0, 0.05, 0.18, 0.18))
+
+func _on_security_disabled(_camera: SecurityCamera) -> void:
+	if phase != "combat" or run_over: return
+	mission_tracker.record_security_shutdown()
+	detail_label.text = "SECURITY NODE OFFLINE"
+	_update_combat_objective_hud()
+
+func _update_combat_objective_hud() -> void:
+	if phase != "combat" or run_over: return
+	status_label.text = "MISSION // " + mission_tracker.profile.display_name if mission_tracker.profile != null else "MISSION // " + level_title
+	hud.set_objective(mission_tracker.get_status_line() + " // ALARMS %d" % mission_tracker.alarm_triggers)
 
 func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: int) -> void:
 	var pickup = WEAPON_PICKUP_SCENE.instantiate()
@@ -341,6 +404,7 @@ func _enter_cleanup_phase() -> void:
 	for bullet in get_tree().get_nodes_in_group("bullet"): bullet.queue_free()
 	status_label.text = "CLEANUP REQUIRED"
 	detail_label.text = "GET CLOSE // HOLD LMB"
+	hud.set_objective("OBJECTIVES COMPLETE // ERASE ALL EVIDENCE")
 	if is_instance_valid(extraction_zone): extraction_zone.set_active(true)
 
 func _begin_cleanup_transition() -> void:
@@ -379,12 +443,15 @@ func _finish_run(left_evidence: bool) -> void:
 	run_over = true
 	var cleanup_ratio := CleanupRegistry.get_cleanup_ratio()
 	var time_bonus := maxi(0, 500 - roundi(elapsed * 3.0))
-	final_score = roundi(cleanup_ratio * 1000.0) + enemies_killed * 100 + time_bonus
-	if cleanup_ratio >= 0.999: final_grade = "S"
-	elif cleanup_ratio >= 0.9: final_grade = "A"
-	elif cleanup_ratio >= 0.75: final_grade = "B"
-	elif cleanup_ratio >= 0.5: final_grade = "C"
+	final_score = maxi(0, roundi(cleanup_ratio * 1000.0) + enemies_killed * 100 + time_bonus + mission_tracker.get_score_modifier())
+	var alarm_performance := maxf(0.0, 1.0 - mission_tracker.alarm_triggers * 0.15)
+	var mission_rating := cleanup_ratio * 0.75 + alarm_performance * 0.25
+	if cleanup_ratio >= 0.999 and mission_tracker.alarm_triggers == 0: final_grade = "S"
+	elif mission_rating >= 0.9: final_grade = "A"
+	elif mission_rating >= 0.75: final_grade = "B"
+	elif mission_rating >= 0.5: final_grade = "C"
 	else: final_grade = "D"
 	status_label.text = "SCENE ABANDONED" if left_evidence else "SCENE CLEAN"
-	detail_label.text = "GRADE %s // %04d PTS // R RESTART" % [final_grade, final_score]
+	detail_label.text = "GRADE %s // %04d PTS // %d ALARMS // R RESTART" % [final_grade, final_score, mission_tracker.alarm_triggers]
+	hud.set_objective("MISSION COMPLETE // " + mission_tracker.get_status_line())
 	interaction_label.text = "EVIDENCE LEFT // %d" % CleanupRegistry.get_remaining_value() if left_evidence else "PERFECT CLEANUP"

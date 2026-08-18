@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource path="res://scenes/main.tscn" type="PackedScene" id="1_main"]
 [ext_resource path="res://scenes/props/swing_door.tscn" type="PackedScene" id="2_door"]
+[ext_resource path="res://scenes/props/security_camera.tscn" type="PackedScene" id="3_camera"]
+[ext_resource path="res://resources/missions/after_hours.tres" type="Resource" id="4_mission"]
 
 [node name="AfterHours" instance=ExtResource("1_main")]
 level_title = "AFTER HOURS // VERTICAL SLICE"
@@ -10,6 +12,7 @@ enemy_spawns = PackedVector2Array(72, 54, 142, 54, 212, 54, 292, 54, 340, 92, 82
 enemy_patrol_offsets = PackedVector2Array(48, 0, 0, 48, 48, 0, 0, 48, -48, 0, 0, -48, 48, 0, 0, -48, -48, 0, 0, -48)
 enemy_types = PackedStringArray("dog", "gunner", "assault", "heavy", "melee", "gunner", "dog", "assault", "heavy", "melee")
 fixed_sentry_indices = PackedInt32Array(3, 8)
+mission_profile = ExtResource("4_mission")
 
 [node name="TileMap" parent="." index="0"]
 layout_id = "tactical_lab"
@@ -30,6 +33,14 @@ rotation = -1.5708
 [node name="NorthAccessDoor" parent="Doors" index="4" instance=ExtResource("2_door")]
 position = Vector2(116, 56)
 rotation = -1.5708
+
+[node name="WestSecurityCamera" parent="." instance=ExtResource("3_camera")]
+position = Vector2(110, 40)
+rotation = 1.5708
+
+[node name="EastSecurityCamera" parent="." instance=ExtResource("3_camera")]
+position = Vector2(306, 152)
+rotation = 3.14159
 
 [node name="CanvasModulate" parent="." index="1"]
 color = Color(0.48, 0.42, 0.58, 1)

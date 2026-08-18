@@ -2,6 +2,14 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.7 mission and security layer
+
+- Each level can assign a `MissionProfile` with authored elimination, security, bonus and alarm-penalty rules
+- `After Hours` now requires clearing ten hostiles and disabling two sweeping security cameras before cleanup begins
+- Cameras build detection over time, report the player's position into the tactical AI network and re-arm only after losing the player
+- Press `E` beside a camera for a quiet shutdown, or shoot it for a fast but noisy takedown
+- The HUD tracks mandatory objectives and alarm count; alarms reduce score and prevent a perfect S grade
+
 ## v0.0.6 evidence and extraction
 
 - Evidence types carry different risk values, with corpses and dropped weapons weighted above blood or shell casings

@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.7] - In development
+
+### Added
+
+- Data-driven mission profiles and a bounded objective tracker for elimination and security requirements.
+- Sweeping security cameras with line-of-sight detection buildup, alarm latching and floor-wide tactical alerts.
+- Close-range camera shutdowns and projectile destruction as quiet/loud security counterplay choices.
+- Persistent mission-objective HUD lines, alarm accounting, completion bonuses and alarm score penalties.
+- Cleanup-phase gating that requires every configured combat and security objective instead of only eliminating enemies.
+
+### Tests
+
+- Added mission-objective, security-camera and alarm-sensitive final-grade regression coverage.
+
 ## [v.0.0.6] - In development
 
 ### Added
