@@ -38,6 +38,8 @@ jobs:
           mkdir -p "$HOME/.local/share/godot/export_templates/4.7.1.stable"
           unzip -q Godot_v4.7.1-stable_export_templates.tpz
           mv templates/* "$HOME/.local/share/godot/export_templates/4.7.1.stable/"
+      - name: Prime Godot import cache
+        run: ./godot --headless --editor --quit --path .
       - name: Export release
         run: |
           mkdir -p "$(dirname '${{ matrix.output }}')"
