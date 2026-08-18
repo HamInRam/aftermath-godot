@@ -21,6 +21,7 @@ Events="*res://utility/events.gd"
 CombatDirector="*res://utility/combat_director.gd"
 CleanupRegistry="*res://utility/cleanup_registry.gd"
 CorpseIncidentRegistry="*res://utility/corpse_incident_registry.gd"
+Progression="*res://utility/progression_store.gd"
 
 [display]
 

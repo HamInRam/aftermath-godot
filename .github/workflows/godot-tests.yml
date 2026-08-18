@@ -33,7 +33,10 @@ jobs:
             tests/test_cleanup_registry.tscn \
             tests/test_cleanup_scoring.tscn \
             tests/test_cleanup_tools.tscn \
+            tests/test_campaign_ui.tscn \
             tests/test_mission_objectives.tscn \
+            tests/test_mission_result_flow.tscn \
+            tests/test_progression_store.tscn \
             tests/test_security_camera.tscn \
             tests/test_weapon_inventory.tscn \
             tests/test_weapon_throw.tscn \

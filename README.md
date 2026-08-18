@@ -2,6 +2,14 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.8 campaign progression
+
+- Campaign cases unlock in order: Nightclub → Sandwich Shop → After Hours; Tactical Lab remains an unrestricted training mission
+- Selecting a case opens an authored briefing with objectives and the current personal best before deployment
+- Completed missions write versioned progress to `user://aftermath_progress.json`, preserving the highest-scoring report for each case
+- Press `Enter` after a completed cleanup to open an action report with grade, score, time, cleanup, alarms and remaining risk
+- The action report supports immediate retry, return to case files or deployment to the newly unlocked next case
+
 ## v0.0.7 mission and security layer
 
 - Each level can assign a `MissionProfile` with authored elimination, security, bonus and alarm-penalty rules

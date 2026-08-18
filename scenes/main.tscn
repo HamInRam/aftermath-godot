@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1_main"]
 [ext_resource path="res://scripts/effects/blood_system.gd" type="Script" id="2_blood_system"]
@@ -9,6 +9,7 @@
 [ext_resource path="res://shaders/screen_effect.gdshader" type="Shader" id="7_screen_shader"]
 [ext_resource path="res://shaders/hue_cycle.gdshader" type="Shader" id="8_hue_shader"]
 [ext_resource path="res://scripts/effects/neon_light.gd" type="Script" id="9_neon_light"]
+[ext_resource path="res://resources/missions/nightclub.tres" type="Resource" id="10_mission"]
 
 [sub_resource type="Gradient" id="Gradient_light"]
 offsets = PackedFloat32Array(0, 0.42, 1)
@@ -38,6 +39,7 @@ adjustment_saturation = 1.5
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
+mission_profile = ExtResource("10_mission")
 
 [node name="TileMap" type="Node2D" parent="." groups=["pathfinding_world"]]
 script = ExtResource("4_tile_world")

@@ -19,6 +19,7 @@ const EXTRACTION_ZONE_SCENE := preload("res://scenes/props/extraction_zone.tscn"
 @export var doors_enabled := true
 @export var extraction_position := Vector2.ZERO
 @export var mission_profile: MissionProfile
+@export var record_progress := true
 
 var phase := "combat"
 var player: CharacterBody2D
@@ -98,6 +99,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if run_over and event.is_action_pressed("reload"):
 		get_tree().reload_current_scene()
+		return
+	if run_over and not final_grade.is_empty() and event.is_action_pressed("ui_accept"):
+		get_tree().change_scene_to_file("res://scenes/ui/debrief_screen.tscn")
 
 func _create_ui() -> void:
 	hud = HudController.new()
@@ -203,6 +207,7 @@ func _start_run() -> void:
 		device.alarm_triggered.connect(_on_security_alarm)
 		device.disabled.connect(_on_security_disabled)
 	mission_tracker.configure(_get_mission_profile(), started_enemy_count, security_devices.size())
+	if record_progress: Progression.current_mission_id = mission_tracker.profile.mission_id
 	detail_label.text = mission_tracker.profile.briefing
 	_update_combat_objective_hud()
 
@@ -452,6 +457,8 @@ func _finish_run(left_evidence: bool) -> void:
 	elif mission_rating >= 0.5: final_grade = "C"
 	else: final_grade = "D"
 	status_label.text = "SCENE ABANDONED" if left_evidence else "SCENE CLEAN"
-	detail_label.text = "GRADE %s // %04d PTS // %d ALARMS // R RESTART" % [final_grade, final_score, mission_tracker.alarm_triggers]
+	detail_label.text = "GRADE %s // %04d PTS // %d ALARMS // ENTER REPORT // R RETRY" % [final_grade, final_score, mission_tracker.alarm_triggers]
 	hud.set_objective("MISSION COMPLETE // " + mission_tracker.get_status_line())
 	interaction_label.text = "EVIDENCE LEFT // %d" % CleanupRegistry.get_remaining_value() if left_evidence else "PERFECT CLEANUP"
+	if record_progress:
+		Progression.record_mission_result(mission_tracker.profile.mission_id, final_score, final_grade, elapsed, cleanup_ratio, mission_tracker.alarm_triggers, CleanupRegistry.get_remaining_value())

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+mission_id = "tactical_lab"
+display_name = "TRAINING // TACTICAL LAB"
+briefing = "CONTROLLED CONDITIONS. TEST DOORS, SIGHTLINES, WEAPONS AND RESPONSE PATTERNS."
+required_eliminations = -1
+completion_bonus = 0
+alarm_penalty = 0
+scene_path = "res://scenes/levels/tactical_lab.tscn"
+debrief_text = "DRILL COMPLETE. RESULTS WERE NOT ADDED TO THE CAMPAIGN."
+is_campaign_mission = false

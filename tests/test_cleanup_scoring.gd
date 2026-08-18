@@ -15,6 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	var level = LEVEL_SCENE.instantiate()
+	level.record_progress = false
 	add_child(level)
 	for enemy in level.get_node("Enemies").get_children(): enemy.set_physics_process(false)
 	var evidence := DummyCorpseEvidence.new()
@@ -39,6 +40,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	CleanupRegistry.reset()
 	var alarmed_level = LEVEL_SCENE.instantiate()
+	alarmed_level.record_progress = false
 	add_child(alarmed_level)
 	for enemy in alarmed_level.get_node("Enemies").get_children(): enemy.set_physics_process(false)
 	alarmed_level.phase = "cleanup"

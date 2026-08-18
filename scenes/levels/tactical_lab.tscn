@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource path="res://scenes/main.tscn" type="PackedScene" id="1_main"]
 [ext_resource path="res://scenes/props/swing_door.tscn" type="PackedScene" id="2_door"]
+[ext_resource path="res://resources/missions/tactical_lab.tres" type="Resource" id="3_mission"]
 
 [node name="TacticalLab" instance=ExtResource("1_main")]
 level_title = "TACTICAL LAB"
@@ -10,6 +11,7 @@ enemy_spawns = PackedVector2Array(180, 60, 216, 60, 276, 88, 84, 72, 148, 176, 2
 enemy_patrol_offsets = PackedVector2Array(0, 56, 48, 0, 0, 48, 56, 0, 48, 0, 0, -48, -56, 0)
 enemy_types = PackedStringArray("melee", "gunner", "gunner", "melee", "gunner", "melee", "gunner")
 fixed_sentry_indices = PackedInt32Array(2, 6)
+mission_profile = ExtResource("3_mission")
 
 [node name="TileMap" parent="." index="0"]
 layout_id = "tactical_lab"

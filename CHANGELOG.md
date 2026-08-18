@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.8] - In development
+
+### Added
+
+- A three-case campaign sequence from Nightclub through Sandwich Shop to After Hours, with Tactical Lab retained as an always-available training mission.
+- Versioned local JSON progress containing completed cases and score-protected personal-best action reports.
+- Locked mission selection, native-resolution case-file UI and mission-specific pre-operation briefings.
+- Post-operation reports showing grade, score, time, cleanup percentage, alarms, unresolved risk and newly unlocked cases.
+- Retry, return-to-menu and continue-to-next-case flow from completed operations.
+
+### Tests
+
+- Added campaign catalog, disk persistence, UI layout, unlock flow and real level-to-save integration regressions.
+
 ## [v.0.0.7] - In development
 
 ### Added

@@ -8,3 +8,8 @@ extends Resource
 @export var required_security_shutdowns := 0
 @export var completion_bonus := 500
 @export var alarm_penalty := 125
+@export_file("*.tscn") var scene_path := ""
+@export_multiline var debrief_text := "THE FLOOR IS QUIET. THE EVIDENCE IS NOT."
+@export var unlock_after := ""
+@export var campaign_order := 0
+@export var is_campaign_mission := true
