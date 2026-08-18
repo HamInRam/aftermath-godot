@@ -8,6 +8,9 @@ level_title = "SANDWICH SHOP"
 player_spawn = Vector2(52, 188)
 enemy_spawns = PackedVector2Array(70, 42, 145, 92, 222, 42, 278, 104, 340, 55, 118, 184, 220, 184, 332, 184)
 enemy_patrol_offsets = PackedVector2Array(56, 0, 48, 0, -48, 0, 48, 0, 0, 48, 48, 0, 48, 0, -56, 0)
+ammo_pickup_positions = PackedVector2Array(98, 104, 250, 112, 322, 184)
+ammo_pickup_weapon_ids = PackedStringArray("pistol", "smg", "lmg")
+ammo_pickup_rounds = PackedInt32Array(12, 24, 30)
 doors_enabled = false
 mission_profile = ExtResource("2_mission")
 

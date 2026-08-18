@@ -13,6 +13,7 @@ const DEFAULT_LIMITS := {
 	"footprint": 96,
 	"corpse": 48,
 	"weapon_pickup": 64,
+	"ammo_pickup": 32,
 	"thrown_weapon": 24,
 	"debris": 48,
 }

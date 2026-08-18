@@ -234,6 +234,19 @@ func is_navigation_position_walkable(world_position: Vector2) -> bool:
 	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
 	return path_grid.is_in_boundsv(cell) and not path_grid.is_point_solid(cell)
 
+func get_tactical_room_id(world_position: Vector2) -> String:
+	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
+	if layout_id == "tactical_lab":
+		return "%s_%s" % ["west" if cell.x < 24 else "east", "north" if cell.y < 14 else "south"]
+	if layout_id == "sandwich_shop":
+		if cell.y < 7: return "front"
+		if cell.y >= 15: return "storage_west" if cell.x < 23 else "storage_east"
+		return "kitchen" if cell.x < 30 else "dining"
+	if cell.x <= 11: return "west_north" if cell.y < 16 else "west_south"
+	if cell.x >= 24 and cell.y < 9: return "stage"
+	if cell.x >= 24: return "east"
+	return "center_north" if cell.y < 16 else "center_south"
+
 func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
 	var cell := wall_layer.local_to_map(wall_layer.to_local(hit_position + flight_direction.normalized()))
 	if wall_layer.get_cell_atlas_coords(cell).x != Tile.WINDOW:

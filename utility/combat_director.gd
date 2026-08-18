@@ -16,10 +16,12 @@ func _on_combat_noise(world_position: Vector2, radius: float, source_kind: Strin
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a.response.priority) < float(b.response.priority)
 	)
+	var rooms := PackedStringArray()
+	for candidate in candidates: rooms.append(_candidate_room(candidate.enemy))
+	var roles := build_room_role_plan(rooms, PackedStringArray(["push", "push", "sweep"]), "guard")
 	for index in range(candidates.size()):
-		var role := "push" if index < 2 else ("sweep" if index == 2 else "guard")
 		var candidate: Dictionary = candidates[index]
-		candidate.enemy.receive_combat_noise_result(world_position, radius, source_kind, role, candidate.response)
+		candidate.enemy.receive_combat_noise_result(world_position, radius, source_kind, roles[index], candidate.response)
 
 func _on_tactical_alert(world_position: Vector2, likely_direction: Vector2, source_kind: String, reporter: Node) -> void:
 	var candidates: Array[Dictionary] = []
@@ -31,6 +33,28 @@ func _on_tactical_alert(world_position: Vector2, likely_direction: Vector2, sour
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a.priority) < float(b.priority)
 	)
+	var rooms := PackedStringArray()
+	for candidate in candidates: rooms.append(_candidate_room(candidate.enemy))
+	var roles := build_room_role_plan(rooms, PackedStringArray(["sweep_left", "sweep_right", "guard"]), "observe")
 	for index in range(candidates.size()):
-		var role := "sweep_left" if index == 0 else ("sweep_right" if index == 1 else ("guard" if index == 2 else "observe"))
-		candidates[index].enemy.receive_tactical_assignment(world_position, likely_direction, source_kind, role)
+		candidates[index].enemy.receive_tactical_assignment(world_position, likely_direction, source_kind, roles[index])
+
+func build_room_role_plan(room_ids: PackedStringArray, active_roles: PackedStringArray, passive_role: String) -> PackedStringArray:
+	var totals := {}
+	for room_id in room_ids: totals[room_id] = int(totals.get(room_id, 0)) + 1
+	var active_by_room := {}
+	var active_index := 0
+	var roles := PackedStringArray()
+	for room_id in room_ids:
+		var room_limit := maxi(1, int(totals.get(room_id, 1)) - 1)
+		var can_leave_room := int(active_by_room.get(room_id, 0)) < room_limit
+		if active_index < active_roles.size() and can_leave_room:
+			roles.append(active_roles[active_index])
+			active_index += 1
+			active_by_room[room_id] = int(active_by_room.get(room_id, 0)) + 1
+		else:
+			roles.append(passive_role)
+	return roles
+
+func _candidate_room(enemy: Node) -> String:
+	return str(enemy.get_tactical_room_id()) if enemy.has_method("get_tactical_room_id") else "open_floor"

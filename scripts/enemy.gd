@@ -87,6 +87,15 @@ var reposition_time := 0.0
 var reposition_sign := 1.0
 var home_position := Vector2.ZERO
 var return_target := Vector2.ZERO
+var tactical_move_mode := ""
+var tactical_cover_position := Vector2.ZERO
+var tactical_peek_position := Vector2.ZERO
+var tactical_move_time := 0.0
+var tactical_hold_time := 0.0
+var tactical_player_anchor := Vector2.ZERO
+var tactical_decision_cooldown := 0.0
+var weapon_pickup_target: Node2D
+var weapon_pickup_scan_time := 0.0
 var archetype_id := "gunner"
 var default_weapon_id := ""
 var attack_windup_multiplier := 1.0
@@ -114,6 +123,11 @@ func _physics_process(delta: float) -> void:
 	melee_cooldown = maxf(0.0, melee_cooldown - delta)
 	melee_swing_time = maxf(0.0, melee_swing_time - delta)
 	reposition_time = maxf(0.0, reposition_time - delta)
+	tactical_decision_cooldown = maxf(0.0, tactical_decision_cooldown - delta)
+	if not tactical_move_mode.is_empty():
+		tactical_move_time = maxf(0.0, tactical_move_time - delta)
+		if tactical_move_time <= 0.0 or (is_instance_valid(player) and player.global_position.distance_to(tactical_player_anchor) > 52.0):
+			_clear_tactical_move()
 	guard_alert_time = maxf(0.0, guard_alert_time - delta)
 	_update_alert_memory(delta)
 	if tactical_role == "guard" and guard_alert_time <= 0.0: tactical_role = "none"
@@ -165,9 +179,11 @@ func _physics_process(delta: float) -> void:
 		if state == State.ATTACK:
 			state = State.CHASE
 			attack_windup_time = 0.0
-		chase_lost_time += delta
+		if tactical_move_mode.is_empty(): chase_lost_time += delta
 		if chase_lost_time >= chase_memory_duration:
+			_clear_tactical_move()
 			_begin_search(investigation_target, last_seen_direction)
+	if _update_weapon_scavenge(delta): return
 	if state in [State.IDLE, State.INVESTIGATE, State.SEARCH, State.RETURN]: _scan_for_corpses(delta)
 	if state == State.IDLE:
 		_update_patrol(delta)
@@ -186,11 +202,28 @@ func _physics_process(delta: float) -> void:
 				return
 	var target_position := investigation_target
 	if state == State.CHASE:
-		target_position = player.global_position if has_visual_contact else investigation_target
+		if tactical_move_mode in ["to_cover", "hold"]: target_position = tactical_cover_position
+		elif tactical_move_mode in ["to_peek", "at_peek", "flank"]: target_position = tactical_peek_position
+		else: target_position = player.global_position if has_visual_contact else investigation_target
 	elif state == State.SEARCH and search_index < search_points.size():
 		target_position = search_points[search_index]
 	var to_target := target_position - global_position
 	var target_distance := to_target.length()
+	if state == State.CHASE and not tactical_move_mode.is_empty():
+		if tactical_move_mode == "hold":
+			tactical_hold_time -= delta
+			velocity = velocity.move_toward(Vector2.ZERO, 260.0 * delta)
+			move_and_slide()
+			rotation = lerp_angle(rotation, global_position.direction_to(player.global_position).angle(), 1.0 - exp(-10.0 * delta))
+			if tactical_hold_time <= 0.0: tactical_move_mode = "to_peek"
+			return
+		if target_distance < 5.0:
+			if tactical_move_mode == "to_cover":
+				tactical_move_mode = "hold"
+				tactical_hold_time = randf_range(0.18, 0.34)
+				return
+			if tactical_move_mode == "to_peek": tactical_move_mode = "at_peek"
+			elif tactical_move_mode == "flank": _clear_tactical_move()
 	if state == State.INVESTIGATE and target_distance < 7.0:
 		investigation_wait += delta
 		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
@@ -222,7 +255,7 @@ func _physics_process(delta: float) -> void:
 	var direction := to_target.normalized()
 	rotation = lerp_angle(rotation, direction.angle(), 1.0 - exp(-10.0 * delta))
 	path_refresh -= delta
-	var direct_chase := state == State.CHASE and has_visual_contact
+	var direct_chase := state == State.CHASE and has_visual_contact and tactical_move_mode.is_empty()
 	if direct_chase:
 		path_points.clear()
 	elif path_refresh <= 0.0 and is_instance_valid(tile_world):
@@ -233,7 +266,7 @@ func _physics_process(delta: float) -> void:
 			path_points.remove_at(0)
 		if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
 	if state == State.CHASE:
-		var holds_position := is_fixed_sentry or tactical_role == "guard"
+		var holds_position := is_fixed_sentry or tactical_role == "guard" or tactical_move_mode == "at_peek"
 		var tactical_distance := distance if has_visual_contact else target_distance
 		velocity = EnemyCombatController.chase_velocity(enemy_type, direction, move_speed, chase_speed_multiplier, actor_type, tactical_distance, melee_range, holds_position, reposition_time, reposition_sign, strafe_sign)
 	elif state in [State.INVESTIGATE, State.SEARCH] or distance > preferred_distance:
@@ -252,8 +285,7 @@ func _physics_process(delta: float) -> void:
 	_update_movement_progress(delta, intended_velocity.length_squared() > 1.0)
 	if state == State.CHASE and has_visual_contact:
 		if enemy_type == "gunner" and distance <= shoot_range:
-			if gun.ammo <= 0 and not gun.is_reloading: gun.reload()
-			elif gun.cooldown <= 0.0 and not gun.is_reloading:
+			if gun.ammo > 0 and gun.cooldown <= 0.0 and not gun.is_reloading:
 				if _has_clear_shot():
 					blocked_shot_time = 0.0
 					_begin_attack()
@@ -261,8 +293,7 @@ func _physics_process(delta: float) -> void:
 					blocked_shot_time += delta
 					if blocked_shot_time >= 0.18 and not is_fixed_sentry and tactical_role != "guard":
 						blocked_shot_time = 0.0
-						reposition_time = 0.72
-						reposition_sign = EnemyCombatController.choose_reposition_sign(self, player)
+						_begin_tactical_reposition()
 		elif enemy_type == "melee" and distance <= melee_range and melee_cooldown <= 0.0:
 			_begin_attack()
 
@@ -382,6 +413,9 @@ func _update_attack(delta: float, to_player: Vector2, distance: float, has_visua
 	if enemy_type == "gunner":
 		if distance <= shoot_range and _has_clear_shot() and gun.try_fire(to_player.normalized()):
 			gun.cooldown += randf_range(0.35, 0.75)
+			if tactical_move_mode == "at_peek": tactical_move_mode = "to_cover"
+			elif tactical_decision_cooldown <= 0.0 and not is_fixed_sentry and tactical_role != "guard":
+				_begin_tactical_reposition(false)
 	elif distance <= melee_range:
 		_execute_melee_attack()
 	state = State.CHASE
@@ -389,6 +423,81 @@ func _update_attack(delta: float, to_player: Vector2, distance: float, has_visua
 
 func _has_clear_shot() -> bool:
 	return EnemyCombatController.has_clear_shot(self, gun, player)
+
+func _begin_tactical_reposition(allow_flank := true) -> void:
+	var plan := EnemyCombatController.choose_cover_plan(self, player, tile_world, preferred_distance, reposition_sign)
+	if plan.is_empty() or (not allow_flank and str(plan.get("mode", "")) != "cover"):
+		tactical_decision_cooldown = 0.9
+		if not allow_flank: return
+		reposition_time = 0.72
+		reposition_sign = EnemyCombatController.choose_reposition_sign(self, player)
+		return
+	tactical_cover_position = plan.cover
+	tactical_peek_position = plan.peek
+	tactical_player_anchor = player.global_position
+	tactical_move_time = 3.2
+	tactical_decision_cooldown = 1.4
+	tactical_move_mode = "to_cover" if str(plan.mode) == "cover" else "flank"
+	path_points.clear()
+	path_refresh = 0.0
+
+func _clear_tactical_move() -> void:
+	tactical_move_mode = ""
+	tactical_move_time = 0.0
+	tactical_hold_time = 0.0
+	path_points.clear()
+	path_refresh = 0.0
+
+func _update_weapon_scavenge(delta: float) -> bool:
+	if enemy_type != "gunner" or gun.ammo > 0:
+		weapon_pickup_target = null
+		return false
+	weapon_pickup_scan_time -= delta
+	if weapon_pickup_scan_time <= 0.0:
+		weapon_pickup_scan_time = 0.25
+		weapon_pickup_target = _find_weapon_pickup()
+	if not is_instance_valid(weapon_pickup_target): return false
+	var distance := global_position.distance_to(weapon_pickup_target.global_position)
+	if distance <= 9.0:
+		weapon_pickup_target.collect_enemy(self)
+		weapon_pickup_target = null
+		path_points.clear()
+		return false
+	var direction := global_position.direction_to(weapon_pickup_target.global_position)
+	path_refresh -= delta
+	if path_refresh <= 0.0 and is_instance_valid(tile_world):
+		path_refresh = 0.18
+		path_points = tile_world.get_navigation_path(global_position, weapon_pickup_target.global_position)
+	while not path_points.is_empty() and global_position.distance_to(path_points[0]) < 5.0:
+		path_points.remove_at(0)
+	if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
+	rotation = lerp_angle(rotation, direction.angle(), 1.0 - exp(-10.0 * delta))
+	velocity = direction * move_speed * 1.08
+	var intended_velocity := velocity
+	move_and_slide()
+	push_contact_bodies(intended_velocity)
+	return true
+
+func _find_weapon_pickup() -> Node2D:
+	var nearest: Node2D
+	var nearest_distance := 120.0 * 120.0
+	for node in get_tree().get_nodes_in_group("weapon_pickup"):
+		if not node is Node2D or int(node.get("rounds")) <= 0: continue
+		var distance := global_position.distance_squared_to(node.global_position)
+		if distance >= nearest_distance: continue
+		if is_instance_valid(tile_world) and tile_world.get_navigation_path(global_position, node.global_position).is_empty(): continue
+		nearest = node
+		nearest_distance = distance
+	return nearest
+
+func equip_dropped_weapon(weapon_id: String, rounds: int) -> bool:
+	if enemy_type != "gunner" or rounds <= 0: return false
+	gun.set_gun_data(AttackCatalog.get_gun_data(weapon_id), true)
+	gun.set_weapon_ammo(weapon_id, mini(rounds, gun.max_ammo))
+	default_weapon_id = weapon_id
+	gun.visible = true
+	gun.set_process(true)
+	return true
 
 func _update_sentry(delta: float) -> void:
 	velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
@@ -437,6 +546,7 @@ func _scan_for_corpses(delta: float) -> void:
 		return
 
 func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_claim := false) -> void:
+	_clear_tactical_move()
 	if not keep_corpse_claim: _release_corpse_claim()
 	state = State.INVESTIGATE
 	investigation_target = target
@@ -455,6 +565,7 @@ func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_cla
 	_reset_movement_progress()
 
 func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
+	_clear_tactical_move()
 	if is_fixed_sentry:
 		state = State.IDLE
 		alertness = 0.0
@@ -481,6 +592,7 @@ func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
 	_reset_movement_progress()
 
 func _begin_sector_search(origin: Vector2, likely_direction: Vector2, sector_sign: float) -> void:
+	_clear_tactical_move()
 	if is_fixed_sentry: return
 	state = State.SEARCH
 	search_points = EnemyNavigation.build_sector_search(tile_world, origin, likely_direction, search_radius, sector_sign)
@@ -521,6 +633,7 @@ func _finish_search() -> void:
 	_begin_return_to_patrol()
 
 func _begin_return_to_patrol() -> void:
+	_clear_tactical_move()
 	_release_corpse_claim()
 	tactical_role = "none"
 	state = State.RETURN
@@ -665,6 +778,11 @@ func evaluate_tactical_assignment(world_position: Vector2) -> Dictionary:
 		return {"eligible": false, "priority": INF}
 	return {"eligible": true, "priority": global_position.distance_to(world_position)}
 
+func get_tactical_room_id() -> String:
+	if is_instance_valid(tile_world) and tile_world.has_method("get_tactical_room_id"):
+		return str(tile_world.get_tactical_room_id(global_position))
+	return "open_floor"
+
 func receive_tactical_assignment(world_position: Vector2, likely_direction: Vector2, _source_kind: String, role: String) -> bool:
 	var response := evaluate_tactical_assignment(world_position)
 	if not bool(response.get("eligible", false)): return false
@@ -709,6 +827,7 @@ func _update_alert_memory(delta: float) -> void:
 
 func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	if is_dead: return
+	_clear_tactical_move()
 	_release_corpse_claim()
 	state = State.STAGGERED
 	_reset_movement_progress()
@@ -718,6 +837,7 @@ func apply_stagger(push_direction: Vector2, duration: float) -> void:
 
 func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 	if is_dead: return
+	_clear_tactical_move()
 	_release_corpse_claim()
 	if hit_type == "kill":
 		take_damage(1, global_position - hit_direction)

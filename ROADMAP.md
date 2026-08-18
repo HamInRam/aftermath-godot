@@ -10,13 +10,13 @@
 - Adaptive procedural combat audio, persistent accessibility settings and global scene transitions.
 - Runtime object ceilings, performance telemetry, stress regressions and Windows/Linux release automation.
 
-## Next — v0.1.0 encounter intelligence
+## Completed — v0.1.0 encounter intelligence
 
-- Give ranged guards scored cover positions, short corner peeks and alternate-route selection when a firing lane is unsafe.
-- Let unarmed human enemies evaluate nearby dropped weapons while preserving the identity of melee-only archetypes.
-- Extend squad assignments with room-aware role limits so one incident cannot empty every defended space.
-- Add explicit friendly-fire lane rejection and automated regressions for moving allies, doors and destructible glass.
-- Build authored reserve-ammo placement and tune scarcity per mission instead of relying only on enemy magazines.
+- Ranged guards score reachable cover positions, short corner peeks and alternate-route waypoints when a firing lane is unsafe.
+- Empty human gunners evaluate nearby dropped weapons while melee-only archetypes preserve their identity.
+- Squad assignments use authored room identities and retain defenders in staffed spaces.
+- Friendly bodies explicitly reject a firing lane before an attack is committed.
+- Per-weapon reserve ammunition and authored mission pickups replace unlimited player reloads.
 
 ## Later — content and production
 

@@ -28,6 +28,7 @@ jobs:
             tests/test_corpse_coordination.tscn \
             tests/test_enemy_search.tscn \
             tests/test_enemy_archetypes.tscn \
+            tests/test_encounter_intelligence.tscn \
             tests/test_game_settings.tscn \
             tests/test_noise_roles.tscn \
             tests/test_melee_balance.tscn \

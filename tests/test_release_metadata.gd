@@ -4,7 +4,7 @@ var failures := 0
 
 func _ready() -> void:
 	_expect(ProjectSettings.get_setting("application/config/name") == "AFTERMATH", "release build should use the final product name")
-	_expect(ProjectSettings.get_setting("application/config/version") == "0.0.10", "project version should match the release branch")
+	_expect(ProjectSettings.get_setting("application/config/version") == "0.1.0", "project version should match the release branch")
 	_expect(FileAccess.file_exists("res://assets/branding/aftermath_icon.svg"), "release icon should be present")
 	_expect(FileAccess.file_exists("res://LICENSE.md") and FileAccess.file_exists("res://THIRD_PARTY_NOTICES.md") and FileAccess.file_exists("res://GODOT_LICENSE.txt"), "project, third-party and engine license notices should ship")
 	_expect(FileAccess.file_exists("res://RELEASE_CHECKLIST.md") and FileAccess.file_exists("res://export_presets.cfg"), "release checklist and export presets should be versioned")

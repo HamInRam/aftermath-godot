@@ -46,6 +46,7 @@ var dragged_corpse: Node2D
 
 func _ready() -> void:
 	super._ready()
+	gun.set_reserve_ammo("pistol", 24)
 	gun.fired.connect(_on_gun_fired)
 	actor_died.connect(_on_actor_died)
 	queue_redraw()
@@ -130,6 +131,7 @@ func acquire_gun(weapon_id: String, rounds: int) -> bool:
 			break
 	if found_index < 0: return false
 	if found_index not in owned_gun_indices: owned_gun_indices.append(found_index)
+	if not gun.reserve_by_weapon.has(weapon_id): gun.set_reserve_ammo(weapon_id, 0)
 	gun.set_weapon_ammo(weapon_id, gun.get_weapon_ammo(weapon_id) + rounds)
 	gun_index = found_index
 	equipped_mode = "gun"
@@ -171,6 +173,11 @@ func select_cleanup_tool(tool_name: String) -> bool:
 	if tool_name not in CLEANUP_TOOLS: return false
 	current_cleanup_tool = tool_name
 	queue_redraw()
+	return true
+
+func add_reserve_ammo(weapon_id: String, rounds: int) -> bool:
+	if rounds <= 0: return false
+	gun.add_reserve_ammo(weapon_id, rounds)
 	return true
 
 func throw_equipped_gun(direction: Vector2) -> bool:

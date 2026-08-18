@@ -22,6 +22,13 @@ func collect(player: Node) -> bool:
 	queue_free()
 	return true
 
+func collect_enemy(enemy: Node) -> bool:
+	if rounds <= 0 or not is_instance_valid(enemy) or not enemy.has_method("equip_dropped_weapon"): return false
+	if not enemy.equip_dropped_weapon(weapon_id, rounds): return false
+	CleanupRegistry.unregister_target(self)
+	queue_free()
+	return true
+
 func clean_step() -> void:
 	cleanup_amount -= 0.34
 	modulate.a = clampf(cleanup_amount, 0.2, 1.0)

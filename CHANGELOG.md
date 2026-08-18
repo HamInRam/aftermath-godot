@@ -2,6 +2,25 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.1.0] - In development
+
+### Added
+
+- Scored, navigation-validated cover/peek pairs for ranged enemies plus lateral alternate-route waypoints when no usable cover exists.
+- Explicit friendly-fire lane classification so an allied body prevents attack commitment instead of relying on an incidental miss.
+- Authored tactical room identities and responder limits that retain defenders in rooms containing multiple guards.
+- Empty-gunner evaluation of reachable dropped firearms, preserving weapon identity and remaining magazine ammunition.
+- Finite per-weapon reserve ammunition, reserve-aware reload transfer and three weapon-specific ammunition pickups in every mission.
+
+### Changed
+
+- Gunners no longer create ammunition through unlimited reloads; after exhausting a magazine they must claim a viable dropped gun.
+- The combat HUD displays magazine capacity and the currently equipped weapon's reserve.
+
+### Tests
+
+- Added encounter-intelligence coverage for open firing lanes, friendly obstruction, alternate routing, room-aware assignments, enemy weapon decisions, finite reloads and ammunition pickups.
+
 ## [v.0.0.10] - In development
 
 ### Added

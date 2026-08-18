@@ -7,6 +7,7 @@ const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
 const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/effects/muzzle_flash.tscn")
 const WEAPON_PICKUP_SCENE := preload("res://scenes/props/weapon_pickup.tscn")
+const AMMO_PICKUP_SCENE := preload("res://scenes/props/ammo_pickup.tscn")
 const THROWN_WEAPON_SCENE := preload("res://scenes/props/thrown_weapon.tscn")
 const EXTRACTION_ZONE_SCENE := preload("res://scenes/props/extraction_zone.tscn")
 
@@ -16,6 +17,9 @@ const EXTRACTION_ZONE_SCENE := preload("res://scenes/props/extraction_zone.tscn"
 @export var enemy_patrol_offsets := PackedVector2Array([Vector2(0, 48), Vector2(56, 0), Vector2(0, 48), Vector2(64, 0), Vector2(-48, 0), Vector2(48, 0), Vector2(56, 0), Vector2(0, 56), Vector2(56, 0)])
 @export var enemy_types := PackedStringArray(["melee", "gunner", "gunner", "gunner", "gunner", "melee", "gunner", "gunner", "gunner"])
 @export var fixed_sentry_indices := PackedInt32Array()
+@export var ammo_pickup_positions := PackedVector2Array([Vector2(82, 126), Vector2(206, 86), Vector2(306, 126)])
+@export var ammo_pickup_weapon_ids := PackedStringArray(["pistol", "smg", "lmg"])
+@export var ammo_pickup_rounds := PackedInt32Array([12, 24, 30])
 @export var doors_enabled := true
 @export var extraction_position := Vector2.ZERO
 @export var mission_profile: MissionProfile
@@ -54,6 +58,9 @@ var cleanup_scan_timer := 0.0
 var security_devices: Array[SecurityCamera] = []
 var security_devices_cached := false
 var performance_debug_enabled := false
+var current_ammo := 0
+var current_capacity := 0
+var current_reserve := -1
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -159,6 +166,7 @@ func _update_interaction_prompt() -> void:
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)
+	Events.ammo_reserve_updated.connect(_on_ammo_reserve_updated)
 	Events.reload_started.connect(_on_reload_started)
 	Events.reload_finished.connect(_on_reload_finished)
 	Events.weapon_fired.connect(_on_weapon_fired)
@@ -175,7 +183,16 @@ func _on_glass_shattered(_world_position: Vector2) -> void:
 
 func _on_ammo_updated(current: int, maximum: int, is_reloading: bool) -> void:
 	if phase == "cleanup": return
-	ammo_label.text = "RELOAD" if is_reloading else "%02d/%02d" % [current, maximum]
+	current_ammo = current
+	current_capacity = maximum
+	ammo_label.text = "RELOAD" if is_reloading else _format_ammo()
+
+func _on_ammo_reserve_updated(reserve: int) -> void:
+	current_reserve = reserve
+	if phase != "cleanup" and is_instance_valid(ammo_label): ammo_label.text = _format_ammo()
+
+func _format_ammo() -> String:
+	return "%02d/%02d  +%s" % [current_ammo, current_capacity, "∞" if current_reserve < 0 else "%02d" % current_reserve]
 
 func _on_reload_started(_duration: float) -> void:
 	if phase != "cleanup": detail_label.text = "RELOADING..."
@@ -218,6 +235,7 @@ func _start_run() -> void:
 	add_child(extraction_zone)
 	extraction_zone.set_active(false)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
+	for index in ammo_pickup_positions.size(): _spawn_ammo_pickup(index)
 	started_enemy_count = enemy_spawns.size()
 	remaining_enemies = started_enemy_count
 	security_devices = _get_security_devices()
@@ -353,6 +371,14 @@ func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: in
 	if not RuntimeBudget.try_add("weapon_pickup", pickup, self): return
 	pickup.global_position = world_position + Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
 	pickup.rotation = randf_range(-PI, PI)
+	pickup.setup(weapon_id, rounds)
+
+func _spawn_ammo_pickup(index: int) -> void:
+	var pickup = AMMO_PICKUP_SCENE.instantiate()
+	if not RuntimeBudget.try_add("ammo_pickup", pickup, self): return
+	pickup.global_position = ammo_pickup_positions[index]
+	var weapon_id := ammo_pickup_weapon_ids[index] if index < ammo_pickup_weapon_ids.size() else "pistol"
+	var rounds := ammo_pickup_rounds[index] if index < ammo_pickup_rounds.size() else 12
 	pickup.setup(weapon_id, rounds)
 
 func _on_weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int) -> void:

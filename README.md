@@ -2,6 +2,14 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.1.0 encounter intelligence
+
+- Ranged enemies score reachable cover/peek pairs and fall back to a lateral route when their firing lane is blocked
+- Shots are rejected when another enemy occupies the projectile lane; gunners can fire from a peek and briefly retreat behind cover
+- Combat noise and corpse alerts preserve defenders in staffed rooms instead of draining every space into one incident
+- Empty gunners seek reachable dropped firearms while melee-only archetypes retain their role
+- Reloading now transfers finite per-weapon reserves, and every authored mission contains weapon-specific ammunition pickups
+
 ## v0.0.10 performance and release readiness
 
 - Runtime budgets cap bullets, casings, transient effects, blood evidence, corpses, pickups and debris before long fights can grow the scene tree without bound
@@ -122,6 +130,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Mouse — aim
 - `1` gun; press repeatedly to cycle pistol/SMG/LMG / `2` fists / `3` knife / `4` bat
 - The player starts with only a pistol; armed enemies drop their current gun and remaining magazine, and `E` collects it
+- The starting pistol has 24 reserve rounds; cyan ammunition boxes replenish only their marked weapon reserve
 - Each owned gun preserves its own partially used magazine when cycling weapons
 - Left mouse — fire or melee attack / scrub during cleanup
 - Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails

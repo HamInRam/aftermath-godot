@@ -48,16 +48,19 @@ var reload_movement_multiplier := 0.8
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 
 var ammo := 12
+var reserve_ammo := -1
 var cooldown := 0.0
 var recoil := 0.0
 var shot_heat := 0.0
 var is_reloading := false
 var ammo_by_weapon: Dictionary = {}
+var reserve_by_weapon: Dictionary = {}
 
 func _ready() -> void:
 	set_gun_data(gun_data, true)
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
+	if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
 	queue_redraw()
 
 func _apply_gun_data() -> void:
@@ -93,6 +96,7 @@ func set_gun_data(data: Resource, refill := true) -> void:
 	if data == null: return
 	if gun_data != null and not weapon_id.is_empty():
 		ammo_by_weapon[weapon_id] = ammo
+		reserve_by_weapon[weapon_id] = reserve_ammo
 	gun_data = data
 	_apply_gun_data()
 	if ammo_by_weapon.has(weapon_id):
@@ -101,6 +105,7 @@ func set_gun_data(data: Resource, refill := true) -> void:
 		ammo = max_ammo
 	else:
 		ammo = 0
+	reserve_ammo = int(reserve_by_weapon.get(weapon_id, -1))
 	ammo_by_weapon[weapon_id] = ammo
 	is_reloading = false
 	shot_heat = 0.0
@@ -116,6 +121,7 @@ func set_gun_data(data: Resource, refill := true) -> void:
 		weapon_shadow.texture = weapon_sprite.texture
 		muzzle.position.x = weapon_sprite.texture.get_width() * 0.5 + 1.0
 		if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
+		if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
 	queue_redraw()
 
 func set_weapon_ammo(target_weapon_id: String, rounds: int) -> void:
@@ -127,6 +133,22 @@ func set_weapon_ammo(target_weapon_id: String, rounds: int) -> void:
 func get_weapon_ammo(target_weapon_id: String) -> int:
 	if target_weapon_id == weapon_id: return ammo
 	return int(ammo_by_weapon.get(target_weapon_id, 0))
+
+func set_reserve_ammo(target_weapon_id: String, rounds: int) -> void:
+	reserve_by_weapon[target_weapon_id] = rounds if rounds < 0 else maxi(0, rounds)
+	if weapon_id == target_weapon_id:
+		reserve_ammo = int(reserve_by_weapon[target_weapon_id])
+		if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
+
+func get_reserve_ammo(target_weapon_id: String) -> int:
+	if target_weapon_id == weapon_id: return reserve_ammo
+	return int(reserve_by_weapon.get(target_weapon_id, 0))
+
+func add_reserve_ammo(target_weapon_id: String, rounds: int) -> int:
+	var current := get_reserve_ammo(target_weapon_id)
+	if current < 0: return current
+	set_reserve_ammo(target_weapon_id, current + maxi(0, rounds))
+	return get_reserve_ammo(target_weapon_id)
 
 func _process(delta: float) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
@@ -168,7 +190,7 @@ func try_fire(direction: Vector2) -> bool:
 	return true
 
 func reload() -> void:
-	if is_reloading or ammo >= max_ammo: return
+	if is_reloading or ammo >= max_ammo or reserve_ammo == 0: return
 	is_reloading = true
 	reload_timer.start(reload_duration)
 	reload_audio.pitch_scale = randf_range(0.97, 1.03)
@@ -178,9 +200,15 @@ func reload() -> void:
 		Events.publish_ammo(ammo, max_ammo, true)
 
 func _on_reload_timer_timeout() -> void:
-	ammo = max_ammo
+	var required := max_ammo - ammo
+	var loaded := required if reserve_ammo < 0 else mini(required, reserve_ammo)
+	ammo += loaded
+	if reserve_ammo >= 0:
+		reserve_ammo -= loaded
+		reserve_by_weapon[weapon_id] = reserve_ammo
 	ammo_by_weapon[weapon_id] = ammo
 	is_reloading = false
 	if not enemy_owned:
 		Events.reload_finished.emit(ammo, max_ammo)
 		Events.publish_ammo(ammo, max_ammo, false)
+		Events.publish_ammo_reserve(reserve_ammo)
