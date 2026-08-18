@@ -6,7 +6,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 
 ### Fixed
 
-- Render 2D canvas items directly at the integer-scaled output resolution, use a legible Segoe UI semibold face with automatic output-scale sampling, and enlarge menu text to prevent missing strokes at the native layout size.
+- Render 2D canvas items directly at the integer-scaled output resolution and use the bundled grid-designed Silkscreen font at larger menu sizes, retaining the pixel aesthetic without damaging ordinary system-font glyphs.
 
 ### Added
 

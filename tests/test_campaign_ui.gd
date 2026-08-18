@@ -10,9 +10,7 @@ func _ready() -> void:
 	_expect(ProjectSettings.get_setting("display/window/stretch/mode") == "canvas_items", "UI should render at output resolution instead of being enlarged from the native viewport")
 	_expect(ProjectSettings.get_setting("display/window/stretch/scale_mode") == "integer", "pixel art and UI should retain integer output scaling")
 	var theme := load("res://utility/themes/default_theme.tres") as Theme
-	var system_font := theme.default_font as SystemFont
-	_expect(system_font != null and system_font.font_names[0] == "Segoe UI", "Windows UI should prefer the highly legible Segoe UI face")
-	_expect(system_font.antialiasing == TextServer.FONT_ANTIALIASING_GRAY and system_font.subpixel_positioning == TextServer.SUBPIXEL_POSITIONING_AUTO, "UI font rasterization should retain grayscale smoothing and automatic output-scale sampling")
+	_expect(theme.default_font != null and theme.default_font.resource_path.ends_with("Silkscreen-Regular.ttf"), "UI should use the bundled grid-designed Silkscreen pixel font")
 	var original_data: Dictionary = Progression.data.duplicate(true)
 	var original_current: String = Progression.current_mission_id
 	var original_result: Dictionary = Progression.last_result.duplicate(true)
