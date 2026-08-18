@@ -5,6 +5,7 @@ const GUNS := {
 	"pistol": preload("res://resources/weapons/pistol.tres"),
 	"smg": preload("res://resources/weapons/smg.tres"),
 	"lmg": preload("res://resources/weapons/lmg.tres"),
+	"shotgun": preload("res://resources/weapons/shotgun.tres"),
 }
 
 const MELEE := {

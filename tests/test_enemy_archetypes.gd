@@ -15,7 +15,7 @@ func _run() -> void:
 	var enemy = ENEMY_SCENE.instantiate()
 	add_child(enemy)
 	enemy.configure_combat("assault")
-	_expect(enemy.archetype_id == "assault" and enemy.default_weapon_id == "smg", "assault profile should force the SMG role")
+	_expect(enemy.archetype_id == "assault" and enemy.default_weapon_id == "shotgun", "assault profile should carry the close-range Shotgun")
 	_expect(enemy.move_speed > EnemyCatalog.get_profile("gunner").move_speed, "assault should push faster than a gunner")
 	enemy.configure_combat("heavy")
 	_expect(enemy.default_weapon_id == "lmg" and enemy.knockdown_resistance >= 1.0, "heavy should carry LMG and resist knockdown")

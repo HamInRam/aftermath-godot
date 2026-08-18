@@ -1,0 +1,45 @@
+[gd_resource type="Resource" script_class="GunData" load_steps=6 format=3]
+
+[ext_resource path="res://scripts/gun_data.gd" type="Script" id="1_data"]
+[ext_resource path="res://assets/weapons/lmg_14x5.svg" type="Texture2D" id="2_texture"]
+[ext_resource path="res://assets/audio/sfx/pistol_shot.wav" type="AudioStream" id="3_shot"]
+[ext_resource path="res://assets/audio/sfx/pistol_reload.wav" type="AudioStream" id="4_reload"]
+[ext_resource path="res://assets/audio/sfx/dry_fire.wav" type="AudioStream" id="5_dry"]
+
+[resource]
+script = ExtResource("1_data")
+weapon_id = "shotgun"
+display_name = "SHOTGUN"
+weapon_texture = ExtResource("2_texture")
+shot_stream = ExtResource("3_shot")
+reload_stream = ExtResource("4_reload")
+dry_fire_stream = ExtResource("5_dry")
+death_style = "firearm_gib"
+shot_volume_db = -5.0
+mechanical_pitch = 0.72
+punch_pitch = 0.48
+ammo_capacity = 6
+damage = 1
+fire_interval = 0.72
+fire_interval_variance = 0.025
+spread_degrees = 1.5
+pellet_count = 7
+pellet_spread_degrees = 8.5
+reload_duration = 2.15
+movement_speed_multiplier = 0.9
+reload_movement_multiplier = 0.62
+pitch_min = 0.88
+pitch_max = 0.96
+blood_power = 2.25
+blood_range = 105.0
+blood_wall_reach = 72.0
+blood_pattern = "radial"
+blood_cone = 1.05
+recoil_strength = 1.8
+camera_shake = 1.55
+muzzle_flash_size = 42.0
+muzzle_flash_duration = 0.065
+bullet_speed = 610.0
+knockback = 58.0
+hearing_radius = 620.0
+hit_stop = 0.06

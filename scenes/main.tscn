@@ -134,7 +134,7 @@ position = Vector2(92, 88)
 position = Vector2(232, 76)
 rotation = -1.5708
 
-[node name="BloodSystem" type="Node2D" parent="."]
+[node name="BloodSystem" type="Node2D" parent="." groups=["blood_system"]]
 script = ExtResource("2_blood_system")
 
 [node name="CombatAudioDirector" type="Node" parent="."]

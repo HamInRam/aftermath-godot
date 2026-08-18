@@ -17,6 +17,8 @@ extends Resource
 @export_range(0.03, 2.0, 0.01) var fire_interval := 0.1
 @export_range(0.0, 0.2, 0.001) var fire_interval_variance := 0.018
 @export_range(0.0, 12.0, 0.1) var spread_degrees := 0.0
+@export_range(1, 12, 1) var pellet_count := 1
+@export_range(0.0, 24.0, 0.5) var pellet_spread_degrees := 0.0
 @export_range(0.0, 4.0, 0.05) var spread_growth_per_shot := 0.0
 @export_range(0.0, 12.0, 0.1) var maximum_spread_bonus := 0.0
 @export_range(0.1, 12.0, 0.1) var spread_recovery := 4.0

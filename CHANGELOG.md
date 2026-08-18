@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v0.1.1] - In development
+
+### Added
+
+- Dynamic blood mist droplets that settle into bounded, permanent and cleanable micro-stains at their visible endpoints.
+- Head, torso and limb hit classification that drives wound-relative corpse pools and future authored body-state selection.
+- Four seconds of postmortem wound seepage plus repeated drag-route contamination from the corpse wound position.
+- Floor-aware blood behavior: compact easy-clean tile droplets, longer wood smears and darker high-risk carpet absorption.
+- Blood-trail perception that lets idle guards investigate visible fresh stains and bloody footprints without omniscient tracking.
+- A seven-pellet Shotgun with radial close-range gore, strong knockback, loud floor-wide reporting and recoverable Assault drops.
+
+### Tests
+
+- Added blood-forensics coverage for surface cleanup, clue registration, hit zones and Shotgun blood/ammo data.
+
 ## [v.0.1.0] - 2026-08-18
 
 ### Fixed

@@ -14,6 +14,7 @@ const PLAYER_GUNS := [
 	preload("res://resources/weapons/pistol.tres"),
 	preload("res://resources/weapons/smg.tres"),
 	preload("res://resources/weapons/lmg.tres"),
+	preload("res://resources/weapons/shotgun.tres"),
 ]
 const MELEE_DATA := {
 	"fist": {"range": 12.0, "angle": 35.0, "windup": 0.03, "cooldown": 0.18, "duration": 0.06, "lethal": false, "color": Color("ffffff")},

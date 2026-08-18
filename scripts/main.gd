@@ -45,6 +45,8 @@ var pending_death_direction := Vector2.RIGHT
 var pending_death_knockback := 20.0
 var pending_death_blood_power := 1.0
 var pending_death_style := "firearm"
+var pending_death_hit_zone := "torso"
+var pending_death_hit_position := Vector2.ZERO
 var transitioning_cleanup := false
 var vision_debug_enabled := false
 var screen_effects_enabled := true
@@ -308,14 +310,17 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	trauma_camera.trigger_kill_effect(0.72, "red")
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.position = to_local(pos)
-	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power, pending_death_style)
+	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power, pending_death_style, pending_death_hit_zone)
 	RuntimeBudget.try_add("corpse", corpse, self)
-	blood_system.spawn_death_pool(pos, pending_death_blood_power)
+	var pool_offset := pending_death_hit_position - pos if pending_death_hit_position != Vector2.ZERO else Vector2.ZERO
+	blood_system.spawn_death_pool(pos, pending_death_blood_power, pool_offset)
 	if is_instance_valid(defeated_enemy) and defeated_enemy.enemy_type == "gunner":
 		var remaining_rounds: int = defeated_enemy.gun.ammo
 		if remaining_rounds > 0:
 			_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, remaining_rounds)
 	pending_death_style = "firearm"
+	pending_death_hit_zone = "torso"
+	pending_death_hit_position = Vector2.ZERO
 	_update_combat_objective_hud()
 
 func _get_mission_profile() -> MissionProfile:
@@ -388,7 +393,7 @@ func _on_weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: 
 	thrown_weapon.global_position = origin
 	thrown_weapon.setup(direction, weapon_id, rounds)
 
-func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
+func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool, hit_zone: String) -> void:
 	blood_system.emit_hit(hit_position, direction, damage, weapon_id, travel_distance, lethal)
 	if lethal:
 		var data := AttackCatalog.get_gun_data(weapon_id)
@@ -396,6 +401,8 @@ func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, we
 		pending_death_knockback = data.knockback
 		pending_death_blood_power = data.blood_power
 		pending_death_style = data.death_style
+		pending_death_hit_zone = hit_zone
+		pending_death_hit_position = hit_position
 		_trigger_hit_stop(data.hit_stop)
 
 func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction: Vector2, melee_type: String, lethal: bool) -> void:

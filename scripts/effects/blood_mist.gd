@@ -1,7 +1,10 @@
 extends Node2D
 
+signal droplet_settled(world_position: Vector2, strength: float, direction: Vector2)
+
 var particles: Array[Dictionary] = []
 var max_lifetime := 0.34
+var deposits_remaining := 10
 
 func setup(spray_direction: Vector2, intensity: float, color := Color("b30325"), cone := 0.72) -> void:
 	var direction := spray_direction.normalized()
@@ -23,11 +26,15 @@ func setup(spray_direction: Vector2, intensity: float, color := Color("b30325"),
 func _process(delta: float) -> void:
 	var alive_particles: Array[Dictionary] = []
 	for particle in particles:
+		var previous_life: float = particle.life
 		particle.position += particle.velocity * delta
 		particle.velocity *= exp(-7.5 * delta)
 		particle.life -= delta
 		if particle.life > 0.0:
 			alive_particles.append(particle)
+		elif previous_life > 0.0 and deposits_remaining > 0 and randf() < 0.48:
+			droplet_settled.emit(to_global(particle.position), clampf(float(particle.size) / 1.25, 0.25, 1.0), particle.velocity.normalized())
+			deposits_remaining -= 1
 	particles = alive_particles
 	queue_redraw()
 	if particles.is_empty(): queue_free()

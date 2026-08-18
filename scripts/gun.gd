@@ -13,6 +13,8 @@ var automatic := false
 var fire_interval := 0.1
 var fire_interval_variance := 0.018
 var spread_degrees := 0.0
+var pellet_count := 1
+var pellet_spread_degrees := 0.0
 var spread_growth_per_shot := 0.0
 var maximum_spread_bonus := 0.0
 var spread_recovery := 4.0
@@ -72,6 +74,8 @@ func _apply_gun_data() -> void:
 	fire_interval = gun_data.fire_interval
 	fire_interval_variance = gun_data.fire_interval_variance
 	spread_degrees = gun_data.spread_degrees
+	pellet_count = gun_data.pellet_count
+	pellet_spread_degrees = gun_data.pellet_spread_degrees
 	spread_growth_per_shot = gun_data.spread_growth_per_shot
 	maximum_spread_bonus = gun_data.maximum_spread_bonus
 	spread_recovery = gun_data.spread_recovery
@@ -183,7 +187,9 @@ func try_fire(direction: Vector2) -> bool:
 	shot_heat += 1.0
 	var normalized_direction := direction.normalized().rotated(spread_radians)
 	var origin := muzzle.global_position
-	fired.emit(origin, normalized_direction, enemy_owned, projectile_damage, weapon_id)
+	for pellet_index in range(pellet_count):
+		var pellet_offset := deg_to_rad(randf_range(-pellet_spread_degrees, pellet_spread_degrees))
+		fired.emit(origin, normalized_direction.rotated(pellet_offset), enemy_owned, projectile_damage, weapon_id)
 	Events.weapon_fired.emit(origin, normalized_direction, enemy_owned, weapon_id)
 	Events.publish_combat_noise(origin, hearing_radius, "gunshot")
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)

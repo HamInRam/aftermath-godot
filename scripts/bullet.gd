@@ -2,7 +2,7 @@ extends CharacterBody2D
 
 const WALL_SPARKS_SCENE := preload("res://scenes/effects/wall_sparks.tscn")
 
-signal blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool)
+signal blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool, hit_zone: String)
 
 @export var speed := 650.0
 var direction := Vector2.RIGHT
@@ -45,7 +45,8 @@ func _physics_process(delta: float) -> void:
 			var valid_target: bool = (enemy_owned and collider.is_in_group("player")) or ((not enemy_owned) and collider.is_in_group("enemy"))
 			if valid_target:
 				var current_hp: int = int(collider.get("hp"))
-				blood_impact.emit(global_position, direction, damage, weapon_id, travel_distance, current_hp <= damage)
+				var hit_zone := str(collider.classify_hit_zone(global_position)) if collider.has_method("classify_hit_zone") else "torso"
+				blood_impact.emit(global_position, direction, damage, weapon_id, travel_distance, current_hp <= damage, hit_zone)
 				collider.take_damage(damage, global_position - direction * 2.0)
 		queue_free()
 		return

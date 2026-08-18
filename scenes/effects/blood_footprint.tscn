@@ -2,6 +2,6 @@
 
 [ext_resource path="res://scripts/effects/blood_footprint.gd" type="Script" id="1_footprint"]
 
-[node name="BloodFootprint" type="Node2D" groups=["blood", "footprint"]]
+[node name="BloodFootprint" type="Node2D" groups=["blood", "footprint", "blood_clue"]]
 z_index = 2
 script = ExtResource("1_footprint")

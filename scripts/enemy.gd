@@ -62,6 +62,7 @@ var investigation_look_rotation := 0.0
 var investigation_look_time := 0.0
 var corpse_scan_time := 0.0
 var discovered_corpses := {}
+var discovered_blood_clues := {}
 var player_in_sight := false
 var chase_lost_time := 0.0
 var last_seen_direction := Vector2.RIGHT
@@ -544,6 +545,25 @@ func _scan_for_corpses(delta: float) -> void:
 		_begin_investigation(corpse_node.global_position, 0.78, true)
 		Events.publish_tactical_alert(corpse_node.global_position, Vector2.RIGHT.rotated(corpse_node.rotation), "corpse", self)
 		return
+	_scan_for_blood_clue()
+
+func _scan_for_blood_clue() -> void:
+	if state not in [State.IDLE, State.RETURN] or is_fixed_sentry: return
+	var nearest: Node2D
+	var nearest_distance := INF
+	for node in get_tree().get_nodes_in_group("blood_clue"):
+		if not node is Node2D or not is_instance_valid(node): continue
+		var clue_id := node.get_instance_id()
+		if discovered_blood_clues.has(clue_id): continue
+		var distance := global_position.distance_squared_to(node.global_position)
+		if distance >= nearest_distance or distance > detection_range * detection_range * 0.55: continue
+		if not EnemyPerception.can_see_position(self, node.global_position, detection_range * 0.74, vision_fov_degrees, 32): continue
+		nearest = node
+		nearest_distance = distance
+	if not is_instance_valid(nearest): return
+	discovered_blood_clues[nearest.get_instance_id()] = true
+	_begin_investigation(nearest.global_position, 0.56)
+	Events.publish_tactical_alert(nearest.global_position, Vector2.RIGHT.rotated(nearest.rotation), "blood_trail", self)
 
 func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_claim := false) -> void:
 	_clear_tactical_move()
@@ -854,6 +874,12 @@ func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 
 func is_knocked_down() -> bool:
 	return not is_dead and state == State.KNOCKED_DOWN
+
+func classify_hit_zone(world_hit_position: Vector2) -> String:
+	var local_hit := to_local(world_hit_position)
+	if local_hit.x >= 3.0: return "head"
+	if absf(local_hit.y) >= 3.2 or local_hit.x <= -4.0: return "limb"
+	return "torso"
 
 func is_actively_engaging_player() -> bool:
 	return not is_dead and state in [State.CHASE, State.ATTACK]

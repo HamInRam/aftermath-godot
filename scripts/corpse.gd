@@ -8,30 +8,43 @@ var cleanup_amount := 1.0
 var dragging_actor: Node2D
 var bag_progress := 0.0
 var bagged := false
+var wound_offset := Vector2.ZERO
+var bleed_time := 4.0
+var bleed_tick := 0.35
+var drag_stain_distance := 0.0
+var last_drag_position := Vector2.ZERO
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
 
-func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, blood_power := 1.0, style := "firearm") -> void:
+func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, blood_power := 1.0, style := "firearm", hit_zone := "torso") -> void:
 	rotation = facing + randf_range(-0.35, 0.35)
 	velocity = impact_direction.normalized() * knockback
 	spin = randf_range(-2.5, 2.5) * clampf(knockback / 24.0, 0.4, 1.8)
 	wound_variant = randi_range(0, 2)
 	wound_severity = clampf(blood_power, 0.7, 1.8)
 	death_style = style
+	wound_offset = Vector2(4, 0) if hit_zone == "head" else (Vector2(-2, 3) if hit_zone == "limb" else Vector2.ZERO)
+	last_drag_position = global_position
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
+	_update_bleeding(delta)
 	if is_instance_valid(dragging_actor):
 		var drag_direction := Vector2.RIGHT.rotated(dragging_actor.rotation)
 		var target_position := dragging_actor.global_position - drag_direction * 13.0
 		velocity = ((target_position - global_position) * 9.0).limit_length(92.0)
 		move_and_slide()
+		drag_stain_distance += global_position.distance_to(last_drag_position)
+		if drag_stain_distance >= 8.0:
+			_spawn_blood_drop(global_position + wound_offset.rotated(rotation), 0.55, global_position - last_drag_position)
+			drag_stain_distance = 0.0
+		last_drag_position = global_position
 		rotation = lerp_angle(rotation, drag_direction.angle(), 1.0 - exp(-5.0 * delta))
 		return
 	if velocity.length_squared() < 0.1:
 		velocity = Vector2.ZERO
-		set_physics_process(false)
+		if bleed_time <= 0.0: set_physics_process(false)
 		return
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
@@ -40,6 +53,18 @@ func _physics_process(delta: float) -> void:
 	velocity = velocity.move_toward(Vector2.ZERO, 95.0 * delta)
 	rotation += spin * delta
 	spin = move_toward(spin, 0.0, 7.0 * delta)
+
+func _update_bleeding(delta: float) -> void:
+	if bagged or bleed_time <= 0.0: return
+	bleed_time -= delta
+	bleed_tick -= delta
+	if bleed_tick <= 0.0:
+		bleed_tick = randf_range(0.38, 0.72)
+		_spawn_blood_drop(global_position + wound_offset.rotated(rotation), clampf(bleed_time / 4.0, 0.25, 0.75), Vector2.RIGHT.rotated(rotation))
+
+func _spawn_blood_drop(position: Vector2, strength: float, direction: Vector2) -> void:
+	var system := get_tree().get_first_node_in_group("blood_system")
+	if is_instance_valid(system) and system.has_method("spawn_micro_drop"): system.spawn_micro_drop(position, strength, direction)
 
 func try_claim_investigation(investigator: Node) -> bool:
 	return CorpseIncidentRegistry.try_claim(self, investigator)

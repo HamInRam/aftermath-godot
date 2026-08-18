@@ -2,6 +2,12 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.1.1 blood forensics
+
+- Visible mist droplets settle into permanent micro-stains instead of simply disappearing, while wounds continue seeping and dragged bodies repaint their route.
+- Head/torso/limb impacts anchor the death pool near the actual wound; tile, wood and carpet alter stain spread, darkness and cleanup effort.
+- Idle guards can investigate visible blood and footprint trails, and Assault enemies introduce a recoverable seven-pellet Shotgun with radial close-range gore.
+
 ## v0.1.0 encounter intelligence
 
 - Ranged enemies score reachable cover/peek pairs and fall back to a lateral route when their firing lane is blocked

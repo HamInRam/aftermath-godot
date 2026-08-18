@@ -48,6 +48,7 @@ jobs:
             tests/test_weapon_inventory.tscn \
             tests/test_weapon_throw.tscn \
             tests/test_blood_footprints.tscn \
+            tests/test_blood_forensics.tscn \
             tests/test_combat_audio_director.tscn \
             tests/test_tactical_alert.tscn \
             tests/test_vertical_slice.tscn \

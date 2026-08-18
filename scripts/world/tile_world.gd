@@ -247,6 +247,14 @@ func get_tactical_room_id(world_position: Vector2) -> String:
 	if cell.x >= 24: return "east"
 	return "center_north" if cell.y < 16 else "center_south"
 
+func get_blood_surface_profile(world_position: Vector2) -> Dictionary:
+	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
+	var tile_id := floor_layer.get_cell_atlas_coords(cell).x
+	if tile_id in [Tile.RED_CARPET, Tile.TEAL_CARPET]: return {"spread": 1.35, "darken": 0.28, "cleanup": 3}
+	if tile_id in [Tile.WOOD, Tile.BLACK_PLANK]: return {"spread": 1.55, "darken": 0.16, "cleanup": 3}
+	if tile_id in [Tile.CHECKER, Tile.BATH_TILE, Tile.CREAM]: return {"spread": 0.82, "darken": 0.0, "cleanup": 2}
+	return {"spread": 1.0, "darken": 0.1, "cleanup": 2}
+
 func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
 	var cell := wall_layer.local_to_map(wall_layer.to_local(hit_position + flight_direction.normalized()))
 	if wall_layer.get_cell_atlas_coords(cell).x != Tile.WINDOW:
