@@ -29,10 +29,14 @@ signal died_at(world_position: Vector2, facing: float)
 @export_range(8.0, 40.0, 1.0) var melee_range := 17.0
 @export_range(0.1, 2.0, 0.05) var melee_interval := 0.7
 @export_range(0.2, 4.0, 0.1) var chase_memory_duration := 1.5
+@export_group("Alert Memory")
+@export_range(1.0, 20.0, 0.5) var suspicious_memory_duration := 5.0
+@export_range(2.0, 30.0, 0.5) var alert_memory_duration := 10.0
 @onready var gun = $Gun
 
-enum State { IDLE, INVESTIGATE, SEARCH, CHASE, ATTACK, STAGGERED, KNOCKED_DOWN }
+enum State { IDLE, INVESTIGATE, SEARCH, RETURN, CHASE, ATTACK, STAGGERED, KNOCKED_DOWN }
 enum PatrolMode { MOVING, WAITING, SENTRY }
+enum AlertLevel { NORMAL, SUSPICIOUS, ALERT }
 
 var player: CharacterBody2D
 var alertness := 0.0
@@ -43,6 +47,8 @@ var path_points := PackedVector2Array()
 var path_refresh := 0.0
 var tile_world: Node
 var state := State.IDLE
+var alert_level := AlertLevel.NORMAL
+var alert_memory_time := 0.0
 var investigation_target := Vector2.ZERO
 var investigation_wait := 0.0
 var stagger_time := 0.0
@@ -79,12 +85,15 @@ var guard_facing := 0.0
 var blocked_shot_time := 0.0
 var reposition_time := 0.0
 var reposition_sign := 1.0
+var home_position := Vector2.ZERO
+var return_target := Vector2.ZERO
 const KNOCKDOWN_DURATION := 4.0
 
 func _ready() -> void:
 	super._ready()
 	player = get_tree().get_first_node_in_group("player") as CharacterBody2D
 	tile_world = get_tree().get_first_node_in_group("pathfinding_world")
+	home_position = global_position
 	strafe_sign = [-1.0, 1.0].pick_random()
 	sentry_base_rotation = rotation
 	_pick_sentry_angle()
@@ -102,6 +111,7 @@ func _physics_process(delta: float) -> void:
 	melee_swing_time = maxf(0.0, melee_swing_time - delta)
 	reposition_time = maxf(0.0, reposition_time - delta)
 	guard_alert_time = maxf(0.0, guard_alert_time - delta)
+	_update_alert_memory(delta)
 	if tactical_role == "guard" and guard_alert_time <= 0.0: tactical_role = "none"
 	queue_redraw()
 	if melee_swing_time > 0.0: queue_redraw()
@@ -143,6 +153,7 @@ func _physics_process(delta: float) -> void:
 			state = State.CHASE
 			_reset_movement_progress()
 		alertness = 1.0
+		_raise_alert(AlertLevel.ALERT, alert_memory_duration)
 		investigation_target = player.global_position
 		last_seen_direction = player.velocity.normalized() if player.velocity.length_squared() > 1.0 else to_player.normalized()
 		chase_lost_time = 0.0
@@ -153,9 +164,12 @@ func _physics_process(delta: float) -> void:
 		chase_lost_time += delta
 		if chase_lost_time >= chase_memory_duration:
 			_begin_search(investigation_target, last_seen_direction)
-	if state in [State.IDLE, State.INVESTIGATE, State.SEARCH]: _scan_for_corpses(delta)
+	if state in [State.IDLE, State.INVESTIGATE, State.SEARCH, State.RETURN]: _scan_for_corpses(delta)
 	if state == State.IDLE:
 		_update_patrol(delta)
+		return
+	if state == State.RETURN:
+		_update_return_to_patrol(delta)
 		return
 	if state == State.ATTACK:
 		_update_attack(delta, to_player, distance, has_visual_contact)
@@ -189,7 +203,7 @@ func _physics_process(delta: float) -> void:
 	if state == State.SEARCH and target_distance < 7.0:
 		if not search_timer_started:
 			search_timer_started = true
-			search_time_remaining = search_duration_limit
+			search_time_remaining = search_duration_limit * (1.25 if alert_level == AlertLevel.ALERT else 1.0)
 		search_wait += delta
 		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
 		move_and_slide()
@@ -305,6 +319,7 @@ func configure_patrol(points: PackedVector2Array) -> void:
 	path_points.clear()
 	path_refresh = 0.0
 	_reset_movement_progress()
+	if not points.is_empty(): home_position = points[0]
 
 func configure_combat(type_name: String) -> void:
 	enemy_type = type_name if type_name in ["gunner", "melee"] else "gunner"
@@ -322,6 +337,7 @@ func configure_combat(type_name: String) -> void:
 
 func configure_fixed_sentry() -> void:
 	is_fixed_sentry = true
+	home_position = global_position
 	configure_patrol(PackedVector2Array())
 
 func _execute_melee_attack() -> void:
@@ -374,13 +390,17 @@ func _pick_sentry_angle() -> void:
 	sentry_look_time = randf_range(2.0, 4.0)
 
 func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
+	var reaction_multiplier := 1.0
+	if alert_level == AlertLevel.SUSPICIOUS: reaction_multiplier = 0.72
+	elif alert_level == AlertLevel.ALERT: reaction_multiplier = 0.48
+	var effective_reaction_time := reaction_time * reaction_multiplier
 	if has_visual_contact:
-		visual_exposure = minf(reaction_time, visual_exposure + delta)
-		alertness = maxf(alertness, visual_exposure / reaction_time)
+		visual_exposure = minf(effective_reaction_time, visual_exposure + delta)
+		alertness = maxf(alertness, visual_exposure / effective_reaction_time)
 	else:
 		visual_exposure = 0.0
 		alertness = move_toward(alertness, 0.0, delta * 0.8)
-	return has_visual_contact and visual_exposure >= reaction_time
+	return has_visual_contact and visual_exposure >= effective_reaction_time
 
 func _scan_for_corpses(delta: float) -> void:
 	if is_fixed_sentry or is_instance_valid(claimed_corpse): return
@@ -398,7 +418,9 @@ func _scan_for_corpses(delta: float) -> void:
 			continue
 		discovered_corpses[corpse_id] = true
 		claimed_corpse = corpse_node
+		_raise_alert(AlertLevel.ALERT, alert_memory_duration)
 		_begin_investigation(corpse_node.global_position, 0.78, true)
+		Events.publish_tactical_alert(corpse_node.global_position, Vector2.RIGHT.rotated(corpse_node.rotation), "corpse", self)
 		return
 
 func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_claim := false) -> void:
@@ -437,8 +459,25 @@ func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
 	for point in EnemyNavigation.build_directional_search(tile_world, origin, direction, search_radius, distance_scale, strafe_sign):
 		search_points.append(point)
 	if search_points.is_empty():
-		state = State.IDLE
-		alertness = 0.0
+		_begin_return_to_patrol()
+		return
+	investigation_target = search_points[0]
+	investigation_look_time = 0.0
+	path_points.clear()
+	path_refresh = 0.0
+	_reset_movement_progress()
+
+func _begin_sector_search(origin: Vector2, likely_direction: Vector2, sector_sign: float) -> void:
+	if is_fixed_sentry: return
+	state = State.SEARCH
+	search_points = EnemyNavigation.build_sector_search(tile_world, origin, likely_direction, search_radius, sector_sign)
+	search_index = 0
+	search_wait = 0.0
+	search_time_remaining = 0.0
+	search_timer_started = false
+	attack_windup_time = 0.0
+	if search_points.is_empty():
+		_begin_return_to_patrol()
 		return
 	investigation_target = search_points[0]
 	investigation_look_time = 0.0
@@ -459,9 +498,6 @@ func _advance_search() -> void:
 	investigation_target = search_points[search_index]
 
 func _finish_search() -> void:
-	state = State.IDLE
-	tactical_role = "none"
-	alertness = 0.0
 	search_points.clear()
 	search_index = 0
 	search_wait = 0.0
@@ -469,7 +505,51 @@ func _finish_search() -> void:
 	search_timer_started = false
 	path_points.clear()
 	path_refresh = 0.0
+	_begin_return_to_patrol()
+
+func _begin_return_to_patrol() -> void:
+	_release_corpse_claim()
+	tactical_role = "none"
+	state = State.RETURN
+	return_target = home_position
+	if not patrol_waypoints.is_empty():
+		var nearest_index := 0
+		var nearest_distance := INF
+		for index in range(patrol_waypoints.size()):
+			var waypoint_distance := global_position.distance_squared_to(patrol_waypoints[index])
+			if waypoint_distance < nearest_distance:
+				nearest_distance = waypoint_distance
+				nearest_index = index
+		patrol_index = nearest_index
+		return_target = patrol_waypoints[nearest_index]
+	path_points.clear()
+	path_refresh = 0.0
 	_reset_movement_progress()
+
+func _update_return_to_patrol(delta: float) -> void:
+	if global_position.distance_to(return_target) < 6.0:
+		state = State.IDLE
+		patrol_mode = PatrolMode.WAITING if patrol_waypoints.size() >= 2 else PatrolMode.SENTRY
+		patrol_wait_time = randf_range(patrol_wait_min, maxf(patrol_wait_min, patrol_wait_max))
+		sentry_base_rotation = rotation
+		_pick_sentry_angle()
+		velocity = Vector2.ZERO
+		_reset_movement_progress()
+		return
+	var direction := global_position.direction_to(return_target)
+	path_refresh -= delta
+	if path_refresh <= 0.0 and is_instance_valid(tile_world):
+		path_refresh = 0.3
+		path_points = tile_world.get_navigation_path(global_position, return_target)
+	while not path_points.is_empty() and global_position.distance_to(path_points[0]) < 5.0:
+		path_points.remove_at(0)
+	if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
+	rotation = lerp_angle(rotation, direction.angle(), 1.0 - exp(-8.0 * delta))
+	velocity = direction * move_speed * 0.72
+	var intended_velocity := velocity
+	move_and_slide()
+	push_contact_bodies(intended_velocity)
+	_update_movement_progress(delta, true)
 
 func _complete_corpse_investigation() -> void:
 	if not is_instance_valid(claimed_corpse):
@@ -515,9 +595,10 @@ func _update_movement_progress(delta: float, expected_to_move: bool) -> void:
 			_advance_search()
 		State.INVESTIGATE:
 			_release_corpse_claim()
+			_begin_return_to_patrol()
+		State.RETURN:
 			state = State.IDLE
 			tactical_role = "none"
-			alertness = 0.0
 		State.CHASE:
 			strafe_sign *= -1.0
 			reposition_sign *= -1.0
@@ -526,8 +607,10 @@ func _update_movement_progress(delta: float, expected_to_move: bool) -> void:
 				patrol_index = (patrol_index + 1) % patrol_waypoints.size()
 
 func _can_see_player(distance: float, to_player: Vector2) -> bool:
-	if distance > detection_range or to_player.length_squared() < 0.001: return false
-	return EnemyPerception.can_see_target(self, player, detection_range, vision_fov_degrees, 32)
+	var range_multiplier := 1.0 if alert_level == AlertLevel.NORMAL else (1.08 if alert_level == AlertLevel.SUSPICIOUS else 1.16)
+	var effective_range := detection_range * range_multiplier
+	if distance > effective_range or to_player.length_squared() < 0.001: return false
+	return EnemyPerception.can_see_target(self, player, effective_range, vision_fov_degrees, 32)
 
 func get_noise_response_priority(world_position: Vector2, radius: float) -> float:
 	var response := evaluate_noise_response(world_position, radius)
@@ -545,6 +628,7 @@ func receive_combat_noise_result(world_position: Vector2, radius: float, _source
 	if not bool(response.get("eligible", false)): return false
 	var effective_distance := float(response.priority)
 	tactical_role = role
+	_raise_alert(AlertLevel.ALERT if _source_kind == "gunshot" else AlertLevel.SUSPICIOUS, alert_memory_duration if _source_kind == "gunshot" else suspicious_memory_duration)
 	if role == "guard":
 		guard_alert_time = 3.5
 		guard_facing = global_position.direction_to(world_position).angle()
@@ -562,6 +646,53 @@ func receive_combat_noise_result(world_position: Vector2, radius: float, _source
 		if not tile_world.is_navigation_position_walkable(perceived_position): perceived_position = world_position
 	_begin_investigation(perceived_position, 0.55)
 	return true
+
+func evaluate_tactical_assignment(world_position: Vector2) -> Dictionary:
+	if is_dead or is_instance_valid(claimed_corpse) or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
+		return {"eligible": false, "priority": INF}
+	return {"eligible": true, "priority": global_position.distance_to(world_position)}
+
+func receive_tactical_assignment(world_position: Vector2, likely_direction: Vector2, _source_kind: String, role: String) -> bool:
+	var response := evaluate_tactical_assignment(world_position)
+	if not bool(response.get("eligible", false)): return false
+	_raise_alert(AlertLevel.ALERT, alert_memory_duration)
+	tactical_role = role
+	match role:
+		"sweep_left":
+			_begin_sector_search(world_position, likely_direction, -1.0)
+		"sweep_right":
+			_begin_sector_search(world_position, likely_direction, 1.0)
+		"guard":
+			guard_alert_time = minf(alert_memory_duration, 6.0)
+			guard_facing = global_position.direction_to(world_position).angle()
+			state = State.IDLE
+			path_points.clear()
+		"observe":
+			if state == State.IDLE:
+				guard_facing = global_position.direction_to(world_position).angle()
+	queue_redraw()
+	return true
+
+func _raise_alert(level: AlertLevel, duration: float) -> void:
+	alert_level = maxi(alert_level, level)
+	alert_memory_time = maxf(alert_memory_time, duration)
+	alertness = maxf(alertness, 0.5 if level == AlertLevel.SUSPICIOUS else 1.0)
+
+func _update_alert_memory(delta: float) -> void:
+	if alert_level == AlertLevel.NORMAL: return
+	if state in [State.CHASE, State.ATTACK]:
+		alert_memory_time = maxf(alert_memory_time, alert_memory_duration)
+		return
+	alert_memory_time = maxf(0.0, alert_memory_time - delta)
+	if alert_memory_time > 0.0: return
+	if alert_level == AlertLevel.ALERT:
+		alert_level = AlertLevel.SUSPICIOUS
+		alert_memory_time = suspicious_memory_duration
+		alertness = minf(alertness, 0.62)
+	else:
+		alert_level = AlertLevel.NORMAL
+		alertness = 0.0
+		if tactical_role == "observe": tactical_role = "none"
 
 func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	if is_dead: return
@@ -644,6 +775,9 @@ func _draw() -> void:
 	elif state == State.SEARCH:
 		draw_arc(Vector2(0, -9), 3.0, -PI * 0.2, PI * 1.3, 9, Color("66e0ff"), 1.0)
 		draw_line(Vector2(2, -7), Vector2(4, -5), Color("66e0ff"), 1.0)
+	elif state == State.RETURN:
+		draw_line(Vector2(-3, -9), Vector2(3, -9), Color("9cc8ff"), 1.0)
+		draw_line(Vector2(-3, -9), Vector2(-1, -11), Color("9cc8ff"), 1.0)
 	elif state in [State.CHASE, State.ATTACK]:
 		draw_line(Vector2(0, -12), Vector2(0, -8), Color("ff385f"), 1.5)
 		draw_circle(Vector2(0, -6.5), 0.9, Color("ff385f"))
