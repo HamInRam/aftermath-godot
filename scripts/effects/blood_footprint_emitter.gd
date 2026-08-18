@@ -46,6 +46,13 @@ func contaminate(strength := 1.0) -> void:
 	prints_remaining = maxi(prints_remaining, roundi(maximum_prints * normalized_strength))
 	distance_since_print = maxf(distance_since_print, footprint_spacing * 0.55)
 
+func refresh_blood_contacts() -> void:
+	# Combat-to-cleanup is a semantic phase boundary. A corpse already touching the
+	# player during the transition must be allowed to contaminate their shoes again.
+	touching_sources.clear()
+	source_scan_cooldown = 0.0
+	_scan_blood_sources()
+
 func _scan_blood_sources() -> void:
 	var current_sources: Dictionary = {}
 	for source in get_tree().get_nodes_in_group("corpse"):
@@ -57,6 +64,7 @@ func _scan_blood_sources() -> void:
 
 func _register_contact(source: Node, radius: float, strength: float, current_sources: Dictionary) -> void:
 	if not source is Node2D or not is_instance_valid(source): return
+	if source.has_method("is_bagged") and source.is_bagged(): return
 	if actor.global_position.distance_squared_to(source.global_position) > radius * radius: return
 	var source_id := source.get_instance_id()
 	current_sources[source_id] = true

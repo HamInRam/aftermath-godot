@@ -372,6 +372,8 @@ func _finish_execution() -> void:
 
 func set_cleanup_mode(enabled: bool) -> void:
 	cleanup_mode = enabled
+	if enabled and has_node("BloodFootprintEmitter"):
+		$BloodFootprintEmitter.refresh_blood_contacts()
 	if not enabled and is_instance_valid(dragged_corpse):
 		dragged_corpse.end_drag(self)
 		dragged_corpse = null

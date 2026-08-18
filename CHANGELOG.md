@@ -13,6 +13,10 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Blood-trail perception that lets idle guards investigate visible fresh stains and bloody footprints without omniscient tracking.
 - A seven-pellet Shotgun with radial close-range gore, strong knockback, loud floor-wide reporting and recoverable Assault drops.
 
+### Fixed
+
+- Refresh corpse and blood-pool contact at the combat-to-cleanup boundary so crossing an already-nearby unbagged corpse reliably produces bloody footprints during cleanup.
+
 ### Tests
 
 - Added blood-forensics coverage for surface cleanup, clue registration, hit zones and Shotgun blood/ammo data.
