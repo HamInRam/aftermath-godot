@@ -2,6 +2,13 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.6 evidence and extraction
+
+- Evidence types carry different risk values, with corpses and dropped weapons weighted above blood or shell casings
+- Corpses require two Body Bag actions, then must be dragged into the glowing extraction zone
+- Returning to the extraction zone and pressing `E` allows an early exit with an evidence penalty and S–D grade
+- The cleanup HUD reports both remaining object count and total unresolved risk
+
 ## v0.0.5 combat expansion
 
 - Data-driven Gunner, Rusher, Assault, Heavy and Hound archetypes

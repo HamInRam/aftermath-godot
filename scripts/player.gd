@@ -6,6 +6,7 @@ signal died
 signal execution_impact(world_position: Vector2, direction: Vector2, lethal: bool, execution_type: String)
 signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction: Vector2, melee_type: String, lethal: bool)
 signal weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int)
+signal extraction_requested
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
 const PLAYER_GUNS := [
@@ -69,7 +70,8 @@ func _physics_process(delta: float) -> void:
 		attempt_ground_execution()
 		if is_executing: return
 	if Input.is_action_just_pressed("interact"):
-		if cleanup_mode: attempt_corpse_drag()
+		if cleanup_mode:
+			if not attempt_corpse_drag(): extraction_requested.emit()
 		else: attempt_weapon_pickup()
 	if cleanup_mode: _handle_cleanup_tool_selection()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -194,7 +196,7 @@ func throw_equipped_gun(direction: Vector2) -> bool:
 func get_cleanup_efficiency(cleanup_type: String) -> int:
 	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore"]: return 2
 	if current_cleanup_tool == "evidence_bag" and cleanup_type in ["shell", "dropped_weapon"]: return 3
-	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 4
+	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 1
 	return 1
 
 func get_nearby_draggable_corpse() -> Node2D:

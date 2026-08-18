@@ -8,6 +8,7 @@ const SHELL_CASING_SCENE := preload("res://scenes/effects/shell_casing.tscn")
 const MUZZLE_FLASH_SCENE := preload("res://scenes/effects/muzzle_flash.tscn")
 const WEAPON_PICKUP_SCENE := preload("res://scenes/props/weapon_pickup.tscn")
 const THROWN_WEAPON_SCENE := preload("res://scenes/props/thrown_weapon.tscn")
+const EXTRACTION_ZONE_SCENE := preload("res://scenes/props/extraction_zone.tscn")
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 142)
@@ -16,6 +17,7 @@ const THROWN_WEAPON_SCENE := preload("res://scenes/props/thrown_weapon.tscn")
 @export var enemy_types := PackedStringArray(["melee", "gunner", "gunner", "gunner", "gunner", "melee", "gunner", "gunner", "gunner"])
 @export var fixed_sentry_indices := PackedInt32Array()
 @export var doors_enabled := true
+@export var extraction_position := Vector2.ZERO
 
 var phase := "combat"
 var player: CharacterBody2D
@@ -41,6 +43,9 @@ var transitioning_cleanup := false
 var vision_debug_enabled := false
 var screen_effects_enabled := true
 var hue_cycle_enabled := true
+var extraction_zone: ExtractionZone
+var final_score := 0
+var final_grade := ""
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -68,12 +73,12 @@ func _process(delta: float) -> void:
 		_begin_cleanup_transition()
 	elif phase == "cleanup":
 		ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
+		_deposit_bagged_corpses()
 		var remaining_cleanup := CleanupRegistry.get_remaining_count()
 		if remaining_cleanup == 0:
-			run_over = true
-			status_label.text = "SCENE CLEAN"
-			detail_label.text = "%.1fs  //  R RESTART" % elapsed
-		else: status_label.text = "CLEAN // %02d" % remaining_cleanup
+			_finish_run(false)
+		else:
+			status_label.text = "CLEAN // %02d  RISK // %03d" % [remaining_cleanup, CleanupRegistry.get_remaining_value()]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
@@ -101,12 +106,14 @@ func _create_ui() -> void:
 	interaction_label = hud.interaction_label
 
 func _update_interaction_prompt() -> void:
-	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or run_over or player.is_executing:
+	if run_over: return
+	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or player.is_executing:
 		if is_instance_valid(interaction_label): interaction_label.text = ""
 		return
 	if phase == "cleanup":
 		if is_instance_valid(player.dragged_corpse): interaction_label.text = "[ E ] DROP BODY"
 		elif is_instance_valid(player.get_nearby_draggable_corpse()): interaction_label.text = "[ E ] DRAG BODY"
+		elif is_instance_valid(extraction_zone) and extraction_zone.contains_position(player.global_position): interaction_label.text = "[ E ] LEAVE SCENE // RISK %d" % CleanupRegistry.get_remaining_value()
 		else: interaction_label.text = "[ 1 ] MOP  [ 2 ] EVIDENCE  [ 3 ] BODY BAG"
 		return
 	if phase != "combat":
@@ -174,7 +181,12 @@ func _start_run() -> void:
 	player.execution_impact.connect(_on_execution_impact)
 	player.melee_impact.connect(_on_melee_impact)
 	player.weapon_throw_requested.connect(_on_weapon_throw_requested)
+	player.extraction_requested.connect(_on_extraction_requested)
 	add_child(player)
+	extraction_zone = EXTRACTION_ZONE_SCENE.instantiate() as ExtractionZone
+	extraction_zone.global_position = player_spawn if extraction_position == Vector2.ZERO else extraction_position
+	add_child(extraction_zone)
+	extraction_zone.set_active(false)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
 	remaining_enemies = started_enemy_count
@@ -329,6 +341,7 @@ func _enter_cleanup_phase() -> void:
 	for bullet in get_tree().get_nodes_in_group("bullet"): bullet.queue_free()
 	status_label.text = "CLEANUP REQUIRED"
 	detail_label.text = "GET CLOSE // HOLD LMB"
+	if is_instance_valid(extraction_zone): extraction_zone.set_active(true)
 
 func _begin_cleanup_transition() -> void:
 	transitioning_cleanup = true
@@ -343,8 +356,35 @@ func _on_clean_requested(world_position: Vector2) -> void:
 	var target := CleanupRegistry.get_nearest_target(world_position, 15.0)
 	if not is_instance_valid(target): return
 	var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else "unknown"
+	if target.has_method("apply_cleanup_tool") and target.apply_cleanup_tool(player.current_cleanup_tool): return
 	var steps: int = int(player.get_cleanup_efficiency(cleanup_type))
 	for index in range(steps):
 		if not is_instance_valid(target) or target.is_queued_for_deletion(): break
 		target.clean_step()
 	ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
+
+func _deposit_bagged_corpses() -> void:
+	if not is_instance_valid(extraction_zone): return
+	for corpse_node in get_tree().get_nodes_in_group("corpse"):
+		if not is_instance_valid(corpse_node) or not corpse_node.has_method("is_bagged") or not corpse_node.is_bagged(): continue
+		if extraction_zone.contains_position(corpse_node.global_position, 15.0): corpse_node.extract_bag()
+
+func _on_extraction_requested() -> void:
+	if phase != "cleanup" or run_over or not is_instance_valid(extraction_zone): return
+	if not extraction_zone.contains_position(player.global_position): return
+	_finish_run(CleanupRegistry.get_remaining_count() > 0)
+
+func _finish_run(left_evidence: bool) -> void:
+	if run_over: return
+	run_over = true
+	var cleanup_ratio := CleanupRegistry.get_cleanup_ratio()
+	var time_bonus := maxi(0, 500 - roundi(elapsed * 3.0))
+	final_score = roundi(cleanup_ratio * 1000.0) + enemies_killed * 100 + time_bonus
+	if cleanup_ratio >= 0.999: final_grade = "S"
+	elif cleanup_ratio >= 0.9: final_grade = "A"
+	elif cleanup_ratio >= 0.75: final_grade = "B"
+	elif cleanup_ratio >= 0.5: final_grade = "C"
+	else: final_grade = "D"
+	status_label.text = "SCENE ABANDONED" if left_evidence else "SCENE CLEAN"
+	detail_label.text = "GRADE %s // %04d PTS // R RESTART" % [final_grade, final_score]
+	interaction_label.text = "EVIDENCE LEFT // %d" % CleanupRegistry.get_remaining_value() if left_evidence else "PERFECT CLEANUP"

@@ -2,13 +2,31 @@ extends Node
 
 signal target_count_changed(remaining: int)
 
+const EVIDENCE_VALUES := {
+	"corpse": 25,
+	"dropped_weapon": 10,
+	"gore": 4,
+	"blood": 3,
+	"blood_footprint": 1,
+	"shell": 1,
+}
+
 var _targets: Dictionary = {}
+var _registered_values: Dictionary = {}
+var _initial_value := 0
+var _resolved_value := 0
+var _initial_count := 0
 
 func register_target(target: Node) -> void:
 	if not is_instance_valid(target): return
 	var instance_id := target.get_instance_id()
 	if _targets.has(instance_id): return
 	_targets[instance_id] = weakref(target)
+	var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else "unknown"
+	var evidence_value := int(EVIDENCE_VALUES.get(cleanup_type, 1))
+	_registered_values[instance_id] = evidence_value
+	_initial_value += evidence_value
+	_initial_count += 1
 	target.tree_exiting.connect(_on_target_exiting.bind(instance_id), CONNECT_ONE_SHOT)
 	target_count_changed.emit(get_remaining_count())
 
@@ -43,8 +61,36 @@ func get_type_counts() -> Dictionary:
 		counts[type_name] = int(counts.get(type_name, 0)) + 1
 	return counts
 
+func get_initial_value() -> int:
+	return _initial_value
+
+func get_remaining_value() -> int:
+	_prune_invalid()
+	var total := 0
+	for instance_id in _targets: total += int(_registered_values.get(instance_id, 1))
+	return total
+
+func get_resolved_value() -> int:
+	_prune_invalid()
+	return _resolved_value
+
+func get_initial_count() -> int:
+	return _initial_count
+
+func get_cleanup_ratio() -> float:
+	if _initial_value <= 0: return 1.0
+	return clampf(float(_resolved_value) / float(_initial_value), 0.0, 1.0)
+
+func get_evidence_value(target: Node) -> int:
+	if not is_instance_valid(target): return 0
+	return int(_registered_values.get(target.get_instance_id(), 0))
+
 func reset() -> void:
 	_targets.clear()
+	_registered_values.clear()
+	_initial_value = 0
+	_resolved_value = 0
+	_initial_count = 0
 	target_count_changed.emit(0)
 
 func _on_target_exiting(instance_id: int) -> void:
@@ -52,6 +98,8 @@ func _on_target_exiting(instance_id: int) -> void:
 
 func _remove_id(instance_id: int) -> void:
 	if not _targets.erase(instance_id): return
+	_resolved_value += int(_registered_values.get(instance_id, 1))
+	_registered_values.erase(instance_id)
 	target_count_changed.emit(get_remaining_count())
 
 func _prune_invalid() -> void:
@@ -59,4 +107,7 @@ func _prune_invalid() -> void:
 	for instance_id in _targets:
 		var reference := _targets[instance_id] as WeakRef
 		if reference == null or not is_instance_valid(reference.get_ref()): stale.append(instance_id)
-	for instance_id in stale: _targets.erase(instance_id)
+	for instance_id in stale:
+		_targets.erase(instance_id)
+		_resolved_value += int(_registered_values.get(instance_id, 1))
+		_registered_values.erase(instance_id)

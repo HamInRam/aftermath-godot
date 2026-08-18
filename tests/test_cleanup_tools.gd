@@ -18,19 +18,24 @@ func _run() -> void:
 	corpse.global_position = Vector2(10, 0)
 	_expect(player.select_cleanup_tool("mop") and player.get_cleanup_efficiency("blood_pool") == 2, "mop should clean blood efficiently")
 	_expect(player.select_cleanup_tool("evidence_bag") and player.get_cleanup_efficiency("shell") == 3, "evidence bag should collect small evidence efficiently")
-	_expect(player.select_cleanup_tool("body_bag") and player.get_cleanup_efficiency("corpse") == 4, "body bag should process corpses efficiently")
+	_expect(player.select_cleanup_tool("body_bag") and player.get_cleanup_efficiency("corpse") == 1, "body bag should use the corpse packaging interaction")
+	_expect(corpse.apply_cleanup_tool("body_bag") and not corpse.is_bagged(), "first body-bag action should begin packaging")
+	_expect(corpse.apply_cleanup_tool("body_bag") and corpse.is_bagged(), "second body-bag action should seal the corpse")
 	_expect(not player.select_cleanup_tool("invalid"), "unknown cleanup tools should be rejected")
 	_expect(player.attempt_corpse_drag(), "nearby corpse should be draggable during cleanup")
 	_expect(corpse.is_being_dragged() and player.dragged_corpse == corpse, "drag state should be shared by player and corpse")
 	_expect(player.attempt_corpse_drag(), "second interaction should drop the body")
 	_expect(not corpse.is_being_dragged() and not is_instance_valid(player.dragged_corpse), "dropping should clear both drag references")
+	_expect(corpse.extract_bag(), "sealed body bag should be accepted by extraction")
+	await get_tree().process_frame
+	_expect(CleanupRegistry.get_remaining_count() == 0, "extracted body bag should resolve its evidence")
 	if failures == 0: print("cleanup tools regression: PASS")
 	for audio_node in player.find_children("*", "AudioStreamPlayer", true, false):
 		var audio := audio_node as AudioStreamPlayer
 		audio.stop()
 		audio.stream = null
 	player.queue_free()
-	corpse.queue_free()
+	if is_instance_valid(corpse): corpse.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	get_tree().quit(failures)

@@ -24,11 +24,14 @@ func _run() -> void:
 	first.global_position = Vector2.ZERO
 	second.global_position = Vector2(20, 0)
 	_expect(CleanupRegistry.get_remaining_count() == 2, "all cleanup types should share one registry")
+	_expect(CleanupRegistry.get_initial_count() == 2 and CleanupRegistry.get_initial_value() == 2, "registry should snapshot initial evidence count and value")
 	_expect(CleanupRegistry.get_nearest_target(Vector2(2, 0), 10.0) == first, "registry should select the nearest target")
 	first.clean_step()
 	first.clean_step()
 	await get_tree().process_frame
 	_expect(CleanupRegistry.get_remaining_count() == 1, "freed cleanup targets should unregister automatically")
+	_expect(CleanupRegistry.get_remaining_value() == 1 and CleanupRegistry.get_resolved_value() == 1, "registry should separate remaining and resolved evidence value")
+	_expect(is_equal_approx(CleanupRegistry.get_cleanup_ratio(), 0.5), "cleanup ratio should be value-weighted")
 	_expect(int(CleanupRegistry.get_type_counts().get("dummy", 0)) == 1, "registry should expose remaining target types")
 	if failures == 0: print("cleanup registry regression: PASS")
 	get_tree().quit(failures)

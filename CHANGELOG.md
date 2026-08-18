@@ -2,6 +2,19 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.6] - In development
+
+### Added
+
+- Value-weighted evidence severity, resolved-risk tracking and cleanup completion ratios.
+- Two-step body-bag packaging followed by physical corpse transport to the extraction zone.
+- Optional early extraction with remaining evidence, score calculation and S/A/B/C/D cleanup grades.
+- Cleanup HUD risk totals and contextual extraction prompts.
+
+### Tests
+
+- Added cleanup scoring, evidence severity, body-bag and extraction regression coverage.
+
 ## [v.0.0.5] - In development
 
 ### Added

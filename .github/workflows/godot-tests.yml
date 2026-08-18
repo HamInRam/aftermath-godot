@@ -31,6 +31,7 @@ jobs:
             tests/test_noise_roles.tscn \
             tests/test_melee_balance.tscn \
             tests/test_cleanup_registry.tscn \
+            tests/test_cleanup_scoring.tscn \
             tests/test_cleanup_tools.tscn \
             tests/test_weapon_inventory.tscn \
             tests/test_weapon_throw.tscn \

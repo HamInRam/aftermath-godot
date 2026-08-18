@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scripts/props/extraction_zone.gd" type="Script" id="1_script"]
+
+[node name="ExtractionZone" type="Node2D" groups=["extraction_zone"]]
+z_index = 1
+script = ExtResource("1_script")
