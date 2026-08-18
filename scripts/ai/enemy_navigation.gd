@@ -22,3 +22,21 @@ static func build_directional_search(tile_world: Node, origin: Vector2, likely_d
 			if not tile_world.is_navigation_position_walkable(candidate): continue
 		points.append(candidate)
 	return points
+
+static func build_sector_search(tile_world: Node, origin: Vector2, likely_direction: Vector2, radius: float, sector_sign: float) -> PackedVector2Array:
+	var direction := likely_direction.normalized()
+	if direction.length_squared() < 0.001: direction = Vector2.RIGHT
+	var sector_direction := direction.rotated(deg_to_rad(48.0) * sector_sign)
+	var side := sector_direction.rotated(PI * 0.5 * sector_sign)
+	var candidates := PackedVector2Array([
+		origin + sector_direction * radius * 0.8,
+		origin + sector_direction * radius * 1.65,
+		origin + sector_direction * radius * 1.25 + side * radius * 0.8,
+		origin + direction * radius * 1.9
+	])
+	var points := PackedVector2Array()
+	for candidate in candidates:
+		if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable"):
+			if not tile_world.is_navigation_position_walkable(candidate): continue
+		points.append(candidate)
+	return points

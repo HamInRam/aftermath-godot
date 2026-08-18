@@ -2,7 +2,139 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.1.0] - 2026-08-18
+
+### Fixed
+
+- Render 2D canvas items directly at the integer-scaled output resolution and use the bundled grid-designed Silkscreen font at larger menu sizes, retaining the pixel aesthetic without damaging ordinary system-font glyphs.
+
+### Added
+
+- Scored, navigation-validated cover/peek pairs for ranged enemies plus lateral alternate-route waypoints when no usable cover exists.
+- Explicit friendly-fire lane classification so an allied body prevents attack commitment instead of relying on an incidental miss.
+- Authored tactical room identities and responder limits that retain defenders in rooms containing multiple guards.
+- Empty-gunner evaluation of reachable dropped firearms, preserving weapon identity and remaining magazine ammunition.
+- Finite per-weapon reserve ammunition, reserve-aware reload transfer and three weapon-specific ammunition pickups in every mission.
+
+### Changed
+
+- Gunners no longer create ammunition through unlimited reloads; after exhausting a magazine they must claim a viable dropped gun.
+- The combat HUD displays magazine capacity and the currently equipped weapon's reserve.
+
+### Tests
+
+- Added encounter-intelligence coverage for open firing lanes, friendly obstruction, alternate routing, room-aware assignments, enemy weapon decisions, finite reloads and ammunition pickups.
+
+## [v.0.0.10] - In development
+
+### Added
+
+- Central runtime object budgets for projectiles, shell casings, transient effects, blood evidence, corpses, dropped weapons and debris, including peak/drop telemetry.
+- A rolling performance monitor with average and p95 frame time, peak scene-tree size and an optional in-game `F6` diagnostics overlay.
+- Windows and Linux export presets, original application icon, proprietary project license, third-party notices and the Godot engine license.
+- A release checklist and GitHub Actions release workflow that builds both desktop targets, generates SHA-256 checksums and uploads packaged artifacts on manual dispatch or version tags.
+
+### Changed
+
+- Interaction prompts, corpse-deposit checks, cleanup counters and security-device discovery now use bounded sampling or cached collections instead of repeated full-tree scans.
+- Gameplay effect creation now reserves capacity before entering the scene tree and releases reservations automatically when nodes exit.
+- Headless test runs suppress disposable positional audio playback, preventing audio-server playback objects from surviving stress-scene teardown.
+
+### Tests
+
+- Added runtime-budget saturation/release coverage, a high-volume combat/evidence stress scenario and release-metadata/export-preset validation.
+- Verified a real Godot resource-pack export from the Windows preset.
+
+## [v.0.0.9] - In development
+
+### Added
+
+- Cached original procedural pulse, danger and electrical-room loops, providing an audible default score without external music dependencies.
+- Event- and threat-driven music intensity that responds to gunfire, executions, tactical alerts, security alarms and actively pursuing enemies.
+- Dedicated Music, SFX and Ambience buses with persistent master/category volume settings.
+- Native-resolution settings screen for screen-shake strength, flash intensity, CRT effects and ambient camera motion.
+- Persistent versioned settings plus live audio preview, restore-default controls and global fade transitions between missions and menus.
+
+### Tests
+
+- Added settings persistence, audio-bus application, accessibility-effect, settings-layout, procedural-loop cache and dynamic-mix regression coverage.
+
+## [v.0.0.8] - In development
+
+### Added
+
+- A three-case campaign sequence from Nightclub through Sandwich Shop to After Hours, with Tactical Lab retained as an always-available training mission.
+- Versioned local JSON progress containing completed cases and score-protected personal-best action reports.
+- Locked mission selection, native-resolution case-file UI and mission-specific pre-operation briefings.
+- Post-operation reports showing grade, score, time, cleanup percentage, alarms, unresolved risk and newly unlocked cases.
+- Retry, return-to-menu and continue-to-next-case flow from completed operations.
+
+### Tests
+
+- Added campaign catalog, disk persistence, UI layout, unlock flow and real level-to-save integration regressions.
+
+## [v.0.0.7] - In development
+
+### Added
+
+- Data-driven mission profiles and a bounded objective tracker for elimination and security requirements.
+- Sweeping security cameras with line-of-sight detection buildup, alarm latching and floor-wide tactical alerts.
+- Close-range camera shutdowns and projectile destruction as quiet/loud security counterplay choices.
+- Persistent mission-objective HUD lines, alarm accounting, completion bonuses and alarm score penalties.
+- Cleanup-phase gating that requires every configured combat and security objective instead of only eliminating enemies.
+
+### Tests
+
+- Added mission-objective, security-camera and alarm-sensitive final-grade regression coverage.
+
+## [v.0.0.6] - In development
+
+### Added
+
+- Value-weighted evidence severity, resolved-risk tracking and cleanup completion ratios.
+- Two-step body-bag packaging followed by physical corpse transport to the extraction zone.
+- Optional early extraction with remaining evidence, score calculation and S/A/B/C/D cleanup grades.
+- Cleanup HUD risk totals and contextual extraction prompts.
+
+### Tests
+
+- Added cleanup scoring, evidence severity, body-bag and extraction regression coverage.
+
+## [v.0.0.5] - In development
+
+### Added
+
+- Data-driven Gunner, Rusher, Assault, Heavy and Hound enemy profiles with distinct perception, movement, weapons and attack timing.
+- Heavy enemies resist ordinary knockdowns while Hounds trade firearms for extreme speed and a wide vision cone.
+- `Q` weapon throwing that knocks down normal enemies, staggers resistant enemies and preserves the thrown magazine in a recoverable pickup.
+
+### Tests
+
+- Added enemy-archetype and weapon-throw regression scenes to CI.
+
+## [v.0.0.4] - In development
+
+### Added
+
+- Three-tier enemy alert memory with faster reacquisition while suspicious or fully alerted.
+- Corpse reports that assign nearby responders to left/right search sectors, guard duty and alert observation instead of stacking on one body.
+- Explicit return-to-patrol behavior after a search expires.
+- Sustained-fire spread growth and weapon-specific movement/reload handling for Pistol, SMG and LMG.
+- Cleanup loadout with Mop, Evidence Bag and Body Bag efficiencies plus interactive corpse dragging.
+- `After Hours` vertical-slice map combining doors, glass, mixed enemy roles, weapon acquisition and the complete cleanup loop.
+
+### Tests
+
+- Added tactical-alert, cleanup-tool and vertical-slice regression scenes to CI.
+
 ## [v.0.0.3] - 2026-08-17
+
+### Fixed
+
+- Throttled bloody-footprint source scans so evidence growth does not cause a full group traversal every physics frame.
+- Made all footprints require exactly two cleanup strokes, including faint trailing prints.
+- Removed duplicate weapon-pickup prompt scans and prevented empty enemy weapons from fabricating ammunition.
+- Made CombatAudioDirector apply its exported combat and cleanup mix configuration automatically on scene startup.
 
 ### Added
 

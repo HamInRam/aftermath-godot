@@ -2,6 +2,61 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.1.0 encounter intelligence
+
+- Ranged enemies score reachable cover/peek pairs and fall back to a lateral route when their firing lane is blocked
+- Shots are rejected when another enemy occupies the projectile lane; gunners can fire from a peek and briefly retreat behind cover
+- Combat noise and corpse alerts preserve defenders in staffed rooms instead of draining every space into one incident
+- Empty gunners seek reachable dropped firearms while melee-only archetypes retain their role
+- Reloading now transfers finite per-weapon reserves, and every authored mission contains weapon-specific ammunition pickups
+
+## v0.0.10 performance and release readiness
+
+- Runtime budgets cap bullets, casings, transient effects, blood evidence, corpses, pickups and debris before long fights can grow the scene tree without bound
+- High-frequency interaction, cleanup and security-device queries are cached or sampled instead of traversing groups every physics frame
+- Press `F6` during a mission to display rolling average/p95 frame time, peak node count and tracked gameplay-object pressure
+- A deterministic stress regression exercises sustained gunfire, lethal blood effects and evidence creation while enforcing object and node ceilings
+- Windows and Linux export presets, release metadata, licensing notices, checksums and a tag/manual GitHub release-build workflow are ready for packaged builds
+
+## v0.0.9 adaptive presentation and accessibility
+
+- An original procedural score supplies cached pulse, danger and room-tone loops with no external music dependency
+- Gunfire, executions, alarms and the proportion of enemies actively pursuing the player smoothly raise the danger layer
+- Combat music cuts rapidly at cleanup while the isolated electrical ambience rises into the foreground
+- Settings persist master, music, SFX and ambience levels in `user://aftermath_settings.json`
+- Accessibility controls scale screen shake and full-screen flashes from 0–100%, and can disable CRT treatment or ambient camera motion
+- Menus, briefings, missions and action reports now use a global input-blocking fade transition
+
+## v0.0.8 campaign progression
+
+- Campaign cases unlock in order: Nightclub → Sandwich Shop → After Hours; Tactical Lab remains an unrestricted training mission
+- Selecting a case opens an authored briefing with objectives and the current personal best before deployment
+- Completed missions write versioned progress to `user://aftermath_progress.json`, preserving the highest-scoring report for each case
+- Press `Enter` after a completed cleanup to open an action report with grade, score, time, cleanup, alarms and remaining risk
+- The action report supports immediate retry, return to case files or deployment to the newly unlocked next case
+
+## v0.0.7 mission and security layer
+
+- Each level can assign a `MissionProfile` with authored elimination, security, bonus and alarm-penalty rules
+- `After Hours` now requires clearing ten hostiles and disabling two sweeping security cameras before cleanup begins
+- Cameras build detection over time, report the player's position into the tactical AI network and re-arm only after losing the player
+- Press `E` beside a camera for a quiet shutdown, or shoot it for a fast but noisy takedown
+- The HUD tracks mandatory objectives and alarm count; alarms reduce score and prevent a perfect S grade
+
+## v0.0.6 evidence and extraction
+
+- Evidence types carry different risk values, with corpses and dropped weapons weighted above blood or shell casings
+- Corpses require two Body Bag actions, then must be dragged into the glowing extraction zone
+- Returning to the extraction zone and pressing `E` allows an early exit with an evidence penalty and S–D grade
+- The cleanup HUD reports both remaining object count and total unresolved risk
+
+## v0.0.5 combat expansion
+
+- Data-driven Gunner, Rusher, Assault, Heavy and Hound archetypes
+- Assault enemies push quickly with SMGs; Heavies carry LMGs and resist ordinary knockdowns; Hounds attack with extreme speed and wide perception
+- Press `Q` to throw the equipped gun, knock down a normal enemy and recover the same weapon with its remaining magazine
+- `After Hours` now mixes all advanced archetypes with the complete combat-to-cleanup loop
+
 ## v0.0.3 architecture, tactics and cleanup
 
 - Pure `Events` signal bus with a dedicated `CombatDirector` for one-pass hearing evaluation and push/sweep/guard assignment
@@ -75,17 +130,21 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Mouse — aim
 - `1` gun; press repeatedly to cycle pistol/SMG/LMG / `2` fists / `3` knife / `4` bat
 - The player starts with only a pistol; armed enemies drop their current gun and remaining magazine, and `E` collects it
+- The starting pistol has 24 reserve rounds; cyan ammunition boxes replenish only their marked weapon reserve
 - Each owned gun preserves its own partially used magazine when cycling weapons
 - Left mouse — fire or melee attack / scrub during cleanup
 - Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails
 - `R` — reload; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
 - `E` — pick up a nearby dropped weapon
+- `Q` — throw the equipped gun; the weapon remains recoverable with its current magazine
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
 - Hold `Shift` — extend the camera toward the cursor
 - `F3` — toggle enemy vision debug cones
-- `F4` — toggle CRT/screen post-processing
+- `F4` — toggle and save the CRT/screen post-processing preference
 - `F5` — toggle exterior hue cycling
+- `F6` — toggle the performance diagnostics overlay
+- All other presentation options are available from the title-screen Settings menu
 - `Esc` — return to the debug room-select menu
 
 ## Game loop

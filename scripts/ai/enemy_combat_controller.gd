@@ -5,8 +5,64 @@ static func attack_windup(enemy_type: String) -> float:
 	return randf_range(0.1, 0.16) if enemy_type == "gunner" else randf_range(0.12, 0.18)
 
 static func has_clear_shot(enemy: CollisionObject2D, gun: Node2D, player: Node2D) -> bool:
-	if not is_instance_valid(enemy) or not is_instance_valid(gun) or not is_instance_valid(player): return false
-	var query := PhysicsRayQueryParameters2D.create(gun.global_position, player.global_position, 3)
+	return bool(evaluate_fire_lane(enemy, gun.global_position if is_instance_valid(gun) else Vector2.ZERO, player).get("clear", false))
+
+static func evaluate_fire_lane(enemy: CollisionObject2D, origin: Vector2, player: Node2D) -> Dictionary:
+	if not is_instance_valid(enemy) or not is_instance_valid(player): return {"clear": false, "reason": "invalid"}
+	var query := PhysicsRayQueryParameters2D.create(origin, player.global_position, 35)
+	query.exclude = [enemy.get_rid()]
+	var result := enemy.get_world_2d().direct_space_state.intersect_ray(query)
+	if result.is_empty(): return {"clear": false, "reason": "no_target"}
+	var collider: Object = result.collider
+	if collider.is_in_group("player"): return {"clear": true, "reason": "player", "collider": collider}
+	if collider.is_in_group("enemy"): return {"clear": false, "reason": "friendly", "collider": collider}
+	return {"clear": false, "reason": "solid", "collider": collider}
+
+static func choose_cover_plan(enemy: CollisionObject2D, player: Node2D, tile_world: Node, preferred_distance: float, flank_sign: float) -> Dictionary:
+	if not is_instance_valid(enemy) or not is_instance_valid(player): return {}
+	var forward: Vector2 = enemy.global_position.direction_to(player.global_position)
+	if forward.length_squared() < 0.001: forward = Vector2.RIGHT
+	var side: Vector2 = forward.rotated(PI * 0.5)
+	var best: Dictionary = {}
+	var best_score := -INF
+	for side_distance in [18.0, 26.0, 34.0, -18.0, -26.0, -34.0]:
+		for depth in [-12.0, 0.0, 12.0]:
+			var cover_position: Vector2 = enemy.global_position + side * side_distance + forward * depth
+			if not _is_reachable(enemy, tile_world, cover_position): continue
+			if not _is_occluded_from_player(enemy, cover_position, player.global_position): continue
+			for peek_sign in [1.0, -1.0]:
+				var peek_position: Vector2 = cover_position + side * 11.0 * float(peek_sign)
+				if not _is_reachable(enemy, tile_world, peek_position): continue
+				if not _position_has_player_lane(enemy, peek_position, player): continue
+				var target_distance: float = peek_position.distance_to(player.global_position)
+				var distance_score := 1.0 - minf(1.0, absf(target_distance - preferred_distance) / maxf(preferred_distance, 1.0))
+				var travel_penalty := enemy.global_position.distance_to(peek_position) * 0.018
+				var preferred_side_bonus := 0.25 if signf(side_distance) == signf(flank_sign) else 0.0
+				var score := 3.0 + distance_score + preferred_side_bonus - travel_penalty
+				if score > best_score:
+					best_score = score
+					best = {"mode": "cover", "cover": cover_position, "peek": peek_position, "score": score}
+	if not best.is_empty(): return best
+	for sign_value in [flank_sign, -flank_sign]:
+		var waypoint: Vector2 = enemy.global_position + side * 30.0 * float(sign_value) + forward * 14.0
+		if not _is_reachable(enemy, tile_world, waypoint): continue
+		return {"mode": "flank", "cover": waypoint, "peek": waypoint, "score": 0.5}
+	return {}
+
+static func _is_reachable(enemy: CollisionObject2D, tile_world: Node, position: Vector2) -> bool:
+	if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable"):
+		if not tile_world.is_navigation_position_walkable(position): return false
+	if is_instance_valid(tile_world) and tile_world.has_method("get_navigation_path"):
+		return not tile_world.get_navigation_path(enemy.global_position, position).is_empty()
+	return true
+
+static func _is_occluded_from_player(enemy: CollisionObject2D, position: Vector2, player_position: Vector2) -> bool:
+	var query := PhysicsRayQueryParameters2D.create(position, player_position, 32)
+	query.exclude = [enemy.get_rid()]
+	return not enemy.get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+
+static func _position_has_player_lane(enemy: CollisionObject2D, position: Vector2, player: Node2D) -> bool:
+	var query := PhysicsRayQueryParameters2D.create(position, player.global_position, 35)
 	query.exclude = [enemy.get_rid()]
 	var result := enemy.get_world_2d().direct_space_state.intersect_ray(query)
 	return not result.is_empty() and result.collider.is_in_group("player")

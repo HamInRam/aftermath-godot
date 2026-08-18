@@ -13,6 +13,9 @@ var automatic := false
 var fire_interval := 0.1
 var fire_interval_variance := 0.018
 var spread_degrees := 0.0
+var spread_growth_per_shot := 0.0
+var maximum_spread_bonus := 0.0
+var spread_recovery := 4.0
 var max_ammo := 12
 var projectile_damage := 1
 var weapon_id := "pistol"
@@ -30,6 +33,8 @@ var hit_stop := 0.035
 var shot_volume_db := -10.0
 var mechanical_pitch := 1.0
 var punch_pitch := 0.73
+var movement_speed_multiplier := 1.0
+var reload_movement_multiplier := 0.8
 
 @onready var reload_timer: Timer = $ReloadTimer
 @onready var shot_audio: AudioStreamPlayer = $ShotAudio
@@ -43,15 +48,19 @@ var punch_pitch := 0.73
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
 
 var ammo := 12
+var reserve_ammo := -1
 var cooldown := 0.0
 var recoil := 0.0
+var shot_heat := 0.0
 var is_reloading := false
 var ammo_by_weapon: Dictionary = {}
+var reserve_by_weapon: Dictionary = {}
 
 func _ready() -> void:
 	set_gun_data(gun_data, true)
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
+	if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
 	queue_redraw()
 
 func _apply_gun_data() -> void:
@@ -63,6 +72,9 @@ func _apply_gun_data() -> void:
 	fire_interval = gun_data.fire_interval
 	fire_interval_variance = gun_data.fire_interval_variance
 	spread_degrees = gun_data.spread_degrees
+	spread_growth_per_shot = gun_data.spread_growth_per_shot
+	maximum_spread_bonus = gun_data.maximum_spread_bonus
+	spread_recovery = gun_data.spread_recovery
 	reload_duration = gun_data.reload_duration
 	pitch_min = gun_data.pitch_min
 	pitch_max = gun_data.pitch_max
@@ -77,11 +89,14 @@ func _apply_gun_data() -> void:
 	shot_volume_db = gun_data.shot_volume_db
 	mechanical_pitch = gun_data.mechanical_pitch
 	punch_pitch = gun_data.punch_pitch
+	movement_speed_multiplier = gun_data.movement_speed_multiplier
+	reload_movement_multiplier = gun_data.reload_movement_multiplier
 
 func set_gun_data(data: Resource, refill := true) -> void:
 	if data == null: return
 	if gun_data != null and not weapon_id.is_empty():
 		ammo_by_weapon[weapon_id] = ammo
+		reserve_by_weapon[weapon_id] = reserve_ammo
 	gun_data = data
 	_apply_gun_data()
 	if ammo_by_weapon.has(weapon_id):
@@ -90,8 +105,10 @@ func set_gun_data(data: Resource, refill := true) -> void:
 		ammo = max_ammo
 	else:
 		ammo = 0
+	reserve_ammo = int(reserve_by_weapon.get(weapon_id, -1))
 	ammo_by_weapon[weapon_id] = ammo
 	is_reloading = false
+	shot_heat = 0.0
 	if is_instance_valid(reload_timer): reload_timer.stop()
 	if is_instance_valid(shot_audio):
 		shot_audio.stream = gun_data.shot_stream
@@ -104,6 +121,7 @@ func set_gun_data(data: Resource, refill := true) -> void:
 		weapon_shadow.texture = weapon_sprite.texture
 		muzzle.position.x = weapon_sprite.texture.get_width() * 0.5 + 1.0
 		if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
+		if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
 	queue_redraw()
 
 func set_weapon_ammo(target_weapon_id: String, rounds: int) -> void:
@@ -116,9 +134,26 @@ func get_weapon_ammo(target_weapon_id: String) -> int:
 	if target_weapon_id == weapon_id: return ammo
 	return int(ammo_by_weapon.get(target_weapon_id, 0))
 
+func set_reserve_ammo(target_weapon_id: String, rounds: int) -> void:
+	reserve_by_weapon[target_weapon_id] = rounds if rounds < 0 else maxi(0, rounds)
+	if weapon_id == target_weapon_id:
+		reserve_ammo = int(reserve_by_weapon[target_weapon_id])
+		if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
+
+func get_reserve_ammo(target_weapon_id: String) -> int:
+	if target_weapon_id == weapon_id: return reserve_ammo
+	return int(reserve_by_weapon.get(target_weapon_id, 0))
+
+func add_reserve_ammo(target_weapon_id: String, rounds: int) -> int:
+	var current := get_reserve_ammo(target_weapon_id)
+	if current < 0: return current
+	set_reserve_ammo(target_weapon_id, current + maxi(0, rounds))
+	return get_reserve_ammo(target_weapon_id)
+
 func _process(delta: float) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	recoil = move_toward(recoil, 0.0, 24.0 * delta)
+	shot_heat = move_toward(shot_heat, 0.0, spread_recovery * delta)
 	queue_redraw()
 
 func try_fire(direction: Vector2) -> bool:
@@ -142,7 +177,10 @@ func try_fire(direction: Vector2) -> bool:
 	punch_audio.play()
 	animation_player.stop()
 	animation_player.play("kick", -1.0, 0.85 + recoil_strength * 0.45)
-	var spread_radians := deg_to_rad(randf_range(-spread_degrees, spread_degrees))
+	var dynamic_spread := minf(maximum_spread_bonus, shot_heat * spread_growth_per_shot)
+	var current_spread := spread_degrees + dynamic_spread
+	var spread_radians := deg_to_rad(randf_range(-current_spread, current_spread))
+	shot_heat += 1.0
 	var normalized_direction := direction.normalized().rotated(spread_radians)
 	var origin := muzzle.global_position
 	fired.emit(origin, normalized_direction, enemy_owned, projectile_damage, weapon_id)
@@ -152,7 +190,7 @@ func try_fire(direction: Vector2) -> bool:
 	return true
 
 func reload() -> void:
-	if is_reloading or ammo >= max_ammo: return
+	if is_reloading or ammo >= max_ammo or reserve_ammo == 0: return
 	is_reloading = true
 	reload_timer.start(reload_duration)
 	reload_audio.pitch_scale = randf_range(0.97, 1.03)
@@ -162,9 +200,15 @@ func reload() -> void:
 		Events.publish_ammo(ammo, max_ammo, true)
 
 func _on_reload_timer_timeout() -> void:
-	ammo = max_ammo
+	var required := max_ammo - ammo
+	var loaded := required if reserve_ammo < 0 else mini(required, reserve_ammo)
+	ammo += loaded
+	if reserve_ammo >= 0:
+		reserve_ammo -= loaded
+		reserve_by_weapon[weapon_id] = reserve_ammo
 	ammo_by_weapon[weapon_id] = ammo
 	is_reloading = false
 	if not enemy_owned:
 		Events.reload_finished.emit(ammo, max_ammo)
 		Events.publish_ammo(ammo, max_ammo, false)
+		Events.publish_ammo_reserve(reserve_ammo)

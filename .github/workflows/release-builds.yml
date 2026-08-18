@@ -1,0 +1,60 @@
+name: Release builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: Windows Desktop
+            output: build/windows/AFTERMATH.exe
+            directory: build/windows
+            artifact: AFTERMATH-Windows-x86_64
+          - preset: Linux
+            output: build/linux/AFTERMATH.x86_64
+            directory: build/linux
+            artifact: AFTERMATH-Linux-x86_64
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Godot 4.7.1
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip
+          unzip -q Godot_v4.7.1-stable_linux.x86_64.zip
+          mv Godot_v4.7.1-stable_linux.x86_64 godot
+          chmod +x godot
+      - name: Install export templates
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.1.stable"
+          unzip -q Godot_v4.7.1-stable_export_templates.tpz
+          mv templates/* "$HOME/.local/share/godot/export_templates/4.7.1.stable/"
+      - name: Prime Godot import cache
+        run: ./godot --headless --editor --quit --path .
+      - name: Export release
+        run: |
+          mkdir -p "$(dirname '${{ matrix.output }}')"
+          ./godot --headless --path . --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+          test -s "${{ matrix.output }}"
+          sha256sum "${{ matrix.output }}" > "${{ matrix.output }}.sha256"
+          cp LICENSE.md README.md THIRD_PARTY_NOTICES.md GODOT_LICENSE.txt "${{ matrix.directory }}/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.output }}
+            ${{ matrix.output }}.sha256
+            ${{ matrix.directory }}/LICENSE.md
+            ${{ matrix.directory }}/README.md
+            ${{ matrix.directory }}/THIRD_PARTY_NOTICES.md
+            ${{ matrix.directory }}/GODOT_LICENSE.txt
+          if-no-files-found: error

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+mission_id = "after_hours"
+display_name = "AFTER HOURS LOCKDOWN"
+briefing = "CLEAR THE FLOOR // BLIND SECURITY // ERASE THE AFTERMATH"
+required_eliminations = -1
+required_security_shutdowns = 2
+completion_bonus = 750
+alarm_penalty = 150
+scene_path = "res://scenes/levels/after_hours.tscn"
+debrief_text = "THE SECURITY ARCHIVE IS DARK. THE LEDGER ENDS HERE, BUT THE CLEANER'S PHONE RINGS AGAIN."
+unlock_after = "sandwich_shop"
+campaign_order = 3

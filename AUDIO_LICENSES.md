@@ -15,3 +15,7 @@ All external audio in this project is sourced from Freesound and published under
 ## Processing
 
 The public high-quality previews were converted to mono 44.1 kHz, trimmed, faded and peak-normalized. The shell-casing field recording was segmented into five short transient variants. No generative processing or third-party copyrighted layers were added.
+
+## Original procedural score
+
+The combat pulse, danger arpeggio and electrical-room ambience introduced in v0.0.9 are synthesized at runtime from original project code. They contain no sampled or third-party musical material and are cached as four-second mono 16-bit loops for reuse across levels.

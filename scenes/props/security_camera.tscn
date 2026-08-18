@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource path="res://scripts/props/security_camera.gd" type="Script" id="1_camera"]
+
+[sub_resource type="RectangleShape2D" id="CameraShape"]
+size = Vector2(10, 9)
+
+[node name="SecurityCamera" type="StaticBody2D"]
+collision_layer = 4
+collision_mask = 0
+script = ExtResource("1_camera")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(1, 0)
+shape = SubResource("CameraShape")

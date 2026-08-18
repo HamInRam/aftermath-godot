@@ -5,6 +5,9 @@ signal clean_requested(world_position: Vector2)
 signal died
 signal execution_impact(world_position: Vector2, direction: Vector2, lethal: bool, execution_type: String)
 signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction: Vector2, melee_type: String, lethal: bool)
+signal weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int)
+signal extraction_requested
+signal world_interaction_requested
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
 const PLAYER_GUNS := [
@@ -17,6 +20,7 @@ const MELEE_DATA := {
 	"knife": {"range": 16.0, "angle": 45.0, "windup": 0.02, "cooldown": 0.22, "duration": 0.05, "lethal": true, "color": Color("00ffff")},
 	"bat": {"range": 28.0, "angle": 120.0, "windup": 0.08, "cooldown": 0.42, "duration": 0.12, "lethal": true, "color": Color("ff007f")},
 }
+const CLEANUP_TOOLS := ["mop", "evidence_bag", "body_bag"]
 
 @onready var upper_body: Node2D = $UpperBody
 @onready var body_sprite: Sprite2D = $UpperBody/BodySprite
@@ -37,9 +41,12 @@ var gun_index := 0
 var owned_gun_indices: Array[int] = [0]
 var cached_execution_target: CharacterBody2D
 var execution_query_cooldown := 0.0
+var current_cleanup_tool := "mop"
+var dragged_corpse: Node2D
 
 func _ready() -> void:
 	super._ready()
+	gun.set_reserve_ammo("pistol", 24)
 	gun.fired.connect(_on_gun_fired)
 	actor_died.connect(_on_actor_died)
 	queue_redraw()
@@ -65,9 +72,13 @@ func _physics_process(delta: float) -> void:
 		attempt_ground_execution()
 		if is_executing: return
 	if Input.is_action_just_pressed("interact"):
-		attempt_weapon_pickup()
+		if cleanup_mode:
+			if not attempt_corpse_drag(): extraction_requested.emit()
+		elif not attempt_weapon_pickup(): world_interaction_requested.emit()
+	if cleanup_mode: _handle_cleanup_tool_selection()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	velocity = input_direction * move_speed
+	var drag_multiplier := 0.72 if is_instance_valid(dragged_corpse) else 1.0
+	velocity = input_direction * move_speed * get_equipped_movement_multiplier() * drag_multiplier
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
@@ -85,6 +96,8 @@ func _physics_process(delta: float) -> void:
 			gun.try_fire(Vector2.RIGHT.rotated(rotation))
 	if Input.is_action_just_pressed("reload") and not cleanup_mode and equipped_mode == "gun":
 		gun.reload()
+	if Input.is_action_just_pressed("throw_weapon"):
+		throw_equipped_gun(Vector2.RIGHT.rotated(rotation))
 
 func _handle_weapon_selection() -> void:
 	if cleanup_mode or is_executing or is_melee_attacking: return
@@ -118,6 +131,7 @@ func acquire_gun(weapon_id: String, rounds: int) -> bool:
 			break
 	if found_index < 0: return false
 	if found_index not in owned_gun_indices: owned_gun_indices.append(found_index)
+	if not gun.reserve_by_weapon.has(weapon_id): gun.set_reserve_ammo(weapon_id, 0)
 	gun.set_weapon_ammo(weapon_id, gun.get_weapon_ammo(weapon_id) + rounds)
 	gun_index = found_index
 	equipped_mode = "gun"
@@ -145,6 +159,75 @@ func get_nearby_weapon_pickup() -> Node2D:
 
 func get_equipped_weapon_name() -> String:
 	return str(gun.gun_data.display_name) if equipped_mode == "gun" and gun.gun_data != null else current_melee_type.to_upper()
+
+func get_equipped_movement_multiplier() -> float:
+	if cleanup_mode or equipped_mode != "gun" or gun.gun_data == null: return 1.0
+	return gun.reload_movement_multiplier if gun.is_reloading else gun.movement_speed_multiplier
+
+func _handle_cleanup_tool_selection() -> void:
+	if Input.is_action_just_pressed("equip_gun"): select_cleanup_tool("mop")
+	elif Input.is_action_just_pressed("equip_fist"): select_cleanup_tool("evidence_bag")
+	elif Input.is_action_just_pressed("equip_knife"): select_cleanup_tool("body_bag")
+
+func select_cleanup_tool(tool_name: String) -> bool:
+	if tool_name not in CLEANUP_TOOLS: return false
+	current_cleanup_tool = tool_name
+	queue_redraw()
+	return true
+
+func add_reserve_ammo(weapon_id: String, rounds: int) -> bool:
+	if rounds <= 0: return false
+	gun.add_reserve_ammo(weapon_id, rounds)
+	return true
+
+func throw_equipped_gun(direction: Vector2) -> bool:
+	if cleanup_mode or is_dead or is_executing or equipped_mode != "gun" or gun.gun_data == null or direction.length_squared() < 0.001: return false
+	var thrown_weapon_id: String = gun.weapon_id
+	var thrown_rounds: int = gun.ammo
+	var thrown_index := gun_index
+	owned_gun_indices.erase(thrown_index)
+	gun.ammo_by_weapon.erase(thrown_weapon_id)
+	weapon_throw_requested.emit(global_position + direction.normalized() * 9.0, direction.normalized(), thrown_weapon_id, thrown_rounds)
+	if owned_gun_indices.is_empty():
+		equipped_mode = "melee"
+		current_melee_type = "fist"
+		gun.visible = false
+		melee_weapon_visual.visible = true
+		melee_weapon_visual.set_weapon(current_melee_type)
+		Events.publish_ammo(0, 0, false)
+	else:
+		gun_index = owned_gun_indices[0]
+		gun.set_gun_data(PLAYER_GUNS[gun_index], false)
+	queue_redraw()
+	return true
+
+func get_cleanup_efficiency(cleanup_type: String) -> int:
+	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore"]: return 2
+	if current_cleanup_tool == "evidence_bag" and cleanup_type in ["shell", "dropped_weapon"]: return 3
+	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 1
+	return 1
+
+func get_nearby_draggable_corpse() -> Node2D:
+	var nearest: Node2D
+	var nearest_distance := 20.0 * 20.0
+	for node in get_tree().get_nodes_in_group("corpse"):
+		if not node is Node2D or not node.has_method("begin_drag"): continue
+		var distance := global_position.distance_squared_to(node.global_position)
+		if distance <= nearest_distance:
+			nearest = node
+			nearest_distance = distance
+	return nearest
+
+func attempt_corpse_drag() -> bool:
+	if not cleanup_mode or is_dead: return false
+	if is_instance_valid(dragged_corpse):
+		dragged_corpse.end_drag(self)
+		dragged_corpse = null
+		return true
+	var corpse := get_nearby_draggable_corpse()
+	if not is_instance_valid(corpse) or not corpse.begin_drag(self): return false
+	dragged_corpse = corpse
+	return true
 
 func _start_melee_attack() -> void:
 	if is_melee_attacking or melee_cooldown > 0.0 or is_dead or cleanup_mode: return
@@ -219,7 +302,7 @@ func _reset_melee_pose() -> void:
 
 func _spawn_melee_trail(data: Dictionary) -> void:
 	var trail = MELEE_TRAIL_SCENE.instantiate()
-	get_tree().current_scene.add_child(trail)
+	if not RuntimeBudget.try_add("transient_fx", trail, get_tree().current_scene): return
 	trail.global_position = melee_tip.global_position
 	trail.global_rotation = melee_tip.global_rotation
 	var tip_distance := global_position.distance_to(melee_tip.global_position)
@@ -288,6 +371,9 @@ func _finish_execution() -> void:
 
 func set_cleanup_mode(enabled: bool) -> void:
 	cleanup_mode = enabled
+	if not enabled and is_instance_valid(dragged_corpse):
+		dragged_corpse.end_drag(self)
+		dragged_corpse = null
 	if enabled:
 		melee_animation_generation += 1
 		is_melee_attacking = false

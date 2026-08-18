@@ -5,6 +5,9 @@ var wound_variant := 0
 var wound_severity := 1.0
 var death_style := "firearm"
 var cleanup_amount := 1.0
+var dragging_actor: Node2D
+var bag_progress := 0.0
+var bagged := false
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
@@ -19,6 +22,13 @@ func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, bl
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
+	if is_instance_valid(dragging_actor):
+		var drag_direction := Vector2.RIGHT.rotated(dragging_actor.rotation)
+		var target_position := dragging_actor.global_position - drag_direction * 13.0
+		velocity = ((target_position - global_position) * 9.0).limit_length(92.0)
+		move_and_slide()
+		rotation = lerp_angle(rotation, drag_direction.angle(), 1.0 - exp(-5.0 * delta))
+		return
 	if velocity.length_squared() < 0.1:
 		velocity = Vector2.ZERO
 		set_physics_process(false)
@@ -52,17 +62,55 @@ func get_cleanup_type() -> String:
 func get_cleanup_cost() -> int:
 	return 10
 
+func apply_cleanup_tool(tool_name: String) -> bool:
+	if tool_name != "body_bag": return false
+	if bagged: return true
+	bag_progress = minf(1.0, bag_progress + 0.5)
+	if bag_progress >= 1.0:
+		bagged = true
+		velocity = Vector2.ZERO
+	queue_redraw()
+	return true
+
+func is_bagged() -> bool:
+	return bagged
+
+func extract_bag() -> bool:
+	if not bagged: return false
+	if is_instance_valid(dragging_actor): dragging_actor.set("dragged_corpse", null)
+	CorpseIncidentRegistry.unregister_corpse(self)
+	queue_free()
+	return true
+
+func begin_drag(actor: Node2D) -> bool:
+	if not is_instance_valid(actor) or (is_instance_valid(dragging_actor) and dragging_actor != actor): return false
+	dragging_actor = actor
+	set_physics_process(true)
+	return true
+
+func end_drag(actor: Node2D) -> void:
+	if dragging_actor != actor: return
+	dragging_actor = null
+	velocity = Vector2.ZERO
+	set_physics_process(false)
+
+func is_being_dragged() -> bool:
+	return is_instance_valid(dragging_actor)
+
 func clean_step() -> void:
-	cleanup_amount -= 1.0 / float(get_cleanup_cost())
-	modulate.a = clampf(cleanup_amount, 0.18, 1.0)
-	if cleanup_amount <= 0.02:
-		CorpseIncidentRegistry.unregister_corpse(self)
-		queue_free()
+	return
 
 func _exit_tree() -> void:
 	CorpseIncidentRegistry.unregister_corpse(self)
 
 func _draw() -> void:
+	if bagged:
+		draw_rect(Rect2(-7, -4, 14, 8), Color("171a20"))
+		draw_line(Vector2(-5, 0), Vector2(5, 0), Color("71808c"), 1.0)
+		draw_circle(Vector2(5, 0), 1.0, Color("a8bbc4"))
+		return
+	if bag_progress > 0.0:
+		draw_arc(Vector2.ZERO, 8.0, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, 16, Color("9de8d4"), 1.5)
 	draw_rect(Rect2(-5, -2, 10, 4), Color("1b171e"))
 	draw_rect(Rect2(-3, -2, 6, 4), Color("7c235b"))
 	draw_circle(Vector2(4, 0), 2.0, Color("a87168"))

@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource path="res://scripts/props/thrown_weapon.gd" type="Script" id="1_script"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape_weapon"]
+size = Vector2(10, 5)
+
+[node name="ThrownWeapon" type="CharacterBody2D" groups=["thrown_weapon"]]
+collision_layer = 0
+collision_mask = 6
+script = ExtResource("1_script")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape_weapon")
+
+[node name="WeaponSprite" type="Sprite2D" parent="."]
+texture_filter = 1

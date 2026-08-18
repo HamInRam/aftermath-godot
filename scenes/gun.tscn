@@ -54,17 +54,22 @@ one_shot = true
 [node name="ShotAudio" type="AudioStreamPlayer" parent="."]
 max_polyphony = 8
 volume_db = -10.0
+bus = &"SFX"
 
 [node name="ReloadAudio" type="AudioStreamPlayer" parent="."]
 volume_db = -10.0
+bus = &"SFX"
 
 [node name="DryFireAudio" type="AudioStreamPlayer" parent="."]
 volume_db = -8.0
+bus = &"SFX"
 
 [node name="MechanicalAudio" type="AudioStreamPlayer" parent="."]
 volume_db = -21.0
 max_polyphony = 8
+bus = &"SFX"
 
 [node name="PunchAudio" type="AudioStreamPlayer" parent="."]
 volume_db = -17.0
 max_polyphony = 8
+bus = &"SFX"

@@ -50,7 +50,12 @@ func _process(delta: float) -> void:
 func _play_clink(volume: float, pitch_low: float, pitch_high: float) -> void:
 	clink_audio.volume_db = volume + randf_range(-1.5, 1.0)
 	clink_audio.pitch_scale = randf_range(pitch_low, pitch_high)
-	clink_audio.play()
+	if DisplayServer.get_name() != "headless": clink_audio.play()
+
+func _exit_tree() -> void:
+	if not is_instance_valid(clink_audio): return
+	clink_audio.stop()
+	clink_audio.stream = null
 
 func clean_step() -> void:
 	cleanup_amount -= 0.5

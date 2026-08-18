@@ -33,8 +33,11 @@ var smooth_follow_position := Vector2.ZERO
 var smooth_shake_offset := Vector2.ZERO
 var smooth_tilt := 0.0
 var drift_time := 0.0
+var shake_strength := 1.0
 
 func _ready() -> void:
+	shake_strength = Settings.screen_shake_strength
+	ambient_drift_enabled = ambient_drift_enabled and Settings.ambient_camera_motion_enabled
 	noise.seed = randi()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	noise.frequency = 0.085
@@ -92,6 +95,6 @@ func _physics_process(delta: float) -> void:
 		offset = smooth_shake_offset.round()
 		rotation = smooth_tilt + (sin(drift_time * drift_speed) * max_drift_angle if ambient_drift_enabled else 0.0)
 		return
-	smooth_shake_offset = Vector2(noise.get_noise_1d(noise_time), noise.get_noise_1d(noise_time + 71.7)) * max_offset * shake
+	smooth_shake_offset = Vector2(noise.get_noise_1d(noise_time), noise.get_noise_1d(noise_time + 71.7)) * max_offset * shake * shake_strength
 	offset = smooth_shake_offset.round()
 	rotation = smooth_tilt + (sin(drift_time * drift_speed) * max_drift_angle if ambient_drift_enabled else 0.0)

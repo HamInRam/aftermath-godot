@@ -12,12 +12,19 @@ func _ready() -> void:
 
 func setup(new_weapon_id: String, new_rounds: int) -> void:
 	weapon_id = new_weapon_id
-	rounds = maxi(1, new_rounds)
+	rounds = maxi(0, new_rounds)
 	if is_node_ready(): _apply_visual()
 
 func collect(player: Node) -> bool:
 	if not is_instance_valid(player) or not player.has_method("acquire_gun"): return false
 	if not player.acquire_gun(weapon_id, rounds): return false
+	CleanupRegistry.unregister_target(self)
+	queue_free()
+	return true
+
+func collect_enemy(enemy: Node) -> bool:
+	if rounds <= 0 or not is_instance_valid(enemy) or not enemy.has_method("equip_dropped_weapon"): return false
+	if not enemy.equip_dropped_weapon(weapon_id, rounds): return false
 	CleanupRegistry.unregister_target(self)
 	queue_free()
 	return true

@@ -8,13 +8,15 @@ jobs:
   regression:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Godot 4.7.1
         run: |
           wget -q https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip
           unzip -q Godot_v4.7.1-stable_linux.x86_64.zip
           mv Godot_v4.7.1-stable_linux.x86_64 godot
           chmod +x godot
+      - name: Prime Godot import cache
+        run: ./godot --headless --editor --quit --path .
       - name: Parse project
         run: |
           set -o pipefail
@@ -27,11 +29,28 @@ jobs:
           for scene in \
             tests/test_corpse_coordination.tscn \
             tests/test_enemy_search.tscn \
+            tests/test_enemy_archetypes.tscn \
+            tests/test_encounter_intelligence.tscn \
+            tests/test_game_settings.tscn \
             tests/test_noise_roles.tscn \
             tests/test_melee_balance.tscn \
             tests/test_cleanup_registry.tscn \
+            tests/test_cleanup_scoring.tscn \
+            tests/test_cleanup_tools.tscn \
+            tests/test_campaign_ui.tscn \
+            tests/test_mission_objectives.tscn \
+            tests/test_mission_result_flow.tscn \
+            tests/test_progression_store.tscn \
+            tests/test_runtime_budget.tscn \
+            tests/test_performance_stress.tscn \
+            tests/test_release_metadata.tscn \
+            tests/test_security_camera.tscn \
             tests/test_weapon_inventory.tscn \
+            tests/test_weapon_throw.tscn \
             tests/test_blood_footprints.tscn \
+            tests/test_combat_audio_director.tscn \
+            tests/test_tactical_alert.tscn \
+            tests/test_vertical_slice.tscn \
             tests/test_ai_black_box.tscn; do
             log_file="$(basename "$scene" .tscn).log"
             ./godot --headless --path . "$scene" 2>&1 | tee "$log_file"

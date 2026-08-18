@@ -23,3 +23,4 @@ script = ExtResource("3_shadow")
 max_distance = 220.0
 attenuation = 1.05
 max_polyphony = 2
+bus = &"SFX"
