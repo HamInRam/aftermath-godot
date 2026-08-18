@@ -17,6 +17,7 @@ const MELEE_DATA := {
 	"knife": {"range": 16.0, "angle": 45.0, "windup": 0.02, "cooldown": 0.22, "duration": 0.05, "lethal": true, "color": Color("00ffff")},
 	"bat": {"range": 28.0, "angle": 120.0, "windup": 0.08, "cooldown": 0.42, "duration": 0.12, "lethal": true, "color": Color("ff007f")},
 }
+const CLEANUP_TOOLS := ["mop", "evidence_bag", "body_bag"]
 
 @onready var upper_body: Node2D = $UpperBody
 @onready var body_sprite: Sprite2D = $UpperBody/BodySprite
@@ -37,6 +38,8 @@ var gun_index := 0
 var owned_gun_indices: Array[int] = [0]
 var cached_execution_target: CharacterBody2D
 var execution_query_cooldown := 0.0
+var current_cleanup_tool := "mop"
+var dragged_corpse: Node2D
 
 func _ready() -> void:
 	super._ready()
@@ -65,9 +68,12 @@ func _physics_process(delta: float) -> void:
 		attempt_ground_execution()
 		if is_executing: return
 	if Input.is_action_just_pressed("interact"):
-		attempt_weapon_pickup()
+		if cleanup_mode: attempt_corpse_drag()
+		else: attempt_weapon_pickup()
+	if cleanup_mode: _handle_cleanup_tool_selection()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	velocity = input_direction * move_speed * get_equipped_movement_multiplier()
+	var drag_multiplier := 0.72 if is_instance_valid(dragged_corpse) else 1.0
+	velocity = input_direction * move_speed * get_equipped_movement_multiplier() * drag_multiplier
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
@@ -149,6 +155,45 @@ func get_equipped_weapon_name() -> String:
 func get_equipped_movement_multiplier() -> float:
 	if cleanup_mode or equipped_mode != "gun" or gun.gun_data == null: return 1.0
 	return gun.reload_movement_multiplier if gun.is_reloading else gun.movement_speed_multiplier
+
+func _handle_cleanup_tool_selection() -> void:
+	if Input.is_action_just_pressed("equip_gun"): select_cleanup_tool("mop")
+	elif Input.is_action_just_pressed("equip_fist"): select_cleanup_tool("evidence_bag")
+	elif Input.is_action_just_pressed("equip_knife"): select_cleanup_tool("body_bag")
+
+func select_cleanup_tool(tool_name: String) -> bool:
+	if tool_name not in CLEANUP_TOOLS: return false
+	current_cleanup_tool = tool_name
+	queue_redraw()
+	return true
+
+func get_cleanup_efficiency(cleanup_type: String) -> int:
+	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore"]: return 2
+	if current_cleanup_tool == "evidence_bag" and cleanup_type in ["shell", "dropped_weapon"]: return 3
+	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 4
+	return 1
+
+func get_nearby_draggable_corpse() -> Node2D:
+	var nearest: Node2D
+	var nearest_distance := 20.0 * 20.0
+	for node in get_tree().get_nodes_in_group("corpse"):
+		if not node is Node2D or not node.has_method("begin_drag"): continue
+		var distance := global_position.distance_squared_to(node.global_position)
+		if distance <= nearest_distance:
+			nearest = node
+			nearest_distance = distance
+	return nearest
+
+func attempt_corpse_drag() -> bool:
+	if not cleanup_mode or is_dead: return false
+	if is_instance_valid(dragged_corpse):
+		dragged_corpse.end_drag(self)
+		dragged_corpse = null
+		return true
+	var corpse := get_nearby_draggable_corpse()
+	if not is_instance_valid(corpse) or not corpse.begin_drag(self): return false
+	dragged_corpse = corpse
+	return true
 
 func _start_melee_attack() -> void:
 	if is_melee_attacking or melee_cooldown > 0.0 or is_dead or cleanup_mode: return
@@ -292,6 +337,9 @@ func _finish_execution() -> void:
 
 func set_cleanup_mode(enabled: bool) -> void:
 	cleanup_mode = enabled
+	if not enabled and is_instance_valid(dragged_corpse):
+		dragged_corpse.end_drag(self)
+		dragged_corpse = null
 	if enabled:
 		melee_animation_generation += 1
 		is_melee_attacking = false

@@ -66,6 +66,7 @@ func _process(delta: float) -> void:
 	if phase == "combat" and not transitioning_cleanup and remaining_enemies <= 0:
 		_begin_cleanup_transition()
 	elif phase == "cleanup":
+		ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
 		var remaining_cleanup := CleanupRegistry.get_remaining_count()
 		if remaining_cleanup == 0:
 			run_over = true
@@ -99,8 +100,16 @@ func _create_ui() -> void:
 	interaction_label = hud.interaction_label
 
 func _update_interaction_prompt() -> void:
-	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or run_over or phase != "combat" or player.is_executing:
+	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or run_over or player.is_executing:
 		if is_instance_valid(interaction_label): interaction_label.text = ""
+		return
+	if phase == "cleanup":
+		if is_instance_valid(player.dragged_corpse): interaction_label.text = "[ E ] DROP BODY"
+		elif is_instance_valid(player.get_nearby_draggable_corpse()): interaction_label.text = "[ E ] DRAG BODY"
+		else: interaction_label.text = "[ 1 ] MOP  [ 2 ] EVIDENCE  [ 3 ] BODY BAG"
+		return
+	if phase != "combat":
+		interaction_label.text = ""
 		return
 	if is_instance_valid(player.peek_nearby_execution_target()):
 		interaction_label.text = "[ SPACE ] EXECUTE"
@@ -311,7 +320,6 @@ func _enter_cleanup_phase() -> void:
 	for bullet in get_tree().get_nodes_in_group("bullet"): bullet.queue_free()
 	status_label.text = "CLEANUP REQUIRED"
 	detail_label.text = "GET CLOSE // HOLD LMB"
-	ammo_label.text = "MOP"
 
 func _begin_cleanup_transition() -> void:
 	transitioning_cleanup = true
@@ -324,4 +332,10 @@ func _on_clean_requested(world_position: Vector2) -> void:
 	if phase != "cleanup" or run_over: return
 	if player.global_position.distance_to(world_position) > 33.0: return
 	var target := CleanupRegistry.get_nearest_target(world_position, 15.0)
-	if is_instance_valid(target): target.clean_step()
+	if not is_instance_valid(target): return
+	var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else "unknown"
+	var steps := player.get_cleanup_efficiency(cleanup_type)
+	for index in range(steps):
+		if not is_instance_valid(target) or target.is_queued_for_deletion(): break
+		target.clean_step()
+	ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")

@@ -5,6 +5,7 @@ var wound_variant := 0
 var wound_severity := 1.0
 var death_style := "firearm"
 var cleanup_amount := 1.0
+var dragging_actor: Node2D
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
@@ -19,6 +20,13 @@ func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, bl
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
+	if is_instance_valid(dragging_actor):
+		var drag_direction := Vector2.RIGHT.rotated(dragging_actor.rotation)
+		var target_position := dragging_actor.global_position - drag_direction * 13.0
+		velocity = ((target_position - global_position) * 9.0).limit_length(92.0)
+		move_and_slide()
+		rotation = lerp_angle(rotation, drag_direction.angle(), 1.0 - exp(-5.0 * delta))
+		return
 	if velocity.length_squared() < 0.1:
 		velocity = Vector2.ZERO
 		set_physics_process(false)
@@ -52,10 +60,26 @@ func get_cleanup_type() -> String:
 func get_cleanup_cost() -> int:
 	return 10
 
+func begin_drag(actor: Node2D) -> bool:
+	if not is_instance_valid(actor) or (is_instance_valid(dragging_actor) and dragging_actor != actor): return false
+	dragging_actor = actor
+	set_physics_process(true)
+	return true
+
+func end_drag(actor: Node2D) -> void:
+	if dragging_actor != actor: return
+	dragging_actor = null
+	velocity = Vector2.ZERO
+	set_physics_process(false)
+
+func is_being_dragged() -> bool:
+	return is_instance_valid(dragging_actor)
+
 func clean_step() -> void:
 	cleanup_amount -= 1.0 / float(get_cleanup_cost())
 	modulate.a = clampf(cleanup_amount, 0.18, 1.0)
 	if cleanup_amount <= 0.02:
+		if is_instance_valid(dragging_actor): dragging_actor.set("dragged_corpse", null)
 		CorpseIncidentRegistry.unregister_corpse(self)
 		queue_free()
 

@@ -30,6 +30,7 @@ jobs:
             tests/test_noise_roles.tscn \
             tests/test_melee_balance.tscn \
             tests/test_cleanup_registry.tscn \
+            tests/test_cleanup_tools.tscn \
             tests/test_weapon_inventory.tscn \
             tests/test_blood_footprints.tscn \
             tests/test_combat_audio_director.tscn \
