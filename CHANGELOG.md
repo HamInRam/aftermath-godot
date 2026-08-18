@@ -2,6 +2,21 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.4] - In development
+
+### Added
+
+- Three-tier enemy alert memory with faster reacquisition while suspicious or fully alerted.
+- Corpse reports that assign nearby responders to left/right search sectors, guard duty and alert observation instead of stacking on one body.
+- Explicit return-to-patrol behavior after a search expires.
+- Sustained-fire spread growth and weapon-specific movement/reload handling for Pistol, SMG and LMG.
+- Cleanup loadout with Mop, Evidence Bag and Body Bag efficiencies plus interactive corpse dragging.
+- `After Hours` vertical-slice map combining doors, glass, mixed enemy roles, weapon acquisition and the complete cleanup loop.
+
+### Tests
+
+- Added tactical-alert, cleanup-tool and vertical-slice regression scenes to CI.
+
 ## [v.0.0.3] - 2026-08-17
 
 ### Fixed

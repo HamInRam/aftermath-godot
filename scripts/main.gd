@@ -334,7 +334,7 @@ func _on_clean_requested(world_position: Vector2) -> void:
 	var target := CleanupRegistry.get_nearest_target(world_position, 15.0)
 	if not is_instance_valid(target): return
 	var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else "unknown"
-	var steps := player.get_cleanup_efficiency(cleanup_type)
+	var steps: int = int(player.get_cleanup_efficiency(cleanup_type))
 	for index in range(steps):
 		if not is_instance_valid(target) or target.is_queued_for_deletion(): break
 		target.clean_step()

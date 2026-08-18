@@ -1,0 +1,35 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource path="res://scenes/main.tscn" type="PackedScene" id="1_main"]
+[ext_resource path="res://scenes/props/swing_door.tscn" type="PackedScene" id="2_door"]
+
+[node name="AfterHours" instance=ExtResource("1_main")]
+level_title = "AFTER HOURS // VERTICAL SLICE"
+player_spawn = Vector2(44, 190)
+enemy_spawns = PackedVector2Array(72, 54, 142, 54, 212, 54, 292, 54, 340, 92, 82, 174, 150, 178, 222, 174, 286, 176, 342, 178)
+enemy_patrol_offsets = PackedVector2Array(48, 0, 0, 48, 48, 0, 0, 48, -48, 0, 0, -48, 48, 0, 0, -48, -48, 0, 0, -48)
+enemy_types = PackedStringArray("melee", "gunner", "gunner", "gunner", "melee", "gunner", "melee", "gunner", "gunner", "melee")
+fixed_sentry_indices = PackedInt32Array(3, 8)
+
+[node name="TileMap" parent="." index="0"]
+layout_id = "tactical_lab"
+
+[node name="WestRoomDoor" parent="Doors" index="0"]
+position = Vector2(196, 56)
+
+[node name="LobbyDoor" parent="Doors" index="1"]
+position = Vector2(80, 116)
+
+[node name="SouthDoor" parent="Doors" index="2" instance=ExtResource("2_door")]
+position = Vector2(196, 152)
+
+[node name="EastDoor" parent="Doors" index="3" instance=ExtResource("2_door")]
+position = Vector2(280, 116)
+rotation = -1.5708
+
+[node name="NorthAccessDoor" parent="Doors" index="4" instance=ExtResource("2_door")]
+position = Vector2(116, 56)
+rotation = -1.5708
+
+[node name="CanvasModulate" parent="." index="1"]
+color = Color(0.48, 0.42, 0.58, 1)
