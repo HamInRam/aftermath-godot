@@ -37,9 +37,11 @@ func _settle_as_pickup() -> void:
 	if settled: return
 	settled = true
 	var pickup = PICKUP_SCENE.instantiate()
+	var parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
+	if not RuntimeBudget.try_add("weapon_pickup", pickup, parent):
+		queue_free()
+		return
 	pickup.global_position = global_position
 	pickup.rotation = rotation
 	pickup.setup(weapon_id, rounds)
-	var parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
-	parent.add_child(pickup)
 	queue_free()

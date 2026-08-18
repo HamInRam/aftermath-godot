@@ -69,6 +69,6 @@ func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -
 func _spawn_splinters(direction: Vector2) -> void:
 	if get_tree().current_scene == null: return
 	var splinters = SPLINTER_SCENE.instantiate()
+	if not RuntimeBudget.try_add("debris", splinters, get_tree().current_scene): return
 	splinters.global_position = global_position + Vector2(0, 14).rotated(global_rotation)
 	splinters.setup(direction)
-	get_tree().current_scene.add_child(splinters)

@@ -295,7 +295,7 @@ func _reset_melee_pose() -> void:
 
 func _spawn_melee_trail(data: Dictionary) -> void:
 	var trail = MELEE_TRAIL_SCENE.instantiate()
-	get_tree().current_scene.add_child(trail)
+	if not RuntimeBudget.try_add("transient_fx", trail, get_tree().current_scene): return
 	trail.global_position = melee_tip.global_position
 	trail.global_rotation = melee_tip.global_rotation
 	var tip_distance := global_position.distance_to(melee_tip.global_position)

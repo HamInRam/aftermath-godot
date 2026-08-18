@@ -49,6 +49,11 @@ var extraction_zone: ExtractionZone
 var mission_tracker := MissionTracker.new()
 var final_score := 0
 var final_grade := ""
+var interaction_scan_timer := 0.0
+var cleanup_scan_timer := 0.0
+var security_devices: Array[SecurityCamera] = []
+var security_devices_cached := false
+var performance_debug_enabled := false
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -72,19 +77,26 @@ func _process(delta: float) -> void:
 	combo_timer -= delta
 	if combo_timer <= 0.0: combo = 0
 	hud.set_combo(combo)
-	_update_interaction_prompt()
+	interaction_scan_timer -= delta
+	if interaction_scan_timer <= 0.0:
+		interaction_scan_timer = 0.08
+		_update_interaction_prompt()
+	if performance_debug_enabled: hud.set_performance(PerformanceMonitor.get_debug_line())
 	if run_over: return
 	if phase == "combat": _update_combat_objective_hud()
 	if phase == "combat" and not transitioning_cleanup and mission_tracker.are_combat_objectives_complete():
 		_begin_cleanup_transition()
 	elif phase == "cleanup":
 		ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
-		_deposit_bagged_corpses()
-		var remaining_cleanup := CleanupRegistry.get_remaining_count()
-		if remaining_cleanup == 0:
-			_finish_run(false)
-		else:
-			status_label.text = "CLEAN // %02d  RISK // %03d" % [remaining_cleanup, CleanupRegistry.get_remaining_value()]
+		cleanup_scan_timer -= delta
+		if cleanup_scan_timer <= 0.0:
+			cleanup_scan_timer = 0.1
+			_deposit_bagged_corpses()
+			var remaining_cleanup := CleanupRegistry.get_remaining_count()
+			if remaining_cleanup == 0:
+				_finish_run(false)
+			else:
+				status_label.text = "CLEAN // %02d  RISK // %03d" % [remaining_cleanup, CleanupRegistry.get_remaining_value()]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
@@ -95,6 +107,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F5:
 		_toggle_hue_cycle()
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F6:
+		performance_debug_enabled = not performance_debug_enabled
+		hud.set_performance(PerformanceMonitor.get_debug_line() if performance_debug_enabled else "")
 		return
 	if event.is_action_pressed("ui_cancel"):
 		SceneTransition.transition_to("res://scenes/ui/title_menu.tscn")
@@ -170,15 +186,15 @@ func _on_reload_finished(_current: int, _maximum: int) -> void:
 func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, weapon_id: String) -> void:
 	var data := AttackCatalog.get_gun_data(weapon_id)
 	var casing = SHELL_CASING_SCENE.instantiate()
-	add_child(casing)
-	var perpendicular := direction.rotated(PI * 0.5)
-	casing.global_position = origin - direction * randf_range(4.5, 7.5) + perpendicular * randf_range(-1.8, 1.8)
-	casing.rotation = randf_range(-PI, PI)
-	casing.setup(direction, enemy_owned)
+	if RuntimeBudget.try_add("shell", casing, self):
+		var perpendicular := direction.rotated(PI * 0.5)
+		casing.global_position = origin - direction * randf_range(4.5, 7.5) + perpendicular * randf_range(-1.8, 1.8)
+		casing.rotation = randf_range(-PI, PI)
+		casing.setup(direction, enemy_owned)
 	var flash = MUZZLE_FLASH_SCENE.instantiate()
-	flash.global_position = origin
+	flash.position = to_local(origin)
 	flash.setup(direction, data.muzzle_flash_size, data.muzzle_flash_duration)
-	add_child(flash)
+	RuntimeBudget.try_add("transient_fx", flash, self)
 
 func _start_run() -> void:
 	CleanupRegistry.reset()
@@ -204,7 +220,8 @@ func _start_run() -> void:
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
 	started_enemy_count = enemy_spawns.size()
 	remaining_enemies = started_enemy_count
-	var security_devices := _get_security_devices()
+	security_devices = _get_security_devices()
+	security_devices_cached = true
 	for device in security_devices:
 		device.alarm_triggered.connect(_on_security_alarm)
 		device.disabled.connect(_on_security_disabled)
@@ -261,7 +278,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	bullet.global_position = origin
 	bullet.blood_impact.connect(_on_blood_impact)
 	bullet.setup(direction, enemy_owned, damage, weapon_id, origin, data.bullet_speed)
-	add_child(bullet)
+	if not RuntimeBudget.try_add("bullet", bullet, self): return
 	trauma_camera.add_trauma(data.camera_shake * (0.1 if enemy_owned else 0.14))
 
 func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) -> void:
@@ -272,9 +289,9 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	combo_timer = 2.2
 	trauma_camera.trigger_kill_effect(0.72, "red")
 	var corpse = CORPSE_SCENE.instantiate()
-	corpse.global_position = pos
+	corpse.position = to_local(pos)
 	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power, pending_death_style)
-	add_child(corpse)
+	RuntimeBudget.try_add("corpse", corpse, self)
 	blood_system.spawn_death_pool(pos, pending_death_blood_power)
 	if is_instance_valid(defeated_enemy) and defeated_enemy.enemy_type == "gunner":
 		var remaining_rounds: int = defeated_enemy.gun.ammo
@@ -290,6 +307,7 @@ func _get_mission_profile() -> MissionProfile:
 	return fallback
 
 func _get_security_devices() -> Array[SecurityCamera]:
+	if security_devices_cached: return security_devices
 	var devices: Array[SecurityCamera] = []
 	for node in get_tree().get_nodes_in_group("security_device"):
 		if node is SecurityCamera and is_ancestor_of(node): devices.append(node)
@@ -332,17 +350,17 @@ func _update_combat_objective_hud() -> void:
 
 func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: int) -> void:
 	var pickup = WEAPON_PICKUP_SCENE.instantiate()
+	if not RuntimeBudget.try_add("weapon_pickup", pickup, self): return
 	pickup.global_position = world_position + Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
 	pickup.rotation = randf_range(-PI, PI)
 	pickup.setup(weapon_id, rounds)
-	add_child(pickup)
 
 func _on_weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int) -> void:
 	if phase != "combat" or run_over: return
 	var thrown_weapon := THROWN_WEAPON_SCENE.instantiate()
+	if not RuntimeBudget.try_add("thrown_weapon", thrown_weapon, self): return
 	thrown_weapon.global_position = origin
 	thrown_weapon.setup(direction, weapon_id, rounds)
-	add_child(thrown_weapon)
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
 	blood_system.emit_hit(hit_position, direction, damage, weapon_id, travel_distance, lethal)

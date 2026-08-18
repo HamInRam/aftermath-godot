@@ -248,9 +248,9 @@ func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
 	wall_layer.erase_cell(cell)
 	path_grid.set_point_solid(cell, false)
 	var shards = GLASS_SHARDS_SCENE.instantiate()
-	shards.global_position = hit_position
-	shards.setup(flight_direction)
 	var effect_parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
-	effect_parent.add_child(shards)
+	if RuntimeBudget.try_add("debris", shards, effect_parent):
+		shards.global_position = hit_position
+		shards.setup(flight_direction)
 	Events.glass_shattered.emit(hit_position)
 	return true

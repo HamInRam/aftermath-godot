@@ -2,6 +2,26 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.10] - In development
+
+### Added
+
+- Central runtime object budgets for projectiles, shell casings, transient effects, blood evidence, corpses, dropped weapons and debris, including peak/drop telemetry.
+- A rolling performance monitor with average and p95 frame time, peak scene-tree size and an optional in-game `F6` diagnostics overlay.
+- Windows and Linux export presets, original application icon, proprietary project license, third-party notices and the Godot engine license.
+- A release checklist and GitHub Actions release workflow that builds both desktop targets, generates SHA-256 checksums and uploads packaged artifacts on manual dispatch or version tags.
+
+### Changed
+
+- Interaction prompts, corpse-deposit checks, cleanup counters and security-device discovery now use bounded sampling or cached collections instead of repeated full-tree scans.
+- Gameplay effect creation now reserves capacity before entering the scene tree and releases reservations automatically when nodes exit.
+- Headless test runs suppress disposable positional audio playback, preventing audio-server playback objects from surviving stress-scene teardown.
+
+### Tests
+
+- Added runtime-budget saturation/release coverage, a high-volume combat/evidence stress scenario and release-metadata/export-preset validation.
+- Verified a real Godot resource-pack export from the Windows preset.
+
 ## [v.0.0.9] - In development
 
 ### Added

@@ -10,7 +10,10 @@ config_version=5
 
 [application]
 
-config/name="AFTERMATH Prototype"
+config/name="AFTERMATH"
+config/description="A neon top-down combat and crime-scene cleanup game."
+config/version="0.0.10"
+config/icon="res://assets/branding/aftermath_icon.svg"
 run/main_scene="res://scenes/ui/title_menu.tscn"
 config/features=PackedStringArray("4.7")
 boot_splash/bg_color=Color(0.035, 0.02, 0.045, 1)
@@ -21,6 +24,8 @@ Events="*res://utility/events.gd"
 CombatDirector="*res://utility/combat_director.gd"
 CleanupRegistry="*res://utility/cleanup_registry.gd"
 CorpseIncidentRegistry="*res://utility/corpse_incident_registry.gd"
+RuntimeBudget="*res://utility/runtime_budget.gd"
+PerformanceMonitor="*res://utility/performance_monitor.gd"
 Progression="*res://utility/progression_store.gd"
 Settings="*res://utility/game_settings_store.gd"
 SceneTransition="*res://utility/scene_transition.gd"

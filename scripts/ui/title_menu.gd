@@ -1,6 +1,7 @@
 extends Control
 
 func _ready() -> void:
+	$Panel/VBox/Subtitle.text = "v%s // CAMPAIGN // CASE FILES" % str(ProjectSettings.get_setting("application/config/version", "DEV"))
 	$Panel/VBox.move_child($Panel/VBox/AfterHoursButton, $Panel/VBox/SandwichButton.get_index() + 1)
 	$Panel/VBox.move_child($Panel/VBox/SettingsButton, $Panel/VBox/QuitButton.get_index())
 	_configure_button($Panel/VBox/NightclubButton, "nightclub")

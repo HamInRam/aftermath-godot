@@ -2,6 +2,14 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.10 performance and release readiness
+
+- Runtime budgets cap bullets, casings, transient effects, blood evidence, corpses, pickups and debris before long fights can grow the scene tree without bound
+- High-frequency interaction, cleanup and security-device queries are cached or sampled instead of traversing groups every physics frame
+- Press `F6` during a mission to display rolling average/p95 frame time, peak node count and tracked gameplay-object pressure
+- A deterministic stress regression exercises sustained gunfire, lethal blood effects and evidence creation while enforcing object and node ceilings
+- Windows and Linux export presets, release metadata, licensing notices, checksums and a tag/manual GitHub release-build workflow are ready for packaged builds
+
 ## v0.0.9 adaptive presentation and accessibility
 
 - An original procedural score supplies cached pulse, danger and room-tone loops with no external music dependency
@@ -126,6 +134,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - `F3` — toggle enemy vision debug cones
 - `F4` — toggle and save the CRT/screen post-processing preference
 - `F5` — toggle exterior hue cycling
+- `F6` — toggle the performance diagnostics overlay
 - All other presentation options are available from the title-screen Settings menu
 - `Esc` — return to the debug room-select menu
 

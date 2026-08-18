@@ -42,8 +42,13 @@ func setup(spray_direction: Vector2, intensity: float, on_wall: bool, play_splat
 		$SplatAudio.stream = SPLAT_STREAM
 		$SplatAudio.pitch_scale = randf_range(0.88, 1.08)
 		$SplatAudio.volume_db = lerpf(-13.0, -7.0, clampf(base_intensity / 2.8, 0.0, 1.0))
-		$SplatAudio.play()
+		if is_inside_tree(): _play_splat()
+		else: call_deferred("_play_splat")
 	queue_redraw()
+
+func _play_splat() -> void:
+	if not is_inside_tree() or DisplayServer.get_name() == "headless": return
+	$SplatAudio.play()
 
 func clean_step() -> void:
 	amount -= 0.12

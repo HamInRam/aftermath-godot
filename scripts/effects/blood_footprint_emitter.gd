@@ -65,7 +65,10 @@ func _register_contact(source: Node, radius: float, strength: float, current_sou
 func _spawn_footprint(direction: Vector2) -> void:
 	if direction.length_squared() < 0.01 or prints_remaining <= 0: return
 	var footprint := FOOTPRINT_SCENE.instantiate() as BloodFootprint
-	get_tree().current_scene.add_child(footprint)
+	if not RuntimeBudget.try_add("footprint", footprint, get_tree().current_scene):
+		prints_remaining = 0
+		contamination_time = 0.0
+		return
 	var lateral := direction.orthogonal() * (-1.7 if left_foot_next else 1.7)
 	footprint.global_position = actor.global_position - direction * 2.5 + lateral
 	footprint.global_rotation = direction.angle()

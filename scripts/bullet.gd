@@ -35,10 +35,10 @@ func _physics_process(delta: float) -> void:
 		var hit_solid_surface: bool = collider is TileMapLayer or (collider is CollisionObject2D and collider.get_collision_layer_value(3))
 		if hit_solid_surface:
 			var sparks = WALL_SPARKS_SCENE.instantiate()
-			sparks.global_position = collision.get_position()
-			sparks.setup(direction)
 			var effect_parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
-			effect_parent.add_child(sparks)
+			if RuntimeBudget.try_add("transient_fx", sparks, effect_parent):
+				sparks.global_position = collision.get_position()
+				sparks.setup(direction)
 		if collider is Node and collider.has_method("receive_projectile_impact"):
 			collider.receive_projectile_impact(velocity, collision.get_position())
 		if collider is Node and collider.has_method("take_damage"):
