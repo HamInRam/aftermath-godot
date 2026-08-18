@@ -13,6 +13,9 @@ var automatic := false
 var fire_interval := 0.1
 var fire_interval_variance := 0.018
 var spread_degrees := 0.0
+var spread_growth_per_shot := 0.0
+var maximum_spread_bonus := 0.0
+var spread_recovery := 4.0
 var max_ammo := 12
 var projectile_damage := 1
 var weapon_id := "pistol"
@@ -30,6 +33,8 @@ var hit_stop := 0.035
 var shot_volume_db := -10.0
 var mechanical_pitch := 1.0
 var punch_pitch := 0.73
+var movement_speed_multiplier := 1.0
+var reload_movement_multiplier := 0.8
 
 @onready var reload_timer: Timer = $ReloadTimer
 @onready var shot_audio: AudioStreamPlayer = $ShotAudio
@@ -45,6 +50,7 @@ var punch_pitch := 0.73
 var ammo := 12
 var cooldown := 0.0
 var recoil := 0.0
+var shot_heat := 0.0
 var is_reloading := false
 var ammo_by_weapon: Dictionary = {}
 
@@ -63,6 +69,9 @@ func _apply_gun_data() -> void:
 	fire_interval = gun_data.fire_interval
 	fire_interval_variance = gun_data.fire_interval_variance
 	spread_degrees = gun_data.spread_degrees
+	spread_growth_per_shot = gun_data.spread_growth_per_shot
+	maximum_spread_bonus = gun_data.maximum_spread_bonus
+	spread_recovery = gun_data.spread_recovery
 	reload_duration = gun_data.reload_duration
 	pitch_min = gun_data.pitch_min
 	pitch_max = gun_data.pitch_max
@@ -77,6 +86,8 @@ func _apply_gun_data() -> void:
 	shot_volume_db = gun_data.shot_volume_db
 	mechanical_pitch = gun_data.mechanical_pitch
 	punch_pitch = gun_data.punch_pitch
+	movement_speed_multiplier = gun_data.movement_speed_multiplier
+	reload_movement_multiplier = gun_data.reload_movement_multiplier
 
 func set_gun_data(data: Resource, refill := true) -> void:
 	if data == null: return
@@ -92,6 +103,7 @@ func set_gun_data(data: Resource, refill := true) -> void:
 		ammo = 0
 	ammo_by_weapon[weapon_id] = ammo
 	is_reloading = false
+	shot_heat = 0.0
 	if is_instance_valid(reload_timer): reload_timer.stop()
 	if is_instance_valid(shot_audio):
 		shot_audio.stream = gun_data.shot_stream
@@ -119,6 +131,7 @@ func get_weapon_ammo(target_weapon_id: String) -> int:
 func _process(delta: float) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	recoil = move_toward(recoil, 0.0, 24.0 * delta)
+	shot_heat = move_toward(shot_heat, 0.0, spread_recovery * delta)
 	queue_redraw()
 
 func try_fire(direction: Vector2) -> bool:
@@ -142,7 +155,10 @@ func try_fire(direction: Vector2) -> bool:
 	punch_audio.play()
 	animation_player.stop()
 	animation_player.play("kick", -1.0, 0.85 + recoil_strength * 0.45)
-	var spread_radians := deg_to_rad(randf_range(-spread_degrees, spread_degrees))
+	var dynamic_spread := minf(maximum_spread_bonus, shot_heat * spread_growth_per_shot)
+	var current_spread := spread_degrees + dynamic_spread
+	var spread_radians := deg_to_rad(randf_range(-current_spread, current_spread))
+	shot_heat += 1.0
 	var normalized_direction := direction.normalized().rotated(spread_radians)
 	var origin := muzzle.global_position
 	fired.emit(origin, normalized_direction, enemy_owned, projectile_damage, weapon_id)

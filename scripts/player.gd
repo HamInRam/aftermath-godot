@@ -67,7 +67,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("interact"):
 		attempt_weapon_pickup()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	velocity = input_direction * move_speed
+	velocity = input_direction * move_speed * get_equipped_movement_multiplier()
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
@@ -145,6 +145,10 @@ func get_nearby_weapon_pickup() -> Node2D:
 
 func get_equipped_weapon_name() -> String:
 	return str(gun.gun_data.display_name) if equipped_mode == "gun" and gun.gun_data != null else current_melee_type.to_upper()
+
+func get_equipped_movement_multiplier() -> float:
+	if cleanup_mode or equipped_mode != "gun" or gun.gun_data == null: return 1.0
+	return gun.reload_movement_multiplier if gun.is_reloading else gun.movement_speed_multiplier
 
 func _start_melee_attack() -> void:
 	if is_melee_attacking or melee_cooldown > 0.0 or is_dead or cleanup_mode: return
