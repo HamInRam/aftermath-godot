@@ -6,7 +6,7 @@ All notable project changes are recorded here. Version branches remain unrelease
 
 ### Fixed
 
-- Render 2D canvas items directly at the integer-scaled output resolution and explicitly hint the Windows system font, preventing HUD and menu text from being rasterized at 320×180 before enlargement.
+- Render 2D canvas items directly at the integer-scaled output resolution, use a legible Segoe UI semibold face with automatic output-scale sampling, and enlarge menu text to prevent missing strokes at the native layout size.
 
 ### Added
 

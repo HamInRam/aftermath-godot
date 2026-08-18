@@ -11,8 +11,8 @@ func _ready() -> void:
 	_expect(ProjectSettings.get_setting("display/window/stretch/scale_mode") == "integer", "pixel art and UI should retain integer output scaling")
 	var theme := load("res://utility/themes/default_theme.tres") as Theme
 	var system_font := theme.default_font as SystemFont
-	_expect(system_font != null and system_font.font_names[0] == "Consolas", "Windows UI should prefer the hinted Consolas face")
-	_expect(system_font.antialiasing == TextServer.FONT_ANTIALIASING_NONE and system_font.subpixel_positioning == TextServer.SUBPIXEL_POSITIONING_DISABLED, "UI font rasterization should disable antialiasing and subpixel blur")
+	_expect(system_font != null and system_font.font_names[0] == "Segoe UI", "Windows UI should prefer the highly legible Segoe UI face")
+	_expect(system_font.antialiasing == TextServer.FONT_ANTIALIASING_GRAY and system_font.subpixel_positioning == TextServer.SUBPIXEL_POSITIONING_AUTO, "UI font rasterization should retain grayscale smoothing and automatic output-scale sampling")
 	var original_data: Dictionary = Progression.data.duplicate(true)
 	var original_current: String = Progression.current_mission_id
 	var original_result: Dictionary = Progression.last_result.duplicate(true)
