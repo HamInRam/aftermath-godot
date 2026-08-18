@@ -8,6 +8,7 @@ const FOOTPRINT_SCENE := preload("res://scenes/effects/blood_footprint.tscn")
 @export var corpse_contact_radius := 12.0
 @export var blood_contact_radius := 9.0
 @export var maximum_prints := 12
+@export_range(0.05, 0.5, 0.01) var source_scan_interval := 0.1
 
 var contamination_time := 0.0
 var prints_remaining := 0
@@ -15,6 +16,7 @@ var distance_since_print := 0.0
 var last_position := Vector2.ZERO
 var left_foot_next := true
 var touching_sources: Dictionary = {}
+var source_scan_cooldown := 0.0
 
 @onready var actor := get_parent() as Node2D
 
@@ -23,7 +25,10 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(actor): return
-	_scan_blood_sources()
+	source_scan_cooldown -= delta
+	if source_scan_cooldown <= 0.0:
+		source_scan_cooldown = source_scan_interval
+		_scan_blood_sources()
 	var current_position := actor.global_position
 	var travelled := current_position.distance_to(last_position)
 	if contamination_time > 0.0:

@@ -26,6 +26,10 @@ func _run() -> void:
 	_expect(pickup.collect(player), "LMG pickup must be collectible")
 	_expect(player.gun.weapon_id == "lmg" and player.gun.ammo == 9, "pickup must equip LMG with stored rounds")
 	_expect(player.owned_gun_indices.size() == 3, "all collected guns must enter inventory")
+	var empty_pickup = PICKUP_SCENE.instantiate()
+	empty_pickup.setup("smg", 0)
+	add_child(empty_pickup)
+	_expect(empty_pickup.rounds == 0, "weapon pickups must not fabricate ammunition")
 	if failures == 0: print("weapon inventory regression: PASS")
 	for audio_node in player.find_children("*", "AudioStreamPlayer", true, false):
 		(audio_node as AudioStreamPlayer).stop()

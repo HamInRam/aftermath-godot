@@ -12,7 +12,7 @@ func _ready() -> void:
 
 func setup(new_weapon_id: String, new_rounds: int) -> void:
 	weapon_id = new_weapon_id
-	rounds = maxi(1, new_rounds)
+	rounds = maxi(0, new_rounds)
 	if is_node_ready(): _apply_visual()
 
 func collect(player: Node) -> bool:

@@ -3,6 +3,7 @@ extends Node2D
 
 var blood_amount := 1.0
 var left_foot := true
+var cleanup_steps_remaining := 2
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
@@ -11,12 +12,16 @@ func _ready() -> void:
 func setup(strength: float, is_left_foot: bool) -> void:
 	blood_amount = clampf(strength, 0.18, 1.0)
 	left_foot = is_left_foot
+	cleanup_steps_remaining = get_cleanup_cost()
 	queue_redraw()
 
 func clean_step() -> void:
-	blood_amount -= 0.5
-	if blood_amount <= 0.02: queue_free()
-	else: queue_redraw()
+	cleanup_steps_remaining = maxi(0, cleanup_steps_remaining - 1)
+	if cleanup_steps_remaining == 0:
+		queue_free()
+		return
+	blood_amount *= 0.45
+	queue_redraw()
 
 func get_cleanup_type() -> String:
 	return "blood_footprint"

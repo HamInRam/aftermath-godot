@@ -32,6 +32,7 @@ jobs:
             tests/test_cleanup_registry.tscn \
             tests/test_weapon_inventory.tscn \
             tests/test_blood_footprints.tscn \
+            tests/test_combat_audio_director.tscn \
             tests/test_ai_black_box.tscn; do
             log_file="$(basename "$scene" .tscn).log"
             ./godot --headless --path . "$scene" 2>&1 | tee "$log_file"

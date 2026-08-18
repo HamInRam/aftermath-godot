@@ -104,11 +104,12 @@ func _update_interaction_prompt() -> void:
 		return
 	if is_instance_valid(player.peek_nearby_execution_target()):
 		interaction_label.text = "[ SPACE ] EXECUTE"
-	elif is_instance_valid(player.get_nearby_weapon_pickup()):
-		var pickup = player.get_nearby_weapon_pickup()
-		interaction_label.text = "[ E ] PICK UP %s" % pickup.weapon_id.to_upper()
 	else:
-		interaction_label.text = ""
+		var pickup = player.get_nearby_weapon_pickup()
+		if not is_instance_valid(pickup):
+			interaction_label.text = ""
+			return
+		interaction_label.text = "[ E ] PICK UP %s" % pickup.weapon_id.to_upper()
 
 func _connect_events() -> void:
 	Events.ammo_updated.connect(_on_ammo_updated)
@@ -229,7 +230,9 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	add_child(corpse)
 	blood_system.spawn_death_pool(pos, pending_death_blood_power)
 	if is_instance_valid(defeated_enemy) and defeated_enemy.enemy_type == "gunner":
-		_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, maxi(1, defeated_enemy.gun.ammo))
+		var remaining_rounds: int = defeated_enemy.gun.ammo
+		if remaining_rounds > 0:
+			_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, remaining_rounds)
 	pending_death_style = "firearm"
 	status_label.text = "TARGETS // %02d/%02d" % [enemies_killed, started_enemy_count]
 

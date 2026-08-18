@@ -4,6 +4,13 @@ All notable project changes are recorded here. Version branches remain unrelease
 
 ## [v.0.0.3] - 2026-08-17
 
+### Fixed
+
+- Throttled bloody-footprint source scans so evidence growth does not cause a full group traversal every physics frame.
+- Made all footprints require exactly two cleanup strokes, including faint trailing prints.
+- Removed duplicate weapon-pickup prompt scans and prevented empty enemy weapons from fabricating ammunition.
+- Made CombatAudioDirector apply its exported combat and cleanup mix configuration automatically on scene startup.
+
 ### Added
 
 - Dedicated CombatDirector, CleanupRegistry and CorpseIncidentRegistry boundaries.
