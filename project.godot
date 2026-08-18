@@ -22,6 +22,8 @@ CombatDirector="*res://utility/combat_director.gd"
 CleanupRegistry="*res://utility/cleanup_registry.gd"
 CorpseIncidentRegistry="*res://utility/corpse_incident_registry.gd"
 Progression="*res://utility/progression_store.gd"
+Settings="*res://utility/game_settings_store.gd"
+SceneTransition="*res://utility/scene_transition.gd"
 
 [display]
 

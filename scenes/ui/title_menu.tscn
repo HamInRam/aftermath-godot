@@ -29,7 +29,7 @@ offset_bottom = 174.0
 
 [node name="VBox" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
-theme_override_constants/separation = 2
+theme_override_constants/separation = 1
 alignment = 1
 
 [node name="Title" type="Label" parent="Panel/VBox"]
@@ -82,3 +82,9 @@ custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
 text = "QUIT"
+
+[node name="SettingsButton" type="Button" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "SETTINGS // ACCESSIBILITY"

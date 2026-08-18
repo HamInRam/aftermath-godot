@@ -2,10 +2,12 @@ extends Control
 
 func _ready() -> void:
 	$Panel/VBox.move_child($Panel/VBox/AfterHoursButton, $Panel/VBox/SandwichButton.get_index() + 1)
+	$Panel/VBox.move_child($Panel/VBox/SettingsButton, $Panel/VBox/QuitButton.get_index())
 	_configure_button($Panel/VBox/NightclubButton, "nightclub")
 	_configure_button($Panel/VBox/SandwichButton, "sandwich_shop")
 	_configure_button($Panel/VBox/AfterHoursButton, "after_hours")
 	_configure_button($Panel/VBox/TacticalLabButton, "tactical_lab")
+	$Panel/VBox/SettingsButton.pressed.connect(_open_settings)
 	$Panel/VBox/QuitButton.pressed.connect(get_tree().quit)
 	$Panel/VBox/ProgressLabel.text = "CASES CLOSED // %d/3" % Progression.get_campaign_completion_count()
 	for button in [$Panel/VBox/NightclubButton, $Panel/VBox/SandwichButton, $Panel/VBox/AfterHoursButton, $Panel/VBox/TacticalLabButton]:
@@ -27,4 +29,7 @@ func _configure_button(button: Button, mission_id: String) -> void:
 
 func _open_mission(mission_id: String) -> void:
 	if not Progression.begin_mission(mission_id): return
-	get_tree().change_scene_to_file("res://scenes/ui/briefing_screen.tscn")
+	SceneTransition.transition_to("res://scenes/ui/briefing_screen.tscn")
+
+func _open_settings() -> void:
+	SceneTransition.transition_to("res://scenes/ui/settings_screen.tscn")

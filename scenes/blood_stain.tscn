@@ -7,3 +7,4 @@ script = ExtResource("1_blood")
 
 [node name="SplatAudio" type="AudioStreamPlayer" parent="."]
 max_polyphony = 3
+bus = &"SFX"

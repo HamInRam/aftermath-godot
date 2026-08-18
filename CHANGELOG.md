@@ -2,6 +2,20 @@
 
 All notable project changes are recorded here. Version branches remain unreleased until explicitly approved and merged into `main`.
 
+## [v.0.0.9] - In development
+
+### Added
+
+- Cached original procedural pulse, danger and electrical-room loops, providing an audible default score without external music dependencies.
+- Event- and threat-driven music intensity that responds to gunfire, executions, tactical alerts, security alarms and actively pursuing enemies.
+- Dedicated Music, SFX and Ambience buses with persistent master/category volume settings.
+- Native-resolution settings screen for screen-shake strength, flash intensity, CRT effects and ambient camera motion.
+- Persistent versioned settings plus live audio preview, restore-default controls and global fade transitions between missions and menus.
+
+### Tests
+
+- Added settings persistence, audio-bus application, accessibility-effect, settings-layout, procedural-loop cache and dynamic-mix regression coverage.
+
 ## [v.0.0.8] - In development
 
 ### Added

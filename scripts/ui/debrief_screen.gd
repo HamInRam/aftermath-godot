@@ -36,11 +36,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func _retry() -> void:
 	if profile == null: return
 	Progression.begin_mission(profile.mission_id)
-	get_tree().change_scene_to_file(profile.scene_path)
+	SceneTransition.transition_to(profile.scene_path)
 
 func _continue_campaign() -> void:
 	if next_profile == null or not Progression.begin_mission(next_profile.mission_id): return
-	get_tree().change_scene_to_file("res://scenes/ui/briefing_screen.tscn")
+	SceneTransition.transition_to("res://scenes/ui/briefing_screen.tscn")
 
 func _back_to_menu() -> void:
-	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
+	SceneTransition.transition_to("res://scenes/ui/title_menu.tscn")

@@ -59,7 +59,9 @@ func _ready() -> void:
 	_create_ui()
 	combat_feedback = CombatFeedback.new()
 	add_child(combat_feedback)
-	combat_feedback.configure($DeathPresentation/Flash)
+	combat_feedback.configure($DeathPresentation/Flash, Settings.flash_intensity)
+	screen_effects_enabled = Settings.screen_effects_enabled
+	($RetroTreatment/Scanlines.material as ShaderMaterial).set_shader_parameter("enable_effect", screen_effects_enabled)
 	_connect_events()
 	trauma_camera.impact_flash_requested.connect(_on_impact_flash_requested)
 	_start_run()
@@ -95,13 +97,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_toggle_hue_cycle()
 		return
 	if event.is_action_pressed("ui_cancel"):
-		get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
+		SceneTransition.transition_to("res://scenes/ui/title_menu.tscn")
 		return
 	if run_over and event.is_action_pressed("reload"):
 		get_tree().reload_current_scene()
 		return
 	if run_over and not final_grade.is_empty() and event.is_action_pressed("ui_accept"):
-		get_tree().change_scene_to_file("res://scenes/ui/debrief_screen.tscn")
+		SceneTransition.transition_to("res://scenes/ui/debrief_screen.tscn")
 
 func _create_ui() -> void:
 	hud = HudController.new()
@@ -243,6 +245,7 @@ func _toggle_screen_effects() -> void:
 	screen_effects_enabled = not screen_effects_enabled
 	var material := $RetroTreatment/Scanlines.material as ShaderMaterial
 	material.set_shader_parameter("enable_effect", screen_effects_enabled)
+	Settings.update_values({"screen_effects_enabled": screen_effects_enabled})
 	detail_label.text = "SCREEN FX: %s" % ("ON" if screen_effects_enabled else "OFF")
 
 func _toggle_hue_cycle() -> void:

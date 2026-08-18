@@ -735,6 +735,9 @@ func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 func is_knocked_down() -> bool:
 	return not is_dead and state == State.KNOCKED_DOWN
 
+func is_actively_engaging_player() -> bool:
+	return not is_dead and state in [State.CHASE, State.ATTACK]
+
 func execute_ground(source_position: Vector2) -> void:
 	if not is_knocked_down(): return
 	_set_knockdown_visual(false)

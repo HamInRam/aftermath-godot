@@ -2,6 +2,15 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v0.0.9 adaptive presentation and accessibility
+
+- An original procedural score supplies cached pulse, danger and room-tone loops with no external music dependency
+- Gunfire, executions, alarms and the proportion of enemies actively pursuing the player smoothly raise the danger layer
+- Combat music cuts rapidly at cleanup while the isolated electrical ambience rises into the foreground
+- Settings persist master, music, SFX and ambience levels in `user://aftermath_settings.json`
+- Accessibility controls scale screen shake and full-screen flashes from 0–100%, and can disable CRT treatment or ambient camera motion
+- Menus, briefings, missions and action reports now use a global input-blocking fade transition
+
 ## v0.0.8 campaign progression
 
 - Campaign cases unlock in order: Nightclub → Sandwich Shop → After Hours; Tactical Lab remains an unrestricted training mission
@@ -115,8 +124,9 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
 - Hold `Shift` — extend the camera toward the cursor
 - `F3` — toggle enemy vision debug cones
-- `F4` — toggle CRT/screen post-processing
+- `F4` — toggle and save the CRT/screen post-processing preference
 - `F5` — toggle exterior hue cycling
+- All other presentation options are available from the title-screen Settings menu
 - `Esc` — return to the debug room-select menu
 
 ## Game loop

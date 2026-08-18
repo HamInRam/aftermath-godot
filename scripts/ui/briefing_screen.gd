@@ -26,7 +26,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"): _back_to_menu()
 
 func _deploy() -> void:
-	if profile != null: get_tree().change_scene_to_file(profile.scene_path)
+	if profile != null: SceneTransition.transition_to(profile.scene_path)
 
 func _back_to_menu() -> void:
-	get_tree().change_scene_to_file("res://scenes/ui/title_menu.tscn")
+	SceneTransition.transition_to("res://scenes/ui/title_menu.tscn")
