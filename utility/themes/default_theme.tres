@@ -1,9 +1,13 @@
 [gd_resource type="Theme" load_steps=3 format=3]
 
 [sub_resource type="SystemFont" id="SystemFont_pixel"]
-font_names = PackedStringArray("Menlo", "Monaco", "Courier New")
+font_names = PackedStringArray("Consolas", "Lucida Console", "Courier New")
 font_weight = 700
 allow_system_fallback = true
+antialiasing = 0
+hinting = 2
+subpixel_positioning = 0
+oversampling = 1.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
 bg_color = Color(0.035, 0.02, 0.045, 0.88)

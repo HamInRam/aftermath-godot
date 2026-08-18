@@ -4,6 +4,10 @@ All notable project changes are recorded here. Version branches remain unrelease
 
 ## [v.0.1.0] - In development
 
+### Fixed
+
+- Render 2D canvas items directly at the integer-scaled output resolution and explicitly hint the Windows system font, preventing HUD and menu text from being rasterized at 320×180 before enlargement.
+
 ### Added
 
 - Scored, navigation-validated cover/peek pairs for ranged enemies plus lateral alternate-route waypoints when no usable cover exists.
