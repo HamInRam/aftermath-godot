@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "harbor_exchange"
+display_name = "CASE 04 // HARBOR EXCHANGE"
+briefing = "THE LEDGER CHANGES HANDS AT PIER NINE. BREAK THE EXCHANGE AND SANITIZE THE WAREHOUSE."
+required_eliminations = -1
+completion_bonus = 850
+alarm_penalty = 170
+maximum_player_shots_for_bonus = 10
+optional_quiet_bonus = 280
+scene_path = "res://scenes/levels/harbor_exchange.tscn"
+debrief_text = "THE TIDE TAKES THE NOISE. A MOTEL KEY REMAINS IN THE COURIER'S COAT."
+unlock_after = "after_hours"
+campaign_order = 4
+cleanup_pressure_seconds = 145.0

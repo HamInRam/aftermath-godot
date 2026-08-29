@@ -3,7 +3,7 @@ extends Node
 
 signal settings_changed
 
-const SCHEMA_VERSION := 1
+const SCHEMA_VERSION := 3
 const DEFAULT_SAVE_PATH := "user://aftermath_settings.json"
 const AUDIO_BUSES := ["Music", "SFX", "Ambience"]
 
@@ -16,6 +16,16 @@ var screen_shake_strength := 1.0
 var flash_intensity := 1.0
 var screen_effects_enabled := true
 var ambient_camera_motion_enabled := true
+var high_contrast_enemies := false
+var hit_stop_strength := 1.0
+var camera_tilt_strength := 1.0
+var chromatic_aberration_strength := 1.0
+var blood_density := 1.0
+var gore_enabled := true
+var aim_assist_strength := 0.66
+var aim_laser_enabled := true
+var reticle_hud_enabled := true
+var ragdoll_enabled := true
 
 func _init(custom_save_path := DEFAULT_SAVE_PATH) -> void:
 	save_path = custom_save_path
@@ -35,6 +45,16 @@ func get_defaults() -> Dictionary:
 		"flash_intensity": 1.0,
 		"screen_effects_enabled": true,
 		"ambient_camera_motion_enabled": true,
+		"high_contrast_enemies": false,
+		"hit_stop_strength": 1.0,
+		"camera_tilt_strength": 1.0,
+		"chromatic_aberration_strength": 1.0,
+		"blood_density": 1.0,
+		"gore_enabled": true,
+		"aim_assist_strength": 0.66,
+		"aim_laser_enabled": true,
+		"reticle_hud_enabled": true,
+		"ragdoll_enabled": true,
 	}
 
 func load_settings() -> bool:
@@ -42,7 +62,7 @@ func load_settings() -> bool:
 	var file := FileAccess.open(save_path, FileAccess.READ)
 	if file == null: return false
 	var parsed = JSON.parse_string(file.get_as_text())
-	if not parsed is Dictionary or int(parsed.get("schema_version", -1)) != SCHEMA_VERSION: return false
+	if not parsed is Dictionary or int(parsed.get("schema_version", -1)) not in [1, 2, SCHEMA_VERSION]: return false
 	_apply_dictionary(parsed)
 	return true
 
@@ -64,6 +84,16 @@ func to_dictionary() -> Dictionary:
 		"flash_intensity": flash_intensity,
 		"screen_effects_enabled": screen_effects_enabled,
 		"ambient_camera_motion_enabled": ambient_camera_motion_enabled,
+		"high_contrast_enemies": high_contrast_enemies,
+		"hit_stop_strength": hit_stop_strength,
+		"camera_tilt_strength": camera_tilt_strength,
+		"chromatic_aberration_strength": chromatic_aberration_strength,
+		"blood_density": blood_density,
+		"gore_enabled": gore_enabled,
+		"aim_assist_strength": aim_assist_strength,
+		"aim_laser_enabled": aim_laser_enabled,
+		"reticle_hud_enabled": reticle_hud_enabled,
+		"ragdoll_enabled": ragdoll_enabled,
 	}
 
 func update_values(values: Dictionary, persist := true) -> void:
@@ -94,6 +124,16 @@ func _apply_dictionary(values: Dictionary) -> void:
 	flash_intensity = clampf(float(values.get("flash_intensity", flash_intensity)), 0.0, 1.0)
 	screen_effects_enabled = bool(values.get("screen_effects_enabled", screen_effects_enabled))
 	ambient_camera_motion_enabled = bool(values.get("ambient_camera_motion_enabled", ambient_camera_motion_enabled))
+	high_contrast_enemies = bool(values.get("high_contrast_enemies", high_contrast_enemies))
+	hit_stop_strength = clampf(float(values.get("hit_stop_strength", hit_stop_strength)), 0.0, 1.0)
+	camera_tilt_strength = clampf(float(values.get("camera_tilt_strength", camera_tilt_strength)), 0.0, 1.0)
+	chromatic_aberration_strength = clampf(float(values.get("chromatic_aberration_strength", chromatic_aberration_strength)), 0.0, 1.0)
+	blood_density = clampf(float(values.get("blood_density", blood_density)), 0.35, 1.0)
+	gore_enabled = bool(values.get("gore_enabled", gore_enabled))
+	aim_assist_strength = clampf(float(values.get("aim_assist_strength", aim_assist_strength)), 0.0, 1.0)
+	aim_laser_enabled = bool(values.get("aim_laser_enabled", aim_laser_enabled))
+	reticle_hud_enabled = bool(values.get("reticle_hud_enabled", reticle_hud_enabled))
+	ragdoll_enabled = bool(values.get("ragdoll_enabled", ragdoll_enabled))
 
 func _ensure_audio_buses() -> void:
 	for bus_name in AUDIO_BUSES:

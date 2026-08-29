@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "cold_storage"
+display_name = "CASE 07 // COLD STORAGE"
+briefing = "THE CLIENT LIST IS BEING BURNED IN A REFRIGERATED DEPOT. SAVE THE CLUES, ERASE THE REST."
+required_eliminations = -1
+completion_bonus = 1050
+alarm_penalty = 210
+maximum_player_shots_for_bonus = 7
+optional_quiet_bonus = 400
+scene_path = "res://scenes/levels/cold_storage.tscn"
+debrief_text = "FROST COVERS THE FLOOR. ONE CASINO ACCOUNT SURVIVED THE SHREDDER."
+unlock_after = "penthouse"
+campaign_order = 7
+cleanup_pressure_seconds = 125.0

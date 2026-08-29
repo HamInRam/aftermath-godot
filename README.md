@@ -2,11 +2,73 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.0 authored world overhaul
+
+- Every ground liquid now uses the same sparse hard-pixel simulation: plumbing water, oil, chemical spills and cleaner solution burst, spread, evaporate and clean at pixel density instead of appearing as smooth translucent discs.
+- Water crossing blood creates pale directional runoff, footsteps carry local liquid color, active plumbing must be repaired, and electricity follows only connected wet pixels across the floor.
+- Blood evidence now lives in sparse 32x32 hard-pixel texture chunks rather than one node per stain: airborne pixels settle into the same density map used by pools, wall spray, drag smears and bloody footprints.
+- Mop and washer movement is resampled into a continuous capsule brush between cursor frames, producing a literal clean strip with diluted wet edges and UV-only residue instead of making whole blood objects disappear at once.
+- Campaign encounters target 7-11 enemies with mixed roles, readable threat outlines and clearer character poses; cleanup removes redundant confirmations through one-action body bags and short-range evidence magnetism.
+- Local `user://playtest_telemetry.json` records the last 100 completed runs (death locations, weapon usage, phase timing and leftover evidence) without networking or personal data, supporting evidence-based balance passes.
+- The interface uses a consistent 8x8 icon vocabulary and color semantics across HUD, case files, briefing, reports, settings, safehouse and workshop; strong focus rails make keyboard/controller navigation immediately visible.
+- Interior dressing follows a restrained real-space rule: furniture lives in perimeter utility bands or small purposeful groups, every room keeps a readable open centre, and doors retain clear approach/exit lanes.
+- Every campaign map follows a CQB floor-plan grammar: one instantly readable primary spine, multiple breach options, limited cross-map firing lanes, door staging space, a flank loop and a low-friction cleanup route. Enemy groups occupy tactical jobs instead of forming a uniform scatter.
+- Combat aftermath now has weapon grammar rather than generic red volume: pistols puncture and trail, automatics tear in clustered lines, shotguns blast broad exit fans, blades cut directional seams and blunt weapons crush compact regions.
+- Airborne droplets collide with walls, blood pools follow wound direction and floor material, corpses can lose modular limbs, dragging paints continuous smears, and casings become bloodied when they settle in fresh evidence.
+- The presentation remains native low-pixel art: a few deliberate dark, arterial, tissue, bone and wet-highlight pixels carry the detail while evidence merging and runtime budgets keep large scenes stable.
+- Destruction is energy- and material-driven rather than a sprite swap: wood splinters, glass bursts, metal dents/arcs, fabric tears, ceramic fractures and liquid leaks progress through damage, failure and directional collapse.
+- A small number of real physical chunks can hit enemies or other props before settling into sortable cleanup evidence; short-lived fragments supply density without exceeding the runtime budget.
+- Corpse momentum, doors, firearms, melee and thrown weapons share the same chain-reaction interface. Water, electricity, oil, glass, spills and smoke persist into cleanup, and active sources must be repaired first.
+- Each of the twelve cases has one signature destructive setpiece with a tactical consequence, while existing mop, washer and evidence-bag controls handle the aftermath without adding a row of fiddly tools.
+- The whole campaign uses a bright, original 1980s neon-crime stage grade: rooms remain readable without local lights, while restrained cyan/magenta/amber accents, cream wall caps and right-down fake shadows create depth.
+- Scanlines, vignette, curvature, chromatic separation, glow and color grading are deliberately subtle so the low-resolution image and interface stay crisp instead of becoming dark or smeared.
+- All twelve campaign cases now have their own functional room graph, sight-line risks, glass lanes, flanking routes, furnishing rhythm and cleanup return path, including a complete rebuild of the original Nightclub.
+- The environment stays deliberately low-density: native 8x8 floors/walls, 8x8 or 16x16 props, hard edges, limited colors and sparse transparent wear marks.
+- Furniture, appliances, mission equipment and large landmarks can be damaged by gunfire, melee, thrown weapons and door impacts, collapse into simple debris, alter navigation and be restored during cleanup.
+- Strong visual anchors make every location recognizable at a glance, from Harbor Exchange's crane and Cold Storage's freezer bank to Police Archive's evidence wall and Last Call's destroyed DJ booth.
+- Material zoning serves gameplay as well as art: carpet, plank, tile and concrete immediately signal room function, blood absorption and expected cleaning effort.
+- Spawn, patrol, ammunition and extraction placement is protected against future layout edits, while a dedicated regression gate verifies unique topology and navigation across the campaign.
+
+## v1.1.0 visceral replay overhaul
+
+- Every projectile now creates one shared DamageContext, so hit zone, range, energy and weapon identity drive the same blood, corpse and feedback result.
+- Firearms gain movement spread, turning instability, sustained-fire recoil recovery and wall-safe muzzle checks; pistol, SMG, LMG and Shotgun retain distinct handling identities.
+- Blood now has entry/exit behavior, stronger lethal spray, wall runs, coagulation, clothing absorption and higher-energy weapon-specific gore under existing runtime budgets.
+- All twelve cases have named visual/layout variants, safe procedural dividers and palette identities in addition to their authored enemy, security and cleanup routes.
+- Completed campaigns unlock five modes through `M`: Standard, Score Attack, New Game+, date-seeded Daily Challenge and continuous Gauntlet.
+- Replay conditions alter light, enemy roles, ammunition, blood load and police response; each case permanently tracks Ghost, Restraint and Immaculate mastery.
+- Final outcomes now include Clean Break, Ghost, Professional, Kingpin and Exposed using behavior accumulated across the campaign.
+
+## v1.0.0 complete game loop
+
+- Finish all twelve cases to unlock Score Attack and New Game+; cycle the active run with `M` from Case Files.
+- The final action report resolves into Clean Break, Professional or Exposed according to cleanup quality, Heat, police timeout and whether valuables were stolen.
+- Career schema v4 persists campaign records, credits, tool upgrades, three specializations, contracts, Heat, endings and replay mode.
+- New Game+ accelerates enemy recognition/chase behavior and police arrival while preserving the one-hit combat rules; Score Attack focuses on leaderboard-style route optimization.
+
+## v0.3.0 full campaign
+
+- Twelve sequential cases now form a complete three-act crime arc, with escalating archetype mixes, security objectives and cleanup pressure.
+- Case Files display four missions per page; use `A/D` to navigate, `L` for the unrestricted Tactical Lab, and complete each case to unlock the next.
+- Every new case has its own briefing, debrief, reward curve and combat/cleanup route configuration while reusing the stable systemic level kit.
+
+## v0.2.0 contracts and safehouse
+
+- Select one of five contracts from each briefing with `C`; optional conditions change payout and are recorded in the forensic debrief.
+- Press `H` in Case Files for the Safehouse, where first-time case completions fund Executioner, Ghost and Cleaner specializations.
+- Persistent Heat shortens authored police-response windows, turning the cleanup phase into a route-planning decision rather than a consequence-free checklist.
+- Red environmental lure props can be triggered with `E` to redirect nearby guards through the same wall-attenuated hearing network as weapons and doors.
+- Press `U` for the independent five-route tool Workshop; 90% cleanup is certified while 100% remains the perfect-clean target.
+
 ## v0.1.1 blood forensics
 
 - Visible mist droplets settle into permanent micro-stains instead of simply disappearing, while wounds continue seeping and dragged bodies repaint their route.
 - Head/torso/limb impacts anchor the death pool near the actual wound; tile, wood and carpet alter stain spread, darkness and cleanup effort.
 - Idle guards can investigate visible blood and footprint trails, and Assault enemies introduce a recoverable seven-pellet Shotgun with radial close-range gore.
+- Melee and execution inputs are buffered, AI perception/crowd work is staggered and cleanup evidence uses a spatial index for stable high-density play.
+- Cleanup now tracks mop saturation: rinse at an authored sink before a dirty mop can continue, while the HUD reports tool progress and shoe contamination.
+- Campaign profiles support zero-alarm and limited-shot bonuses plus property-damage penalties; reports disclose shots, alarms, damage and bloody tracks.
+- Pause/resume, directional death feedback and an optional high-contrast enemy outline improve usability without changing the pixel presentation.
 
 ## v0.1.0 encounter intelligence
 
@@ -138,11 +200,20 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - The player starts with only a pistol; armed enemies drop their current gun and remaining magazine, and `E` collects it
 - The starting pistol has 24 reserve rounds; cyan ammunition boxes replenish only their marked weapon reserve
 - Each owned gun preserves its own partially used magazine when cycling weapons
-- Left mouse — fire or melee attack / scrub during cleanup
+- Left mouse — fire or melee attack; during cleanup, hold and move the cursor to scrub along a real stroke (holding still does not clean)
+- Hold right mouse during cleanup — inspect residue with a forward ultraviolet lamp
+- `Tab` during cleanup — trigger the cooldown-based circular residue scan pulse
 - Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails
-- `R` — reload; restart after death or completion
+- `R` — reload during combat; restart after death or completion
 - `Space` — execute a nearby knocked-down enemy
-- `E` — pick up a nearby dropped weapon
+- `E` — context action: pick up, drag/drop a body, rinse a mop at a sink, use security or extract
+- Cleanup mode disables new bloody footprints, reports named room cleanliness, and renders diluted wet mop trails that dry over time
+- Career cleanup pays credits after every case; press `H` for the Safehouse, `U` for the five-route Workshop and `T` to switch Normal/Professional cleaner guidance
+- On Case Files, use `A/D` to page through twelve cases, `L` for Tactical Lab and—after completing Last Call—`M` to cycle Standard, Score Attack, New Game+, Daily Challenge and Gauntlet
+- Cleanup scenes contain two story clues, one valuable with secure/steal choice, and three pieces of furniture that can be restored with `E`
+- During cleanup, `1` equips the Mop and `2` equips the broad Pressure Washer; `E` automatically handles rinsing, loose evidence, body bags, corpse dragging and nearby scene interactions
+- A dirty mop gradually loses efficiency but never stops working; rinse it at a sink to restore full cleaning speed
+- Detailed cleanup counts appear during the active `Tab` scan; clues, valuables and furniture are optional score opportunities
 - `Q` — throw the equipped gun; the weapon remains recoverable with its current magazine
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
 - Hold `Shift` — extend the camera toward the cursor
@@ -151,22 +222,22 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - `F5` — toggle exterior hue cycling
 - `F6` — toggle the performance diagnostics overlay
 - All other presentation options are available from the title-screen Settings menu
-- `Esc` — return to the debug room-select menu
+- `Esc` — pause/resume; press `Enter` on the pause screen to return to the case menu
 
 ## Game loop
 
-1. Enter a multi-room neon floor with 12 rounds.
-2. Eliminate nine armed enemies while managing distance and ammunition.
+1. Select a contract, replay condition and one of twelve escalating multi-room cases.
+2. Eliminate the authored or seeded armed roster while managing weapon-specific ammunition and movement accuracy.
 3. Chain kills before the combo timer expires.
 4. Survive the one-hit lethality.
 5. When combat ends, switch to cleanup mode.
-6. Remove every blood stain, pool, gore chunk, corpse and shell casing.
+6. Reach 90% scene certification or pursue 100% cleanup, optional clues, mastery medals and a stronger ending.
 
 ## Levels and AI
 
-- Debug title menu loads the Nightclub, Sandwich Shop or Tactical Lab directly
-- Tactical Lab menu entry provides a focused four-room combat puzzle for door breaches, glass crossfire, blind corners, patrol baiting and fixed-sentry counterplay
-- Sandwich Shop has independent layered floors, walls, objects, lighting and spawn configuration
+- Paged Case Files expose twelve sequential campaign cases; Tactical Lab remains an unrestricted stress sandbox
+- Tactical Lab menu entry provides an expanded 64x36-tile, 17-enemy combat stress puzzle for door breaches, glass crossfire, blind corners, patrol baiting and fixed-sentry counterplay
+- Every campaign case has a named TileWorld signature, palette, divider/accent geometry, furnishings, enemy composition and cleanup pressure configuration
 - Enemy routes use an AStarGrid2D generated from solid wall cells
 - Enemy vision uses distance/angle broad-phase checks followed by an opaque-only 2D raycast; `debug_draw_vision` exposes the tuning cone
 - Weapon-specific circular hearing events propagate through walls at a 1.5x effective-distance penalty with distance- and occlusion-scaled uncertainty

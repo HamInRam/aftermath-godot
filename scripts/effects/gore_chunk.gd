@@ -12,7 +12,7 @@ func _ready() -> void:
 func setup(flight_direction: Vector2, intensity: float, variant: int, new_attack_style := "firearm") -> void:
 	attack_style = new_attack_style
 	chunk_kind = variant % (6 if attack_style in ["lmg", "bat", "execution", "execution_bat"] else 4)
-	velocity = flight_direction.normalized() * randf_range(22.0, 48.0) * clampf(intensity, 0.7, 2.0)
+	velocity = flight_direction.normalized() * randf_range(28.0, 62.0) * clampf(intensity, 0.7, 2.8)
 	spin = randf_range(-9.0, 9.0)
 	rotation = randf_range(-PI, PI)
 	queue_redraw()
@@ -33,7 +33,9 @@ func _physics_process(delta: float) -> void:
 
 func clean_step() -> void:
 	amount -= 0.2
-	if amount <= 0.02: queue_free()
+	if amount <= 0.02:
+		CleanupRegistry.unregister_target(self)
+		queue_free()
 	else: queue_redraw()
 
 func get_cleanup_type() -> String:
@@ -53,7 +55,7 @@ func _draw() -> void:
 		draw_rect(Rect2(-1, -3, 3, 6), blood)
 		draw_rect(Rect2(-1, -3, 1, 2), bone)
 	elif chunk_kind == 2:
-		draw_circle(Vector2.ZERO, 2.2, blood)
+		draw_rect(Rect2(-2, -2, 4, 4), blood)
 		draw_rect(Rect2(0, -1, 2, 2), tissue)
 	elif chunk_kind == 3:
 		draw_rect(Rect2(-2, -2, 4, 4), tissue)
@@ -62,6 +64,7 @@ func _draw() -> void:
 		draw_rect(Rect2(-4, -1, 8, 3), blood)
 		draw_rect(Rect2(-4, 0, 3, 1), bone)
 	else:
-		draw_circle(Vector2.ZERO, 3.0, blood)
+		draw_rect(Rect2(-3, -2, 6, 4), blood)
+		draw_rect(Rect2(-2, -3, 4, 6), blood)
 		draw_rect(Rect2(-1, -2, 3, 2), tissue)
 		draw_rect(Rect2(1, -1, 2, 1), bone)

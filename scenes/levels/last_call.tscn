@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/levels/after_hours.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/missions/last_call.tres" type="Resource" id="2"]
+[node name="LastCall" instance=ExtResource("1")]
+level_title = "LAST CALL"
+enemy_spawns = PackedVector2Array(52,52, 52,188, 148,52, 220,52, 268,92, 148,180, 220,180, 268,188, 324,52, 348,108, 332,188)
+enemy_types = PackedStringArray("heavy","assault","gunner","heavy","assault","dog","heavy","assault","melee","gunner","heavy")
+fixed_sentry_indices = PackedInt32Array(0,3,6,10,14)
+mission_profile = ExtResource("2")
+visual_theme = "finale"
+ammo_pickup_positions = PackedVector2Array(60,108, 172,188, 276,108, 348,188)
+disposal_positions = PackedVector2Array(44,204, 348,204)
+disposal_types = PackedStringArray("incinerator", "dumpster")
+cleanup_secret_positions = PackedVector2Array(76,52, 200,76, 340,188)
+cleanup_secret_types = PackedStringArray("clue", "valuable", "clue")
+cleanup_furniture_positions = PackedVector2Array(108,188, 244,188, 332,52)
+tactical_lure_positions = PackedVector2Array(164,108, 300,172)
+[node name="TileMap" parent="." index="0"]
+layout_id = "last_call"

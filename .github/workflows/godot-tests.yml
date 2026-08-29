@@ -38,6 +38,11 @@ jobs:
             tests/test_cleanup_scoring.tscn \
             tests/test_cleanup_tools.tscn \
             tests/test_campaign_ui.tscn \
+            tests/test_campaign_map_identity.tscn \
+            tests/test_destructible_environment.tscn \
+            tests/test_destruction_pipeline.tscn \
+            tests/test_door_passage.tscn \
+            tests/test_visual_readability.tscn \
             tests/test_mission_objectives.tscn \
             tests/test_mission_result_flow.tscn \
             tests/test_progression_store.tscn \
@@ -49,8 +54,13 @@ jobs:
             tests/test_weapon_throw.tscn \
             tests/test_blood_footprints.tscn \
             tests/test_blood_forensics.tscn \
+            tests/test_pixel_blood_canvas.tscn \
+            tests/test_pixel_liquid_system.tscn \
+            tests/test_character_animation.tscn \
+            tests/test_character_eight_way_visual.tscn \
             tests/test_combat_audio_director.tscn \
             tests/test_tactical_alert.tscn \
+            tests/test_tactical_lab_scale.tscn \
             tests/test_vertical_slice.tscn \
             tests/test_ai_black_box.tscn; do
             log_file="$(basename "$scene" .tscn).log"

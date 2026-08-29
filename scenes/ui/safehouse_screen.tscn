@@ -1,0 +1,106 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scripts/ui/safehouse_screen.gd" type="Script" id="1_safehouse"]
+
+[node name="SafehouseScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_safehouse")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.02, 0.04, 1)
+
+[node name="Panel" type="PanelContainer" parent="."]
+offset_left = 18.0
+offset_top = 4.0
+offset_right = 302.0
+offset_bottom = 176.0
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 1
+alignment = 1
+
+[node name="Kicker" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 1, 0.84, 1)
+theme_override_font_sizes/font_size = 7
+text = "SAFEHOUSE // CAREER NETWORK"
+horizontal_alignment = 1
+
+[node name="Title" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.24, 0.48, 1)
+theme_override_font_sizes/font_size = 10
+text = "SPECIALIZATIONS"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.84, 0.42, 1)
+theme_override_font_sizes/font_size = 7
+text = "SPECIALIZATION POINTS 0 // HEAT 0%"
+horizontal_alignment = 1
+
+[node name="Specializations" type="VBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Executioner" type="Button" parent="Panel/VBox/Specializations"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "EXECUTIONER 0/3"
+
+[node name="Ghost" type="Button" parent="Panel/VBox/Specializations"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "GHOST 0/3"
+
+[node name="Cleaner" type="Button" parent="Panel/VBox/Specializations"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "CLEANER 0/3"
+
+[node name="Heat" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.46, 1, 1)
+theme_override_font_sizes/font_size = 6
+text = "HEAT LOW // OPERATIONS REMAIN DISCREET"
+horizontal_alignment = 1
+
+[node name="Feedback" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 6
+text = "COMPLETE NEW CASES TO EARN POINTS"
+horizontal_alignment = 1
+
+[node name="Actions" type="HBoxContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="BackButton" type="Button" parent="Panel/VBox/Actions"]
+custom_minimum_size = Vector2(92, 16)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "CASE FILES"
+
+[node name="WorkshopButton" type="Button" parent="Panel/VBox/Actions"]
+custom_minimum_size = Vector2(92, 16)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "WORKSHOP"

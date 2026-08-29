@@ -15,6 +15,12 @@ func setup(new_weapon_id: String, new_rounds: int) -> void:
 	rounds = maxi(0, new_rounds)
 	if is_node_ready(): _apply_visual()
 
+func absorb_rounds(extra_rounds: int) -> void:
+	rounds += maxi(0, extra_rounds)
+	cleanup_amount = 1.0
+	modulate.a = 1.0
+	queue_redraw()
+
 func collect(player: Node) -> bool:
 	if not is_instance_valid(player) or not player.has_method("acquire_gun"): return false
 	if not player.acquire_gun(weapon_id, rounds): return false
@@ -32,7 +38,9 @@ func collect_enemy(enemy: Node) -> bool:
 func clean_step() -> void:
 	cleanup_amount -= 0.34
 	modulate.a = clampf(cleanup_amount, 0.2, 1.0)
-	if cleanup_amount <= 0.02: queue_free()
+	if cleanup_amount <= 0.02:
+		CleanupRegistry.unregister_target(self)
+		queue_free()
 
 func get_cleanup_type() -> String:
 	return "dropped_weapon"

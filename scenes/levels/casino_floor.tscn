@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/levels/after_hours.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/missions/casino_floor.tres" type="Resource" id="2"]
+[node name="CasinoFloor" instance=ExtResource("1")]
+level_title = "HOUSE EDGE"
+enemy_spawns = PackedVector2Array(44,52, 44,180, 124,52, 212,68, 284,52, 132,180, 236,180, 340,68, 340,188)
+enemy_types = PackedStringArray("gunner","assault","heavy","gunner","melee","dog","assault","heavy","gunner")
+fixed_sentry_indices = PackedInt32Array(2,7,11)
+mission_profile = ExtResource("2")
+visual_theme = "gold"
+ammo_pickup_positions = PackedVector2Array(60,108, 156,188, 276,188, 348,108)
+disposal_positions = PackedVector2Array(44,204, 348,204)
+disposal_types = PackedStringArray("dumpster", "incinerator")
+cleanup_secret_positions = PackedVector2Array(76,52, 196,108, 340,52)
+cleanup_secret_types = PackedStringArray("clue", "valuable", "clue")
+cleanup_furniture_positions = PackedVector2Array(124,76, 268,164, 332,188)
+tactical_lure_positions = PackedVector2Array(172,108, 300,132)
+[node name="TileMap" parent="." index="0"]
+layout_id = "casino_floor"

@@ -30,6 +30,11 @@ func _physics_process(delta: float) -> void:
 func _resolve_impact(collider: Object) -> void:
 	if collider is Node and collider.is_in_group("enemy") and collider.has_method("take_door_hit"):
 		collider.take_door_hit(velocity.normalized(), "knockdown")
+	elif collider is Node and collider.is_in_group("destructible_prop") and collider.has_method("take_damage"):
+		if collider.has_method("receive_thrown_impact"):
+			collider.receive_thrown_impact(velocity.normalized(), clampf(velocity.length() / 180.0, 0.5, 1.5))
+		else:
+			collider.take_damage(1, global_position - velocity.normalized() * 2.0)
 	Events.publish_combat_noise(global_position, 92.0, "thrown_weapon")
 	_settle_as_pickup()
 
@@ -38,7 +43,7 @@ func _settle_as_pickup() -> void:
 	settled = true
 	var pickup = PICKUP_SCENE.instantiate()
 	var parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
-	if not RuntimeBudget.try_add("weapon_pickup", pickup, parent):
+	if not RuntimeBudget.add_persistent("weapon_pickup", pickup, parent):
 		queue_free()
 		return
 	pickup.global_position = global_position

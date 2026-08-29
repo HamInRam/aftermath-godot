@@ -3,6 +3,13 @@ extends "res://scripts/actor.gd"
 signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 signal died_at(world_position: Vector2, facing: float)
 
+const HUMAN_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_blocktop_16x16.svg")
+const MELEE_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_melee_blocktop_16x16.svg")
+const ASSAULT_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_assault_blocktop_16x16.svg")
+const HEAVY_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_heavy_blocktop_16x16.svg")
+const HOUND_OVERHEAD_TEXTURE := preload("res://assets/player/hound_blocktop_16x16.svg")
+const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
+
 @export var preferred_distance := 65.0
 @export var shoot_range := 152.0
 @export var detection_range := 205.0
@@ -33,6 +40,8 @@ signal died_at(world_position: Vector2, facing: float)
 @export_range(1.0, 20.0, 0.5) var suspicious_memory_duration := 5.0
 @export_range(2.0, 30.0, 0.5) var alert_memory_duration := 10.0
 @onready var gun = $Gun
+@onready var legs_visual: PixelActorPart = $LegsVisual
+@onready var lifecycle_rig = $LifecycleRig
 
 enum State { IDLE, INVESTIGATE, SEARCH, RETURN, CHASE, ATTACK, STAGGERED, KNOCKED_DOWN }
 enum PatrolMode { MOVING, WAITING, SENTRY }
@@ -63,6 +72,8 @@ var investigation_look_time := 0.0
 var corpse_scan_time := 0.0
 var discovered_corpses := {}
 var discovered_blood_clues := {}
+static var blood_clue_cache_bucket := -1
+static var blood_clue_region_cache: Dictionary = {}
 var player_in_sight := false
 var chase_lost_time := 0.0
 var last_seen_direction := Vector2.RIGHT
@@ -73,6 +84,12 @@ var search_time_remaining := 0.0
 var search_timer_started := false
 var claimed_corpse: Node2D
 var attack_windup_time := 0.0
+var attack_windup_duration := 0.0
+var committed_aim_position := Vector2.ZERO
+var aim_tracking_strength := 0.15
+var enemy_spread_multiplier := 2.4
+var distance_spread_multiplier := 1.0
+var aim_prediction_seconds := 0.07
 var melee_cooldown := 0.0
 var melee_swing_time := 0.0
 var is_fixed_sentry := false
@@ -93,6 +110,9 @@ var tactical_cover_position := Vector2.ZERO
 var tactical_peek_position := Vector2.ZERO
 var tactical_move_time := 0.0
 var tactical_hold_time := 0.0
+var vision_scan_cooldown := 0.0
+var cached_visual_contact := false
+var alert_transition_pulse := 0.0
 var tactical_player_anchor := Vector2.ZERO
 var tactical_decision_cooldown := 0.0
 var weapon_pickup_target: Node2D
@@ -101,7 +121,15 @@ var archetype_id := "gunner"
 var default_weapon_id := ""
 var attack_windup_multiplier := 1.0
 var knockdown_resistance := 0.0
+var previous_visual_state := State.IDLE
+var state_pose_pulse := 0.0
+var knockdown_pose_phase := 0.0
+var lifecycle_context_impact_frame := -1
 const KNOCKDOWN_DURATION := 4.0
+
+static func clear_shared_caches() -> void:
+	blood_clue_cache_bucket = -1
+	blood_clue_region_cache.clear()
 
 func _ready() -> void:
 	super._ready()
@@ -114,10 +142,16 @@ func _ready() -> void:
 	reaction_time = randf_range(reaction_time_min, maxf(reaction_time_min, reaction_time_max))
 	if actor_type == "dog": reaction_time *= 0.55
 	corpse_scan_time = randf_range(0.0, corpse_scan_interval)
+	vision_scan_cooldown = randf_range(0.0, 0.055)
 	gun.cooldown = randf_range(0.25, 0.9)
 	gun.fired.connect(_on_gun_fired)
 	actor_died.connect(_on_actor_died)
+	hit_received.connect(_on_hit_received)
 	progress_anchor = global_position
+	legs_visual.visible = false
+	$Sprite2D.visible = false
+	$FakeShadow.visible = false
+	lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("6e4a37") if actor_type == "dog" else Color("7c235b"), Color("e8d8c8") if actor_type == "dog" else Color("f23d78"), "hound" if actor_type == "dog" else archetype_id)
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
@@ -130,6 +164,21 @@ func _physics_process(delta: float) -> void:
 		if tactical_move_time <= 0.0 or (is_instance_valid(player) and player.global_position.distance_to(tactical_player_anchor) > 52.0):
 			_clear_tactical_move()
 	guard_alert_time = maxf(0.0, guard_alert_time - delta)
+	alert_transition_pulse = maxf(0.0, alert_transition_pulse - delta)
+	state_pose_pulse = maxf(0.0, state_pose_pulse - delta)
+	if is_instance_valid(legs_visual):
+		var local_motion := velocity.rotated(-rotation)
+		if local_motion.length_squared() > 0.5: legs_visual.rotation = local_motion.angle()
+		legs_visual.update_pose(delta, local_motion, move_speed, "attack" if state == State.ATTACK else "idle", clampf(state_pose_pulse / 0.22, 0.0, 1.0))
+	if is_instance_valid(lifecycle_rig):
+		var rig_action := "attack" if state == State.ATTACK or melee_swing_time > 0.0 else "idle"
+		var rig_amount := clampf(state_pose_pulse / 0.22, 0.0, 1.0) if rig_action == "attack" else 0.0
+		lifecycle_rig.set_weapon_stance("hound" if actor_type == "dog" else ("gun" if enemy_type == "gunner" else "melee"))
+		lifecycle_rig.update_lifecycle(delta, velocity.rotated(-rotation), move_speed, Vector2.ZERO, 0.0, rig_action, rig_amount)
+		gun.z_index = 0 if lifecycle_rig.weapon_should_render_behind() else 2
+	if state != previous_visual_state:
+		state_pose_pulse = 0.22
+		previous_visual_state = state
 	_update_alert_memory(delta)
 	if tactical_role == "guard" and guard_alert_time <= 0.0: tactical_role = "none"
 	queue_redraw()
@@ -159,7 +208,11 @@ func _physics_process(delta: float) -> void:
 			_set_knockdown_visual(false)
 			_begin_search(global_position, Vector2.RIGHT.rotated(rotation))
 		return
-	var has_visual_contact := _can_see_player(distance, to_player)
+	vision_scan_cooldown -= delta
+	if vision_scan_cooldown <= 0.0:
+		vision_scan_cooldown = 0.035 if state in [State.CHASE, State.ATTACK] else (0.055 if alert_level != AlertLevel.NORMAL else 0.085)
+		cached_visual_contact = _can_see_player(distance, to_player)
+	var has_visual_contact := cached_visual_contact
 	player_in_sight = has_visual_contact
 	var sees_player := _update_visual_reaction(has_visual_contact, delta)
 	if debug_draw_vision: queue_redraw()
@@ -330,7 +383,7 @@ func _update_patrol(delta: float) -> void:
 		return
 	if (path_points.is_empty() or path_refresh <= 0.0) and is_instance_valid(tile_world):
 		path_refresh = 0.5
-		path_points = tile_world.get_navigation_path(global_position, patrol_target)
+		path_points = tile_world.get_navigation_path(global_position, patrol_target) if tile_world.has_method("get_navigation_path") else PackedVector2Array([patrol_target])
 		if path_points.is_empty():
 			patrol_mode = PatrolMode.SENTRY
 			sentry_base_rotation = rotation
@@ -374,14 +427,38 @@ func configure_combat(type_name: String) -> void:
 	melee_range = profile.melee_range
 	melee_interval = profile.melee_interval
 	attack_windup_multiplier = profile.attack_windup_multiplier
+	aim_tracking_strength = profile.aim_tracking_strength
+	enemy_spread_multiplier = profile.enemy_spread_multiplier
+	distance_spread_multiplier = profile.distance_spread_multiplier
+	aim_prediction_seconds = profile.aim_prediction_seconds
 	knockdown_resistance = profile.knockdown_resistance
 	var uses_gun := enemy_type == "gunner"
 	gun.visible = uses_gun
 	gun.set_process(uses_gun)
-	$Sprite2D.modulate = profile.sprite_modulate
+	# Strict top-down bodies and weapons remain separate layers so aim rotation
+	# never turns a baked three-quarter weapon into a sideways silhouette.
+	gun.get_node("WeaponPivot/WeaponSprite").visible = uses_gun
+	gun.get_node("WeaponPivot/FakeShadow").visible = uses_gun
+	var human_texture: Texture2D = HEAVY_OVERHEAD_TEXTURE if archetype_id == "heavy" else (ASSAULT_OVERHEAD_TEXTURE if archetype_id == "assault" else (MELEE_OVERHEAD_TEXTURE if enemy_type == "melee" else HUMAN_OVERHEAD_TEXTURE))
+	$Sprite2D.texture = HOUND_OVERHEAD_TEXTURE if actor_type == "dog" else human_texture
+	$FakeShadow.texture = $Sprite2D.texture
+	# Identity colors are authored into the limited-palette sprites. Runtime
+	# tinting previously collapsed gunner, melee and heavy silhouettes together.
+	$Sprite2D.modulate = Color.WHITE
+	if is_instance_valid(legs_visual):
+		var role_color := Color("7c235b")
+		var role_accent := Color("f23d78")
+		match archetype_id:
+			"assault": role_color = Color("9a5719"); role_accent = Color("ff9a45")
+			"heavy": role_color = Color("41306e"); role_accent = Color("a59cff")
+			"melee": role_color = Color("7d163f"); role_accent = Color("ff4f91")
+		legs_visual.configure("dog" if actor_type == "dog" else "enemy", role_color, role_accent)
+		if is_instance_valid(lifecycle_rig): lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("6e4a37") if actor_type == "dog" else role_color, Color("e8d8c8") if actor_type == "dog" else role_accent, "hound" if actor_type == "dog" else archetype_id)
 
 func configure_fixed_sentry() -> void:
 	is_fixed_sentry = true
+	aim_tracking_strength = maxf(aim_tracking_strength, 0.20)
+	enemy_spread_multiplier *= 0.72
 	home_position = global_position
 	configure_patrol(PackedVector2Array())
 
@@ -390,12 +467,21 @@ func _execute_melee_attack() -> void:
 	melee_cooldown = melee_interval
 	melee_swing_time = 0.14
 	queue_redraw()
+	if player.has_method("apply_lifecycle_impact"):
+		var attack_id := "hound_bite" if actor_type == "dog" else "fist"
+		var physical := RAGDOLL_IMPACT.resolve(attack_id, global_position.distance_to(player.global_position), "torso", "human")
+		player.apply_lifecycle_impact(global_position.direction_to(player.global_position), float(physical.limb_force) * 0.72, "torso")
 	player.take_damage(1, global_position)
 
 func _begin_attack() -> void:
 	if state == State.ATTACK: return
+	if enemy_type == "gunner" and not CombatDirector.request_fire_token(self):
+		tactical_decision_cooldown = maxf(tactical_decision_cooldown, randf_range(0.08, 0.16))
+		return
 	state = State.ATTACK
 	attack_windup_time = EnemyCombatController.attack_windup(enemy_type) * attack_windup_multiplier
+	attack_windup_duration = attack_windup_time
+	if enemy_type == "gunner": committed_aim_position = EnemyCombatController.committed_target(player, aim_prediction_seconds)
 	velocity = Vector2.ZERO
 	_reset_movement_progress()
 	queue_redraw()
@@ -404,19 +490,26 @@ func _update_attack(delta: float, to_player: Vector2, distance: float, has_visua
 	velocity = velocity.move_toward(Vector2.ZERO, 240.0 * delta)
 	move_and_slide()
 	if not has_visual_contact:
+		CombatDirector.release_fire_token(self)
 		state = State.CHASE
 		attack_windup_time = 0.0
 		return
-	rotation = lerp_angle(rotation, to_player.angle(), 1.0 - exp(-18.0 * delta))
+	var committed_direction := global_position.direction_to(committed_aim_position) if enemy_type == "gunner" else to_player.normalized()
+	rotation = lerp_angle(rotation, committed_direction.angle(), 1.0 - exp(-12.0 * delta))
 	attack_windup_time -= delta
 	queue_redraw()
 	if attack_windup_time > 0.0: return
 	if enemy_type == "gunner":
-		if distance <= shoot_range and _has_clear_shot() and gun.try_fire(to_player.normalized()):
+		var live_target := global_position + to_player
+		var final_target := committed_aim_position.lerp(live_target, aim_tracking_strength)
+		var fire_direction := global_position.direction_to(final_target)
+		var accuracy_multiplier := enemy_spread_multiplier * EnemyCombatController.distance_accuracy_multiplier(distance, shoot_range, distance_spread_multiplier)
+		if distance <= shoot_range and _has_clear_shot() and gun.try_fire(fire_direction, accuracy_multiplier):
 			gun.cooldown += randf_range(0.35, 0.75)
 			if tactical_move_mode == "at_peek": tactical_move_mode = "to_cover"
 			elif tactical_decision_cooldown <= 0.0 and not is_fixed_sentry and tactical_role != "guard":
 				_begin_tactical_reposition(false)
+		CombatDirector.release_fire_token(self)
 	elif distance <= melee_range:
 		_execute_melee_attack()
 	state = State.CHASE
@@ -514,8 +607,8 @@ func _pick_sentry_angle() -> void:
 
 func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
 	var reaction_multiplier := 1.0
-	if alert_level == AlertLevel.SUSPICIOUS: reaction_multiplier = 0.72
-	elif alert_level == AlertLevel.ALERT: reaction_multiplier = 0.48
+	if alert_level == AlertLevel.SUSPICIOUS: reaction_multiplier = 0.82
+	elif alert_level == AlertLevel.ALERT: reaction_multiplier = 0.65
 	var effective_reaction_time := reaction_time * reaction_multiplier
 	if has_visual_contact:
 		visual_exposure = minf(effective_reaction_time, visual_exposure + delta)
@@ -551,19 +644,42 @@ func _scan_for_blood_clue() -> void:
 	if state not in [State.IDLE, State.RETURN] or is_fixed_sentry: return
 	var nearest: Node2D
 	var nearest_distance := INF
-	for node in get_tree().get_nodes_in_group("blood_clue"):
+	var nearest_region := Vector2i.ZERO
+	var nearest_generation := 0
+	for clue_region in _get_blood_clue_regions():
+		var region_data: Dictionary = blood_clue_region_cache[clue_region]
+		var node_ref = region_data.get("node")
+		var node = node_ref.get_ref() if node_ref is WeakRef else null
+		var generation := int(region_data.get("generation", 0))
 		if not node is Node2D or not is_instance_valid(node): continue
-		var clue_id := node.get_instance_id()
-		if discovered_blood_clues.has(clue_id): continue
+		if int(discovered_blood_clues.get(clue_region, -1)) >= generation: continue
+		if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable") and not tile_world.is_navigation_position_walkable(node.global_position): continue
 		var distance := global_position.distance_squared_to(node.global_position)
 		if distance >= nearest_distance or distance > detection_range * detection_range * 0.55: continue
 		if not EnemyPerception.can_see_position(self, node.global_position, detection_range * 0.74, vision_fov_degrees, 32): continue
 		nearest = node
 		nearest_distance = distance
+		nearest_region = clue_region
+		nearest_generation = generation
 	if not is_instance_valid(nearest): return
-	discovered_blood_clues[nearest.get_instance_id()] = true
+	discovered_blood_clues[nearest_region] = nearest_generation
 	_begin_investigation(nearest.global_position, 0.56)
 	Events.publish_tactical_alert(nearest.global_position, Vector2.RIGHT.rotated(nearest.rotation), "blood_trail", self)
+
+func _get_blood_clue_regions() -> Dictionary:
+	# All enemies share one short-lived spatial snapshot. This changes the hot path
+	# from scanning hundreds of permanent footprints per enemy to one scan per 0.1 s.
+	var current_bucket := int(Time.get_ticks_msec() / 100)
+	if blood_clue_cache_bucket == current_bucket: return blood_clue_region_cache
+	blood_clue_cache_bucket = current_bucket
+	blood_clue_region_cache = {}
+	for clue in get_tree().get_nodes_in_group("blood_clue"):
+		if not clue is Node2D or not is_instance_valid(clue): continue
+		var region := Vector2i(floori(clue.global_position.x / 24.0), floori(clue.global_position.y / 24.0))
+		var generation := int(clue.get_instance_id())
+		if not blood_clue_region_cache.has(region) or generation > int((blood_clue_region_cache[region] as Dictionary).get("generation", 0)):
+			blood_clue_region_cache[region] = {"node": weakref(clue), "generation": generation}
+	return blood_clue_region_cache
 
 func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_claim := false) -> void:
 	_clear_tactical_move()
@@ -719,6 +835,9 @@ func _reset_movement_progress() -> void:
 	stuck_recovery_attempts = 0
 
 func _update_movement_progress(delta: float, expected_to_move: bool) -> void:
+	if state != State.KNOCKED_DOWN:
+		var movement_ratio := clampf(velocity.length() / maxf(1.0, move_speed), 0.0, 1.5)
+		$Sprite2D.position.y = lerpf($Sprite2D.position.y, sin(Time.get_ticks_msec() * 0.018 + get_instance_id() * 0.1) * 0.45 * movement_ratio, 1.0 - exp(-14.0 * delta))
 	if not expected_to_move:
 		progress_anchor = global_position
 		progress_elapsed = 0.0
@@ -808,6 +927,12 @@ func receive_tactical_assignment(world_position: Vector2, likely_direction: Vect
 	if not bool(response.get("eligible", false)): return false
 	_raise_alert(AlertLevel.ALERT, alert_memory_duration)
 	tactical_role = role
+	if _source_kind == "ambush" and role in ["sweep_left", "sweep_right"]:
+		var safe_approach := CombatDirector.get_safe_ambush_approach(world_position, global_position, role)
+		if safe_approach != Vector2.INF:
+			_begin_investigation(safe_approach, 0.82)
+			queue_redraw()
+			return true
 	match role:
 		"sweep_left":
 			_begin_sector_search(world_position, likely_direction, -1.0)
@@ -825,9 +950,13 @@ func receive_tactical_assignment(world_position: Vector2, likely_direction: Vect
 	return true
 
 func _raise_alert(level: AlertLevel, duration: float) -> void:
+	var previous_level := alert_level
 	alert_level = maxi(alert_level, level)
 	alert_memory_time = maxf(alert_memory_time, duration)
 	alertness = maxf(alertness, 0.5 if level == AlertLevel.SUSPICIOUS else 1.0)
+	if alert_level > previous_level:
+		alert_transition_pulse = 0.32
+		queue_redraw()
 
 func _update_alert_memory(delta: float) -> void:
 	if alert_level == AlertLevel.NORMAL: return
@@ -853,6 +982,7 @@ func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	_reset_movement_progress()
 	stagger_time = duration
 	velocity = push_direction.normalized() * 62.0
+	if is_instance_valid(lifecycle_rig): lifecycle_rig.apply_hit(push_direction, 19.0, "torso")
 	gun.cooldown = maxf(gun.cooldown, duration)
 
 func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
@@ -869,6 +999,7 @@ func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 	_reset_movement_progress()
 	knockdown_time = KNOCKDOWN_DURATION
 	velocity = hit_direction.normalized() * 150.0
+	if is_instance_valid(lifecycle_rig): lifecycle_rig.enter_knockdown(hit_direction, 46.0)
 	gun.cooldown = maxf(gun.cooldown, knockdown_time)
 	_set_knockdown_visual(true)
 
@@ -890,12 +1021,18 @@ func execute_ground(source_position: Vector2) -> void:
 	take_damage(maxi(1, hp), source_position)
 
 func _set_knockdown_visual(enabled: bool) -> void:
-	$Sprite2D.rotation = PI * 0.5 if enabled else 0.0
-	$FakeShadow.rotation = PI * 0.5 if enabled else 0.0
+	$Sprite2D.rotation = 0.0
+	$Sprite2D.position = Vector2.ZERO
+	$Sprite2D.visible = false
+	if is_instance_valid(legs_visual): legs_visual.visible = false
+	$FakeShadow.visible = false
+	$FakeShadow.rotation = 0.0
 	gun.visible = false if enabled else enemy_type == "gunner"
+	if not enabled and is_instance_valid(lifecycle_rig): lifecycle_rig.begin_recovery()
 	queue_redraw()
 
 func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
+	if is_instance_valid(lifecycle_rig): lifecycle_rig.trigger_weapon_recoil(0.85)
 	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
 
 func _on_actor_died(source_position: Vector2) -> void:
@@ -916,12 +1053,51 @@ func _on_actor_died(source_position: Vector2) -> void:
 	died_at.emit(global_position, rotation)
 	queue_free()
 
+func _on_hit_received(_amount: int, source_position: Vector2) -> void:
+	var direction := source_position.direction_to(global_position)
+	if direction.length_squared() < 0.001: direction = -Vector2.RIGHT.rotated(rotation)
+	if is_instance_valid(lifecycle_rig) and lifecycle_context_impact_frame != Engine.get_physics_frames(): lifecycle_rig.apply_hit(direction, 22.0, classify_hit_zone(global_position))
+	if hp > 1:
+		apply_stagger(direction, 0.09)
+
+func get_lifecycle_pose() -> Dictionary:
+	return lifecycle_rig.get_pose_snapshot() if is_instance_valid(lifecycle_rig) else {}
+
+func apply_lifecycle_impact(direction: Vector2, power: float, hit_zone := "torso") -> void:
+	lifecycle_context_impact_frame = Engine.get_physics_frames()
+	if is_instance_valid(lifecycle_rig): lifecycle_rig.apply_hit(direction, power, hit_zone)
+
 func _draw() -> void:
+	# Tiny authored role badges survive blood and debris without becoming large
+	# floating HUD markers: cyan gunner, pink rusher, orange assault, violet heavy.
+	if not is_dead:
+		match archetype_id:
+			"melee":
+				draw_line(Vector2(-3, -7), Vector2(0, -9), Color("ff4f91"), 1.0)
+				draw_line(Vector2(0, -9), Vector2(3, -7), Color("ff4f91"), 1.0)
+			"assault":
+				draw_rect(Rect2(-4, -9, 3, 2), Color("ff9a45"))
+				draw_rect(Rect2(1, -9, 3, 2), Color("ff9a45"))
+			"heavy":
+				draw_rect(Rect2(-3, -10, 6, 3), Color("a59cff"), false, 1.0)
+			"gunner":
+				draw_line(Vector2(-2, -8), Vector2(2, -8), Color("62e8ff"), 1.0)
+	if not is_dead and (Settings.high_contrast_enemies or state in [State.CHASE, State.ATTACK]):
+		var threat_color := Color(1.0, 0.16, 0.28, 0.92) if state in [State.CHASE, State.ATTACK] else Color(1.0, 0.78, 0.18, 0.72)
+		draw_line(Vector2(-8, -7), Vector2(-4, -7), threat_color, 1.0)
+		draw_line(Vector2(-8, -7), Vector2(-8, -3), threat_color, 1.0)
+		draw_line(Vector2(-8, 7), Vector2(-4, 7), threat_color, 1.0)
+		draw_line(Vector2(8, -7), Vector2(5, -7), threat_color, 1.0)
 	if melee_swing_time > 0.0:
 		draw_arc(Vector2.ZERO, melee_range, -0.65, 0.65, 10, Color("ffd0a8"), 2.0)
 	if state == State.ATTACK and attack_windup_time > 0.0:
-		draw_arc(Vector2.ZERO, 9.0, -0.48, 0.48, 8, Color("ffe56b"), 1.5)
-		draw_circle(Vector2(7, 0), 1.2, Color("fff3b0"))
+		var charge := 1.0 - clampf(attack_windup_time / maxf(0.001, attack_windup_duration), 0.0, 1.0)
+		draw_arc(Vector2.ZERO, 9.0, -0.48, lerpf(-0.48, 0.48, charge), 8, Color("ffe56b"), 1.5)
+		draw_circle(Vector2(7, 0), 1.2 + charge * 0.7, Color("fff3b0"))
+		# A short two-pixel tell communicates the committed firing lane without
+		# turning combat into a full laser-sight overlay.
+		draw_line(Vector2(9, -1), Vector2(13 + charge * 3.0, -1), Color(1.0, 0.38, 0.2, 0.35 + charge * 0.45), 1.0)
+		draw_line(Vector2(9, 1), Vector2(12 + charge * 2.0, 1), Color(1.0, 0.75, 0.28, 0.28 + charge * 0.38), 1.0)
 	if debug_draw_vision:
 		var half_fov := deg_to_rad(vision_fov_degrees * 0.5)
 		var vision_color := Color(0.2, 1.0, 0.45, 0.16) if player_in_sight else Color(1.0, 0.2, 0.32, 0.09)
@@ -934,9 +1110,21 @@ func _draw() -> void:
 		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(-half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
 		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
 	draw_set_transform(Vector2.ZERO, -rotation, Vector2.ONE)
+	if alert_transition_pulse > 0.0:
+		var pulse_alpha := clampf(alert_transition_pulse / 0.32, 0.0, 1.0)
+		var pulse_color := Color("ff385f", pulse_alpha) if alert_level == AlertLevel.ALERT else Color("ffd166", pulse_alpha)
+		draw_arc(Vector2(0, -9), 4.0 + (1.0 - pulse_alpha) * 3.0, 0.0, TAU, 12, pulse_color, 1.0)
 	if state == State.INVESTIGATE:
-		draw_arc(Vector2(0, -10), 2.4, -PI * 0.85, PI * 0.35, 7, Color("ffd166"), 1.0)
-		draw_circle(Vector2(0, -6.5), 0.8, Color("ffd166"))
+		if is_instance_valid(claimed_corpse):
+			# A compact body silhouette distinguishes corpse discovery from an
+			# ordinary sound investigation without adding floating text.
+			draw_circle(Vector2(0, -11), 1.2, Color("82d8ff"))
+			draw_line(Vector2(-3, -8.5), Vector2(3, -8.5), Color("82d8ff"), 1.2)
+			draw_line(Vector2(-2, -8), Vector2(-3, -6), Color("82d8ff"), 1.0)
+			draw_line(Vector2(2, -8), Vector2(3, -6), Color("82d8ff"), 1.0)
+		else:
+			draw_arc(Vector2(0, -10), 2.4, -PI * 0.85, PI * 0.35, 7, Color("ffd166"), 1.0)
+			draw_circle(Vector2(0, -6.5), 0.8, Color("ffd166"))
 	elif state == State.SEARCH:
 		draw_arc(Vector2(0, -9), 3.0, -PI * 0.2, PI * 1.3, 9, Color("66e0ff"), 1.0)
 		draw_line(Vector2(2, -7), Vector2(4, -5), Color("66e0ff"), 1.0)

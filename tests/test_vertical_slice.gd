@@ -1,6 +1,7 @@
 extends Node
 
 const LEVEL_SCENE := preload("res://scenes/levels/after_hours.tscn")
+const STAIN_SCENE := preload("res://scenes/blood_stain.tscn")
 
 var failures := 0
 
@@ -27,6 +28,20 @@ func _run() -> void:
 	_expect(not level.mission_tracker.are_combat_objectives_complete(), "security objective should gate cleanup after all hostiles fall")
 	for camera in level._get_security_devices(): camera.disable()
 	_expect(level.mission_tracker.are_combat_objectives_complete(), "camera shutdowns should unlock cleanup once combat objective is done")
+	level._enter_cleanup_phase()
+	_expect(level.corpse_disposals.size() == 2 and level.corpse_disposals.all(func(disposal): return disposal.active), "vertical slice should activate two authored alternative body-disposal routes")
+	_expect(level.get_tree().get_nodes_in_group("scene_secret").size() == 3, "cleanup should author two clues and one valuable opportunity")
+	_expect(level.get_tree().get_nodes_in_group("resettable_furniture").size() == 3, "cleanup should author three quick-reset furniture opportunities")
+	_expect(not level.player.get_node("BloodFootprintEmitter").generation_enabled, "career cleanup must not generate fresh bloody footprints")
+	_expect(level.player.select_cleanup_tool("pressure_washer") and level.player.get_cleanup_efficiency("blood") >= 4, "slot-two pressure washing should provide broad biological cleanup")
+	var tool_guard_stain = STAIN_SCENE.instantiate()
+	level.add_child(tool_guard_stain)
+	tool_guard_stain.global_position = level.player.global_position + Vector2(8, 0)
+	tool_guard_stain.setup(Vector2.RIGHT, 1.0, false)
+	var guarded_progress := float(tool_guard_stain.get_cleanup_progress())
+	level.player.select_cleanup_tool("body_bag")
+	level._on_clean_requested(tool_guard_stain.global_position, Vector2.RIGHT, 1.0)
+	_expect(is_equal_approx(float(tool_guard_stain.get_cleanup_progress()), guarded_progress), "body-bag slot must never clean biological stains")
 	if failures == 0: print("vertical slice regression: PASS")
 	for audio_node in level.find_children("*", "AudioStreamPlayer", true, false):
 		var audio := audio_node as AudioStreamPlayer

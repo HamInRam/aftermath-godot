@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "penthouse"
+display_name = "CASE 06 // GLASS HOUSE"
+briefing = "THE BROKER WATCHES THE CITY THROUGH GLASS. TURN HIS SECURITY GRID AGAINST HIM."
+required_eliminations = -1
+required_security_shutdowns = 2
+completion_bonus = 1000
+alarm_penalty = 200
+property_damage_penalty = 45
+scene_path = "res://scenes/levels/penthouse.tscn"
+debrief_text = "THE SKYLINE REFLECTS AN EMPTY SUITE. HIS CLIENT LIST POINTS TO COLD STORAGE."
+unlock_after = "motel_witness"
+campaign_order = 6
+cleanup_pressure_seconds = 130.0

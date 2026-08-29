@@ -2,7 +2,17 @@ class_name EnemyCombatController
 extends RefCounted
 
 static func attack_windup(enemy_type: String) -> float:
-	return randf_range(0.1, 0.16) if enemy_type == "gunner" else randf_range(0.12, 0.18)
+	return randf_range(0.14, 0.22) if enemy_type == "gunner" else randf_range(0.12, 0.18)
+
+static func distance_accuracy_multiplier(distance: float, shoot_range: float, profile_multiplier: float) -> float:
+	var ratio := clampf(distance / maxf(1.0, shoot_range), 0.0, 1.0)
+	if ratio <= 0.32: return 0.78
+	if ratio <= 0.64: return 1.0
+	return lerpf(1.0, maxf(1.0, profile_multiplier), inverse_lerp(0.64, 1.0, ratio))
+
+static func committed_target(player: CharacterBody2D, prediction_seconds: float) -> Vector2:
+	if not is_instance_valid(player): return Vector2.ZERO
+	return player.global_position + player.velocity * clampf(prediction_seconds, 0.0, 0.2)
 
 static func has_clear_shot(enemy: CollisionObject2D, gun: Node2D, player: Node2D) -> bool:
 	return bool(evaluate_fire_lane(enemy, gun.global_position if is_instance_valid(gun) else Vector2.ZERO, player).get("clear", false))

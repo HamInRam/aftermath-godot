@@ -6,6 +6,9 @@ const TEST_SAVE_PATH := "user://aftermath_result_flow_test.json"
 var failures := 0
 
 func _ready() -> void:
+	_expect(MissionResultBuilder.restoration_cost(2, 3, 4) == 182, "result builder should centralize restoration accounting")
+	_expect(MissionResultBuilder.grade(1.0, 0, 0) == "S", "perfect silent restoration should retain the top grade")
+	_expect(MissionResultBuilder.dominant_cost(2, 20, 1, 0) == "BALLISTIC", "result builder should expose the largest cleanup cost category")
 	call_deferred("_run")
 
 func _run() -> void:
@@ -20,9 +23,11 @@ func _run() -> void:
 	for enemy in level.get_node("Enemies").get_children(): enemy.set_physics_process(false)
 	level.phase = "cleanup"
 	level._finish_run(false)
+	_expect(not level.player.controls_enabled and level.player.velocity == Vector2.ZERO, "mission completion must lock player controls and movement")
 	_expect(Progression.is_mission_completed("after_hours"), "real level completion should reach the progression store")
 	_expect(Progression.last_result.mission_id == "after_hours", "result should be attributed to the level mission profile")
 	_expect(int(Progression.last_result.score) == level.final_score and Progression.last_result.grade == level.final_grade, "action report should preserve the level's authoritative score and grade")
+	_expect(Progression.last_result.has("forensic_report") and not (Progression.last_result.forensic_report as Dictionary).is_empty(), "mission results should preserve a causal forensic trace report")
 	_expect(FileAccess.file_exists(TEST_SAVE_PATH), "level completion should persist the action record to disk")
 	for audio_node in level.find_children("*", "AudioStreamPlayer", true, false):
 		var audio := audio_node as AudioStreamPlayer

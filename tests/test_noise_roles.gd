@@ -9,6 +9,7 @@ func _ready() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	CombatDirector.reset_kill_zones()
 	var player = PLAYER_SCENE.instantiate()
 	add_child(player)
 	player.global_position = Vector2(1000, 1000)
@@ -25,6 +26,13 @@ func _run() -> void:
 	_expect(enemies[2].tactical_role == "sweep", "third guard should receive SWEEP")
 	_expect(enemies[3].tactical_role == "guard" and enemies[4].tactical_role == "guard", "remaining guards should hold position")
 	_expect(enemies[3].state == enemies[3].State.IDLE, "GUARD role should not abandon its patrol position")
+	CombatDirector.register_casualty(Vector2(64, 64), Vector2.LEFT, 1000)
+	_expect(not CombatDirector.is_kill_zone(Vector2(64, 64), 1000), "one casualty should not make every doorway tactically forbidden")
+	CombatDirector.register_casualty(Vector2(70, 67), Vector2.LEFT, 1500)
+	_expect(CombatDirector.is_kill_zone(Vector2(64, 64), 1500), "clustered casualties should create a shared fatal-funnel memory")
+	var containment := CombatDirector.get_role_plan_for_event("corpse", Vector2(64, 64), PackedStringArray(["A", "A", "B", "B"]), false)
+	_expect("push" not in containment and containment.count("sweep") == 1, "kill-zone response should contain and flank instead of queueing direct pushers")
+	_expect(not CombatDirector.is_kill_zone(Vector2(64, 64), 12000), "fatal-funnel memory should decay instead of permanently freezing the encounter")
 	enemies[0].configure_combat("gunner")
 	enemies[1].configure_combat("melee")
 	_expect(is_equal_approx(enemies[0].move_speed, 42.0), "gunner speed tuning should be applied")

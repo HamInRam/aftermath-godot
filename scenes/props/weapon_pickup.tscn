@@ -6,7 +6,7 @@
 radius = 7.0
 
 [node name="WeaponPickup" type="Area2D" groups=["weapon_pickup"]]
-z_index = 2
+z_index = 7
 collision_layer = 0
 collision_mask = 1
 monitoring = true

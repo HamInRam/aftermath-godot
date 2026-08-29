@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "motel_witness"
+display_name = "CASE 05 // ROOM SERVICE"
+briefing = "A WITNESS IS UNDER ARMED WATCH. CLEAR BOTH WINGS BEFORE THE NIGHT CLERK CALLS IT IN."
+required_eliminations = -1
+completion_bonus = 900
+alarm_penalty = 180
+maximum_alarms_for_bonus = 0
+optional_quiet_bonus = 350
+scene_path = "res://scenes/levels/motel_witness.tscn"
+debrief_text = "THE VACANCY SIGN BUZZES OVER AN EMPTY LOT. THE WITNESS NAMED THE PENTHOUSE."
+unlock_after = "harbor_exchange"
+campaign_order = 5
+cleanup_pressure_seconds = 135.0

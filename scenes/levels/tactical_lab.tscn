@@ -7,17 +7,23 @@
 [node name="TacticalLab" instance=ExtResource("1_main")]
 level_title = "TACTICAL LAB"
 player_spawn = Vector2(52, 184)
-enemy_spawns = PackedVector2Array(180, 60, 216, 60, 276, 88, 84, 72, 148, 176, 260, 176, 332, 176)
-enemy_patrol_offsets = PackedVector2Array(0, 56, 48, 0, 0, 48, 56, 0, 48, 0, 0, -48, -56, 0)
-ammo_pickup_positions = PackedVector2Array(116, 120, 264, 120, 318, 188)
-ammo_pickup_weapon_ids = PackedStringArray("pistol", "smg", "lmg")
-ammo_pickup_rounds = PackedInt32Array(12, 24, 30)
-enemy_types = PackedStringArray("melee", "gunner", "gunner", "melee", "gunner", "melee", "gunner")
-fixed_sentry_indices = PackedInt32Array(2, 6)
+enemy_spawns = PackedVector2Array(180, 60, 216, 60, 276, 88, 84, 72, 148, 176, 260, 176, 332, 176, 420, 60, 468, 88, 420, 160, 456, 192, 260, 248, 340, 248, 460, 248, 120, 240, 60, 248, 440, 128, 300, 200)
+enemy_patrol_offsets = PackedVector2Array(0, 56, 48, 0, 0, 48, 56, 0, 48, 0, 0, -48, -56, 0, 48, 0, 0, 48, 48, 0, 0, 40, 48, 0, -48, 0, 0, -40, 40, 0, -48, 0, 0, -40)
+ammo_pickup_positions = PackedVector2Array(116, 120, 264, 120, 318, 188, 420, 120, 448, 240)
+ammo_pickup_weapon_ids = PackedStringArray("pistol", "smg", "lmg", "shotgun", "shotgun")
+ammo_pickup_rounds = PackedInt32Array(12, 24, 30, 8, 8)
+enemy_types = PackedStringArray("melee", "gunner", "assault", "melee", "heavy", "melee", "gunner", "assault", "gunner", "dog", "heavy", "melee", "gunner", "dog", "assault", "gunner", "melee")
+fixed_sentry_indices = PackedInt32Array(2, 6, 8, 12)
+disposal_positions = PackedVector2Array(500, 252, 52, 60)
+disposal_types = PackedStringArray("dumpster", "incinerator")
+cleanup_secret_positions = PackedVector2Array(84, 72, 300, 200, 468, 88)
+cleanup_secret_types = PackedStringArray("clue", "clue", "valuable")
+cleanup_furniture_positions = PackedVector2Array(148, 176, 340, 248, 456, 192)
 mission_profile = ExtResource("3_mission")
 
 [node name="TileMap" parent="." index="0"]
 layout_id = "tactical_lab"
+map_size = Vector2i(64, 36)
 
 [node name="WestRoomDoor" parent="Doors" index="0"]
 position = Vector2(196, 56)
@@ -34,3 +40,7 @@ rotation = -1.5708
 
 [node name="CanvasModulate" parent="." index="1"]
 color = Color(0.62, 0.57, 0.68, 1)
+
+[node name="TraumaCamera" parent="." index="8"]
+camera_center_bounds = Rect2(160, 90, 192, 108)
+tilt_room_center_x = 256.0

@@ -3,6 +3,8 @@ extends Node
 
 var flash: ColorRect
 var hit_stop_generation := 0
+var hit_stop_deadline_msec := 0
+var hit_stop_active := false
 var flash_intensity := 1.0
 
 func configure(flash_rect: ColorRect, intensity := 1.0) -> void:
@@ -11,11 +13,18 @@ func configure(flash_rect: ColorRect, intensity := 1.0) -> void:
 
 func trigger_hit_stop(duration: float) -> void:
 	if duration <= 0.0: return
+	hit_stop_deadline_msec = maxi(hit_stop_deadline_msec, Time.get_ticks_msec() + roundi(duration * 1000.0))
+	Engine.time_scale = 0.05
+	if hit_stop_active: return
+	hit_stop_active = true
 	hit_stop_generation += 1
 	var generation := hit_stop_generation
-	Engine.time_scale = 0.05
-	await get_tree().create_timer(duration, true, false, true).timeout
-	if generation == hit_stop_generation: Engine.time_scale = 1.0
+	while generation == hit_stop_generation and Time.get_ticks_msec() < hit_stop_deadline_msec:
+		await get_tree().process_frame
+	if generation == hit_stop_generation:
+		Engine.time_scale = 1.0
+		hit_stop_active = false
+		hit_stop_deadline_msec = 0
 
 func show_flash(color: Color, duration: float) -> void:
 	if not is_instance_valid(flash): return
@@ -26,4 +35,6 @@ func show_flash(color: Color, duration: float) -> void:
 
 func reset() -> void:
 	hit_stop_generation += 1
+	hit_stop_active = false
+	hit_stop_deadline_msec = 0
 	Engine.time_scale = 1.0

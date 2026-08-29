@@ -3,6 +3,7 @@ extends CharacterBody2D
 
 signal health_changed(current_hp: int, max_hp: int)
 signal actor_died(source_position: Vector2)
+signal hit_received(amount: int, source_position: Vector2)
 
 @export var max_hp := 1
 @export var move_speed := 80.0
@@ -30,6 +31,7 @@ func push_contact_bodies(intended_velocity: Vector2) -> void:
 func take_damage(amount: int, source_position := Vector2.ZERO) -> void:
 	if is_dead or amount <= 0:
 		return
+	hit_received.emit(amount, source_position)
 	hp = maxi(0, hp - amount)
 	health_changed.emit(hp, max_hp)
 	if hp == 0:

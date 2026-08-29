@@ -4,14 +4,15 @@ signal droplet_settled(world_position: Vector2, strength: float, direction: Vect
 
 var particles: Array[Dictionary] = []
 var max_lifetime := 0.34
-var deposits_remaining := 10
+var deposits_remaining := 16
 
-func setup(spray_direction: Vector2, intensity: float, color := Color("b30325"), cone := 0.72) -> void:
+func setup(spray_direction: Vector2, intensity: float, color := NeonPalette.BLOOD_FRESH, cone := 0.72, deposit_count := 16) -> void:
 	var direction := spray_direction.normalized()
-	var count := clampi(roundi(20.0 + intensity * 16.0), 20, 60)
+	deposits_remaining = clampi(deposit_count, 2, 24)
+	var count := clampi(roundi(18.0 + intensity * 16.0), 18, 76)
 	for i in range(count):
 		var angle := randf_range(-cone, cone)
-		var speed := randf_range(28.0, 66.0) * clampf(intensity, 0.65, 2.4)
+		var speed := randf_range(32.0, 78.0) * clampf(intensity, 0.65, 3.5)
 		var velocity := direction.rotated(angle) * speed
 		velocity += Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
 		particles.append({
@@ -27,13 +28,27 @@ func _process(delta: float) -> void:
 	var alive_particles: Array[Dictionary] = []
 	for particle in particles:
 		var previous_life: float = particle.life
-		particle.position += particle.velocity * delta
+		var previous_position: Vector2 = particle.position
+		var next_position: Vector2 = previous_position + particle.velocity * delta
+		var query := PhysicsRayQueryParameters2D.create(to_global(previous_position), to_global(next_position), 4)
+		var collision := get_world_2d().direct_space_state.intersect_ray(query)
+		if not collision.is_empty() and deposits_remaining > 0:
+			var travel_direction: Vector2 = particle.velocity.normalized()
+			droplet_settled.emit(collision.position - travel_direction, clampf(float(particle.size) / 1.25, 0.25, 1.0), travel_direction)
+			deposits_remaining -= 1
+			continue
+		particle.position = next_position
 		particle.velocity *= exp(-7.5 * delta)
 		particle.life -= delta
 		if particle.life > 0.0:
 			alive_particles.append(particle)
 		elif previous_life > 0.0 and deposits_remaining > 0 and randf() < 0.48:
-			droplet_settled.emit(to_global(particle.position), clampf(float(particle.size) / 1.25, 0.25, 1.0), particle.velocity.normalized())
+			var settle_position := to_global(particle.position)
+			var travel_direction: Vector2 = particle.velocity.normalized()
+			var settle_query := PhysicsRayQueryParameters2D.create(global_position, settle_position, 4)
+			var wall_hit := get_world_2d().direct_space_state.intersect_ray(settle_query)
+			if not wall_hit.is_empty(): settle_position = wall_hit.position - travel_direction * 1.5
+			droplet_settled.emit(settle_position, clampf(float(particle.size) / 1.25, 0.25, 1.0), travel_direction)
 			deposits_remaining -= 1
 	particles = alive_particles
 	queue_redraw()
@@ -44,6 +59,11 @@ func _draw() -> void:
 		var alpha: float = clampf(particle.life / max_lifetime, 0.0, 1.0)
 		var color: Color = particle.color
 		color.a = alpha * 0.82
-		var trail: Vector2 = -particle.velocity.normalized() * minf(2.6, particle.velocity.length() * 0.045)
-		draw_line(particle.position, particle.position + trail, color, maxf(0.5, particle.size * 0.65))
-		draw_circle(particle.position, particle.size, color)
+		var pixel_position := Vector2(roundi(particle.position.x), roundi(particle.position.y))
+		var trail_direction: Vector2 = -particle.velocity.normalized() if particle.velocity.length_squared() > 0.01 else Vector2.ZERO
+		var trail_length := clampi(roundi(minf(3.0, particle.velocity.length() * 0.045)), 0, 3)
+		for step in range(1, trail_length + 1):
+			var trail_pixel := Vector2(roundi(pixel_position.x + trail_direction.x * step), roundi(pixel_position.y + trail_direction.y * step))
+			draw_rect(Rect2(trail_pixel, Vector2.ONE), Color(color, color.a * (1.0 - float(step) / float(trail_length + 1))))
+		var pixel_size := 2 if float(particle.size) >= 0.92 else 1
+		draw_rect(Rect2(pixel_position - Vector2(floori(pixel_size / 2.0), floori(pixel_size / 2.0)), Vector2(pixel_size, pixel_size)), color)

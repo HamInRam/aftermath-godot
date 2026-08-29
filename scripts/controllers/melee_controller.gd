@@ -1,11 +1,11 @@
 class_name MeleeController
 extends RefCounted
 
-static func query_bodies(actor: CharacterBody2D, melee_shape: CollisionShape2D) -> Array:
+static func query_bodies(actor: CharacterBody2D, melee_shape: CollisionShape2D, collision_mask := 2) -> Array:
 	var query := PhysicsShapeQueryParameters2D.new()
 	query.shape = melee_shape.shape
 	query.transform = melee_shape.global_transform
-	query.collision_mask = 2
+	query.collision_mask = collision_mask
 	query.exclude = [actor.get_rid()]
 	var bodies: Array = []
 	for result in actor.get_world_2d().direct_space_state.intersect_shape(query, 32):

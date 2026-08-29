@@ -25,8 +25,10 @@ func _run() -> void:
 	_expect(RuntimeBudget.get_count("shell") <= int(RuntimeBudget.limits.shell), "stress fire must not exceed shell budget")
 	_expect(RuntimeBudget.get_count("transient_fx") <= int(RuntimeBudget.limits.transient_fx), "stress fire must not exceed transient-effect budget")
 	_expect(RuntimeBudget.get_count("gore") <= int(RuntimeBudget.limits.gore), "lethal effects must not exceed gore budget")
-	_expect(RuntimeBudget.get_count("blood_pool") <= int(RuntimeBudget.limits.blood_pool), "death pools must not exceed pool budget")
-	_expect(RuntimeBudget.get_dropped("shell") > 0 and RuntimeBudget.get_dropped("gore") > 0 and RuntimeBudget.get_dropped("blood_pool") > 0, "stress scene should prove that hard caps activate")
+	_expect(RuntimeBudget.get_count("blood_pool") == 0, "pixel death pools must not allocate legacy pool nodes")
+	_expect(RuntimeBudget.get_dropped("shell") > 0 and RuntimeBudget.get_dropped("gore") > 0, "stress scene should prove that remaining node hard caps activate")
+	_expect(level.blood_system.ground_canvas.chunks.size() < 64, "dense blood should remain inside a bounded sparse-chunk set (got %d)" % level.blood_system.ground_canvas.chunks.size())
+	_expect(int(level.blood_system.ground_canvas.get_debug_pixel_count()) < 20000, "dense blood should remain below the room-scale pixel occupancy budget")
 	_expect(generation_ms < 5000.0, "stress generation should complete within a broad CI-safe five-second budget")
 	for frame in range(12): await get_tree().process_frame
 	var report := PerformanceMonitor.get_report()

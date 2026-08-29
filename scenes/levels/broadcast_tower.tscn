@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/levels/after_hours.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/missions/broadcast_tower.tres" type="Resource" id="2"]
+[node name="BroadcastTower" instance=ExtResource("1")]
+level_title = "DEAD AIR"
+enemy_spawns = PackedVector2Array(44,52, 44,188, 132,92, 212,92, 260,132, 140,196, 236,196, 324,52, 348,116, 332,196)
+enemy_types = PackedStringArray("assault","gunner","heavy","assault","gunner","dog","assault","heavy","melee","gunner")
+fixed_sentry_indices = PackedInt32Array(2,7,10)
+mission_profile = ExtResource("2")
+visual_theme = "broadcast"
+ammo_pickup_positions = PackedVector2Array(60,116, 156,180, 276,76, 348,188)
+disposal_positions = PackedVector2Array(44,204, 348,204)
+disposal_types = PackedStringArray("incinerator", "dumpster")
+cleanup_secret_positions = PackedVector2Array(76,52, 196,108, 340,188)
+cleanup_secret_types = PackedStringArray("clue", "valuable", "clue")
+cleanup_furniture_positions = PackedVector2Array(124,76, 260,148, 332,60)
+tactical_lure_positions = PackedVector2Array(164,116, 300,180)
+[node name="TileMap" parent="." index="0"]
+layout_id = "broadcast_tower"

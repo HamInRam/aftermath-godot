@@ -1,9 +1,23 @@
 class_name EnemyNavigation
 extends RefCounted
 
+static var crowd_cache_bucket := -1
+static var crowd_cache: Array[WeakRef] = []
+
+static func clear_shared_cache() -> void:
+	crowd_cache_bucket = -1
+	crowd_cache.clear()
+
 static func crowd_separation(actor: Node2D, radius: float = 13.0) -> Vector2:
 	var separation := Vector2.ZERO
-	for other in actor.get_tree().get_nodes_in_group("enemy"):
+	var bucket := int(Time.get_ticks_msec() / 16)
+	if crowd_cache_bucket != bucket:
+		crowd_cache_bucket = bucket
+		crowd_cache.clear()
+		for enemy in actor.get_tree().get_nodes_in_group("enemy"):
+			if is_instance_valid(enemy): crowd_cache.append(weakref(enemy))
+	for other_ref in crowd_cache:
+		var other = other_ref.get_ref()
 		if other == actor or not is_instance_valid(other) or not other is Node2D: continue
 		var offset: Vector2 = actor.global_position - other.global_position
 		var distance := offset.length()

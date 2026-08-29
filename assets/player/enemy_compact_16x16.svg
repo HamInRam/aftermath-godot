@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <!-- Two compact rear feet: the body reads from left (feet) to right (head/weapon). -->
+  <rect x="1" y="3" width="5" height="4" fill="#241a29"/>
+  <rect x="1" y="9" width="5" height="4" fill="#241a29"/>
+  <rect x="2" y="4" width="4" height="2" fill="#3a2739"/>
+  <rect x="2" y="10" width="4" height="2" fill="#3a2739"/>
+  <!-- One connected torso mass, no loose anatomy pixels. -->
+  <rect x="4" y="4" width="7" height="8" fill="#241a29"/>
+  <rect x="5" y="5" width="6" height="6" fill="#9a245e"/>
+  <rect x="5" y="6" width="2" height="4" fill="#ce356f"/>
+  <!-- Head sits at the forward/right end of the same axis. -->
+  <rect x="9" y="4" width="4" height="6" fill="#241a29"/>
+  <rect x="10" y="5" width="3" height="4" fill="#d89a7d"/>
+  <rect x="12" y="6" width="1" height="1" fill="#f0bea0"/>
+  <!-- Arms and compact firearm form one readable horizontal line. -->
+  <rect x="8" y="2" width="2" height="4" fill="#241a29"/>
+  <rect x="9" y="3" width="3" height="2" fill="#9a245e"/>
+  <rect x="11" y="3" width="2" height="2" fill="#d89a7d"/>
+  <rect x="12" y="2" width="4" height="3" fill="#241a29"/>
+  <rect x="13" y="3" width="3" height="1" fill="#ece6df"/>
+  <rect x="8" y="10" width="4" height="2" fill="#76204f"/>
+</svg>

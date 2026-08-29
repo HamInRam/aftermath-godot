@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "police_archive"
+display_name = "CASE 09 // BLUE FILES"
+briefing = "A CORRUPT UNIT KEEPS THE REAL CASES OFFLINE. SHUT THE CAMERAS AND TAKE THEIR ARCHIVE APART."
+required_eliminations = -1
+required_security_shutdowns = 2
+completion_bonus = 1250
+alarm_penalty = 250
+property_damage_penalty = 50
+scene_path = "res://scenes/levels/police_archive.tscn"
+debrief_text = "THE ARCHIVE LOSES A DECADE. THE LAST PAPER TRAIL RUNS THROUGH A PACKING PLANT."
+unlock_after = "casino_floor"
+campaign_order = 9
+cleanup_pressure_seconds = 115.0

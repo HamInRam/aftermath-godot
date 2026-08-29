@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource path="res://scripts/ui/briefing_screen.gd" type="Script" id="1_briefing"]
+[ext_resource path="res://assets/portraits/handler_64.svg" type="Texture2D" id="2_portrait"]
 
 [node name="BriefingScreen" type="Control"]
 layout_mode = 3
@@ -26,9 +27,19 @@ offset_top = 15.0
 offset_right = 296.0
 offset_bottom = 165.0
 
+[node name="HandlerPortrait" type="TextureRect" parent="."]
+offset_left = 251.0
+offset_top = 20.0
+offset_right = 283.0
+offset_bottom = 52.0
+texture = ExtResource("2_portrait")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
 [node name="VBox" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
-theme_override_constants/separation = 5
+theme_override_constants/separation = 4
 
 [node name="Kicker" type="Label" parent="Panel/VBox"]
 layout_mode = 2
@@ -40,7 +51,7 @@ horizontal_alignment = 1
 [node name="Title" type="Label" parent="Panel/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.24, 0.48, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 10
 text = "MISSION"
 horizontal_alignment = 1
 
@@ -68,14 +79,35 @@ theme_override_font_sizes/font_size = 7
 text = "NO PRIOR RECORD"
 horizontal_alignment = 1
 
+[node name="Contract" type="Label" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.46, 1, 1)
+theme_override_font_sizes/font_size = 6
+text = "TERMS // STANDARD   KIT // BALANCED"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="Actions" type="HBoxContainer" parent="Panel/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 3
 alignment = 1
 
 [node name="BackButton" type="Button" parent="Panel/VBox/Actions"]
 layout_mode = 2
 text = "BACK"
+
+[node name="IntelButton" type="Button" parent="Panel/VBox/Actions"]
+layout_mode = 2
+text = "INTEL"
+
+[node name="ContractButton" type="Button" parent="Panel/VBox/Actions"]
+layout_mode = 2
+text = "TERMS"
+
+[node name="LoadoutButton" type="Button" parent="Panel/VBox/Actions"]
+layout_mode = 2
+text = "KIT"
 
 [node name="DeployButton" type="Button" parent="Panel/VBox/Actions"]
 layout_mode = 2

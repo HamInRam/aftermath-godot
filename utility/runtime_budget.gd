@@ -10,12 +10,18 @@ const DEFAULT_LIMITS := {
 	"blood_stain": 128,
 	"blood_pool": 48,
 	"gore": 128,
-	"footprint": 96,
-	"corpse": 48,
+	# Footprints are permanent cleanup evidence. A normal mission can exceed the
+	# old 96-node ceiling through repeated contamination, which silently stopped
+	# all later footprints. Keep a generous mission-wide ceiling instead.
+	"footprint": 512,
+	# Corpses are persistent gameplay evidence. Never discard them on the larger
+	# test maps merely because many enemies were killed.
+	"corpse": 128,
 	"weapon_pickup": 64,
 	"ammo_pickup": 32,
 	"thrown_weapon": 24,
 	"debris": 48,
+	"hazard": 24,
 }
 
 var limits: Dictionary = DEFAULT_LIMITS.duplicate()
@@ -32,6 +38,20 @@ func try_add(category: String, node: Node, parent: Node) -> bool:
 		_dropped[category] = int(_dropped.get(category, 0)) + 1
 		budget_exhausted.emit(category, limit)
 		node.free()
+		return false
+	if not _active.has(category): _active[category] = {}
+	var instance_id := node.get_instance_id()
+	(_active[category] as Dictionary)[instance_id] = true
+	_peaks[category] = maxi(int(_peaks.get(category, 0)), get_count(category))
+	node.tree_exiting.connect(_release.bind(category, instance_id), CONNECT_ONE_SHOT)
+	parent.add_child(node)
+	return true
+
+func add_persistent(category: String, node: Node, parent: Node) -> bool:
+	# Mission evidence must never vanish merely because a visual-effect budget is
+	# full. Persistent objects remain tracked for diagnostics, but bypass caps.
+	if not is_instance_valid(node) or not is_instance_valid(parent):
+		if is_instance_valid(node): node.free()
 		return false
 	if not _active.has(category): _active[category] = {}
 	var instance_id := node.get_instance_id()
@@ -74,6 +94,10 @@ func get_snapshot() -> Dictionary:
 func reset_metrics() -> void:
 	_peaks.clear()
 	_dropped.clear()
+
+func reset_session() -> void:
+	_active.clear()
+	reset_metrics()
 
 func override_limits_for_test(new_limits: Dictionary) -> void:
 	limits = DEFAULT_LIMITS.duplicate()

@@ -2,12 +2,12 @@ shader_type canvas_item;
 
 uniform sampler2D screen_texture : hint_screen_texture, filter_nearest;
 uniform bool enable_effect = true;
-uniform float scanline_intensity : hint_range(0.0, 0.25) = 0.045;
+uniform float scanline_intensity : hint_range(0.0, 0.25) = 0.005;
 uniform float scanline_count : hint_range(30.0, 360.0) = 90.0;
-uniform float vignette_intensity : hint_range(0.1, 2.0) = 0.55;
-uniform float vignette_opacity : hint_range(0.0, 1.0) = 0.28;
-uniform float chromatic_aberration : hint_range(0.0, 0.02) = 0.004;
-uniform float distortion : hint_range(0.0, 0.03) = 0.006;
+uniform float vignette_intensity : hint_range(0.1, 2.0) = 0.72;
+uniform float vignette_opacity : hint_range(0.0, 1.0) = 0.11;
+uniform float chromatic_aberration : hint_range(0.0, 0.02) = 0.00025;
+uniform float distortion : hint_range(0.0, 0.03) = 0.0005;
 
 vec2 curve(vec2 uv) {
 	vec2 centered = (uv - 0.5) * 2.0;
@@ -30,6 +30,9 @@ void fragment() {
 			color.r = textureLod(screen_texture, uv - channel_offset, 0.0).r;
 			color.g = textureLod(screen_texture, uv, 0.0).g;
 			color.b = textureLod(screen_texture, uv + channel_offset, 0.0).b;
+			color = clamp((color - vec3(0.5)) * 1.12 + vec3(0.5), vec3(0.0), vec3(1.0));
+			float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+			color = mix(vec3(luminance), color, 0.96);
 			float scanline = sin(uv.y * scanline_count * 6.2831853) * 0.5 + 0.5;
 			color -= scanline * scanline_intensity;
 			float vignette = uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y);

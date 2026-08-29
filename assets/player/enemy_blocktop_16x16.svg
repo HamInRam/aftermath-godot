@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <!-- Same readable anatomy as player; darker jacket and magenta chest establish faction. -->
+  <!-- Legs are rendered independently so movement and aim never share rotation. -->
+  <path d="M4 3h2V2h5v2h2v2h2v5h-2v2h-2v1H6v-1H4z" fill="#18131d"/>
+  <path d="M5 4h2V3h3v1h2v2h1v5h-2v2H6v-1H5z" fill="#e7ddd5"/>
+  <path d="M5 6h6v5H5z" fill="#8e244f"/>
+  <path d="M6 6h2v5H6z" fill="#d83b72"/>
+  <path d="M9 4h5v2h1v5h-1v1H9V9H8V6h1z" fill="#18131d"/>
+  <path d="M10 5h3v1h1v4h-1v1h-3V9H9V6h1z" fill="#d79a7d"/>
+  <path d="M13 6h1v4h-1z" fill="#efbea0"/>
+  <path d="M14 7h1v2h-1z" fill="#4a292c"/>
+  <path d="M6 2h4v1H6z" fill="#f4eee8"/>
+</svg>

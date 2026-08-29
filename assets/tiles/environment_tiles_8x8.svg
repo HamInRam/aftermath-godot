@@ -1,21 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="8" viewBox="0 0 192 8" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="8" viewBox="0 0 256 8" shape-rendering="crispEdges">
   <!-- 0: gray concrete -->
-  <rect x="0" y="0" width="8" height="8" fill="#3a3740"/>
-  <rect x="1" y="1" width="1" height="1" fill="#48444e"/><rect x="6" y="5" width="1" height="1" fill="#302d36"/>
+  <rect x="0" y="0" width="8" height="8" fill="#41474a"/>
+  <rect x="1" y="1" width="1" height="1" fill="#697173"/><rect x="6" y="5" width="1" height="1" fill="#25292c"/>
   <!-- 1: wood -->
-  <rect x="8" y="0" width="8" height="8" fill="#593728"/>
-  <rect x="8" y="1" width="8" height="1" fill="#76452f"/><rect x="8" y="4" width="8" height="1" fill="#3f291f"/><rect x="12" y="0" width="1" height="4" fill="#4a2d22"/>
+  <rect x="8" y="0" width="8" height="8" fill="#684936"/>
+  <rect x="8" y="1" width="8" height="1" fill="#966949"/><rect x="8" y="4" width="8" height="1" fill="#473126"/><rect x="12" y="0" width="1" height="4" fill="#543a2c"/>
   <!-- 2: red carpet -->
-  <rect x="16" y="0" width="8" height="8" fill="#6f2030"/>
-  <rect x="16" y="0" width="1" height="8" fill="#b54a55"/><rect x="23" y="0" width="1" height="8" fill="#3a1522"/><rect x="19" y="3" width="2" height="2" fill="#8e2c3b"/>
+  <rect x="16" y="0" width="8" height="8" fill="#77223f"/>
+  <rect x="16" y="0" width="1" height="8" fill="#b84a61"/><rect x="23" y="0" width="1" height="8" fill="#351522"/><rect x="19" y="3" width="2" height="2" fill="#9d203c"/>
   <!-- 3: solid wall -->
-  <rect x="24" y="0" width="8" height="8" fill="#17131b"/>
-  <rect x="24" y="0" width="8" height="2" fill="#786777"/><rect x="25" y="2" width="6" height="5" fill="#403443"/><rect x="24" y="7" width="8" height="1" fill="#09080c"/>
+  <rect x="24" y="0" width="8" height="8" fill="#0b0d10"/>
+  <rect x="24" y="0" width="8" height="2" fill="#d8d5ca"/><rect x="25" y="2" width="6" height="5" fill="#45474a"/><rect x="24" y="7" width="8" height="1" fill="#050607"/>
   <!-- 4: window wall -->
-  <rect x="32" y="0" width="8" height="8" fill="#17131b"/>
-  <rect x="32" y="0" width="8" height="1" fill="#786777"/><rect x="33" y="2" width="6" height="4" fill="#4ac2cf"/><rect x="35" y="2" width="1" height="4" fill="#c8f4ef"/><rect x="32" y="7" width="8" height="1" fill="#09080c"/>
+  <rect x="32" y="0" width="8" height="8" fill="#0b0d10"/>
+  <rect x="32" y="0" width="8" height="1" fill="#d8d5ca"/><rect x="33" y="2" width="6" height="4" fill="#397d80"/><rect x="35" y="2" width="1" height="4" fill="#b9d9d6"/><rect x="32" y="7" width="8" height="1" fill="#050607"/>
   <!-- 5: dark tile -->
-  <rect x="40" y="0" width="8" height="8" fill="#26212c"/>
+  <rect x="40" y="0" width="8" height="8" fill="#393140"/>
   <rect x="40" y="0" width="8" height="1" fill="#332d39"/><rect x="40" y="4" width="8" height="1" fill="#1e1a24"/><rect x="44" y="0" width="1" height="8" fill="#1f1b25"/>
   <!-- 6: grass -->
   <rect x="48" y="0" width="8" height="8" fill="#263b29"/>
@@ -24,21 +24,21 @@
   <rect x="56" y="0" width="8" height="8" fill="#28232d"/>
   <rect x="56" y="1" width="8" height="1" fill="#8a7180"/><rect x="56" y="3" width="8" height="1" fill="#725b6a"/><rect x="56" y="5" width="8" height="1" fill="#594653"/><rect x="56" y="7" width="8" height="1" fill="#342a34"/>
   <!-- 8: green checker -->
-  <rect x="64" y="0" width="8" height="8" fill="#17151c"/><rect x="64" y="0" width="4" height="4" fill="#647f57"/><rect x="68" y="4" width="4" height="4" fill="#647f57"/><rect x="65" y="1" width="1" height="1" fill="#82966d"/><rect x="69" y="5" width="1" height="1" fill="#82966d"/>
+  <rect x="64" y="0" width="8" height="8" fill="#242729"/><rect x="64" y="0" width="4" height="4" fill="#66735c"/><rect x="68" y="4" width="4" height="4" fill="#66735c"/><rect x="65" y="1" width="1" height="1" fill="#98a181"/><rect x="69" y="5" width="1" height="1" fill="#98a181"/>
   <!-- 9: black teal planks -->
-  <rect x="72" y="0" width="8" height="8" fill="#071914"/><rect x="72" y="1" width="8" height="1" fill="#0c2820"/><rect x="72" y="4" width="8" height="1" fill="#04100d"/><rect x="76" y="0" width="1" height="4" fill="#102e26"/>
+  <rect x="72" y="0" width="8" height="8" fill="#17483d"/><rect x="72" y="1" width="8" height="1" fill="#2d7560"/><rect x="72" y="4" width="8" height="1" fill="#102f29"/><rect x="76" y="0" width="1" height="4" fill="#40977a"/>
   <!-- 10: teal carpet -->
-  <rect x="80" y="0" width="8" height="8" fill="#164b3b"/><rect x="81" y="2" width="1" height="1" fill="#2d7255"/><rect x="85" y="5" width="2" height="1" fill="#0d342b"/><rect x="83" y="7" width="1" height="1" fill="#4a8062"/>
+  <rect x="80" y="0" width="8" height="8" fill="#21664f"/><rect x="81" y="2" width="1" height="1" fill="#43a477"/><rect x="85" y="5" width="2" height="1" fill="#16483a"/><rect x="83" y="7" width="1" height="1" fill="#6cb08a"/>
   <!-- 11: cream corridor -->
   <rect x="88" y="0" width="8" height="8" fill="#c18e70"/><rect x="89" y="1" width="1" height="1" fill="#e1b093"/><rect x="93" y="4" width="1" height="1" fill="#9b664f"/><rect x="88" y="7" width="8" height="1" fill="#a97158"/>
   <!-- 12: magenta stage -->
-  <rect x="96" y="0" width="8" height="8" fill="#c91672"/><rect x="96" y="0" width="8" height="1" fill="#ec2b92"/><rect x="97" y="4" width="6" height="1" fill="#b30d60"/><rect x="102" y="2" width="1" height="1" fill="#f04da3"/>
+  <rect x="96" y="0" width="8" height="8" fill="#8e2855"/><rect x="96" y="0" width="8" height="1" fill="#c43864"/><rect x="97" y="4" width="6" height="1" fill="#641c3e"/><rect x="102" y="2" width="1" height="1" fill="#d982a6"/>
   <!-- 13: red brick -->
-  <rect x="104" y="0" width="8" height="8" fill="#562321"/><rect x="104" y="2" width="8" height="1" fill="#2b1517"/><rect x="104" y="5" width="8" height="1" fill="#2b1517"/><rect x="108" y="0" width="1" height="2" fill="#7b342c"/><rect x="106" y="3" width="1" height="2" fill="#7b342c"/>
+  <rect x="104" y="0" width="8" height="8" fill="#7b3634"/><rect x="104" y="2" width="8" height="1" fill="#3f2024"/><rect x="104" y="5" width="8" height="1" fill="#3f2024"/><rect x="108" y="0" width="1" height="2" fill="#ad5145"/><rect x="106" y="3" width="1" height="2" fill="#ad5145"/>
   <!-- 14: bathroom tile -->
-  <rect x="112" y="0" width="8" height="8" fill="#335963"/><rect x="112" y="3" width="8" height="1" fill="#182f38"/><rect x="115" y="0" width="1" height="8" fill="#182f38"/><rect x="116" y="1" width="2" height="1" fill="#5c8990"/>
+  <rect x="112" y="0" width="8" height="8" fill="#4f8490"/><rect x="112" y="3" width="8" height="1" fill="#294c58"/><rect x="115" y="0" width="1" height="8" fill="#294c58"/><rect x="116" y="1" width="2" height="1" fill="#8cc2c5"/>
   <!-- 15: bright wall trim -->
-  <rect x="120" y="0" width="8" height="8" fill="#17131b"/><rect x="120" y="0" width="8" height="2" fill="#f0ded0"/><rect x="120" y="2" width="8" height="1" fill="#a57c68"/><rect x="121" y="3" width="6" height="4" fill="#302530"/><rect x="120" y="7" width="8" height="1" fill="#09080c"/>
+  <rect x="120" y="0" width="8" height="8" fill="#15121b"/><rect x="120" y="0" width="8" height="2" fill="#f2e4d7"/><rect x="120" y="2" width="8" height="1" fill="#d99a7d"/><rect x="121" y="3" width="6" height="4" fill="#493544"/><rect x="120" y="7" width="8" height="1" fill="#09070c"/>
   <!-- 16: sofa -->
   <rect x="128" y="1" width="8" height="6" fill="#17131b"/><rect x="129" y="2" width="6" height="4" fill="#57d7c1"/><rect x="130" y="3" width="2" height="2" fill="#86f0da"/><rect x="133" y="3" width="2" height="2" fill="#349e91"/>
   <!-- 17: wood table -->
@@ -55,4 +55,20 @@
   <rect x="176" y="0" width="8" height="8" fill="#24152b"/><rect x="177" y="1" width="6" height="6" fill="#3ed6a6"/><rect x="178" y="2" width="4" height="2" fill="#d6298a"/><rect x="178" y="5" width="2" height="1" fill="#152528"/><rect x="181" y="5" width="1" height="2" fill="#ffe357"/>
   <!-- 23: debris / plant -->
   <rect x="184" y="5" width="8" height="3" fill="#42231d"/><rect x="187" y="1" width="2" height="5" fill="#3e8b55"/><rect x="185" y="2" width="3" height="2" fill="#62bb70"/><rect x="189" y="0" width="2" height="3" fill="#2f7048"/>
+  <!-- 24: sparse floor crack overlay -->
+  <path d="M193 1h2v1h1v2h2v1h1v2h-2V6h-1V4h-2V3h-1z" fill="#17131b"/><rect x="196" y="3" width="1" height="1" fill="#8a7180"/>
+  <!-- 25: discarded papers overlay -->
+  <rect x="201" y="2" width="4" height="3" fill="#d8c9aa"/><rect x="204" y="4" width="3" height="3" fill="#eee0c2"/><rect x="202" y="3" width="2" height="1" fill="#8f7768"/>
+  <!-- 26: bottle fragments overlay -->
+  <rect x="209" y="5" width="3" height="2" fill="#3fbbb0"/><rect x="213" y="2" width="2" height="3" fill="#7ce0d0"/><rect x="216" y="6" width="1" height="1" fill="#d7fff5"/>
+  <!-- 27: oil/grime overlay -->
+  <rect x="218" y="4" width="5" height="3" fill="#15151a" fill-opacity=".55"/><rect x="220" y="2" width="3" height="3" fill="#2d2526" fill-opacity=".6"/><rect x="224" y="5" width="1" height="1" fill="#6f4a2d"/>
+  <!-- 28: neon direction marker overlay -->
+  <rect x="226" y="3" width="5" height="2" fill="#f01b85"/><rect x="230" y="2" width="2" height="4" fill="#f01b85"/><rect x="227" y="3" width="3" height="1" fill="#ff7fc0"/>
+  <!-- 29: hazard stripe -->
+  <rect x="232" y="3" width="8" height="3" fill="#1b181b"/><path d="M232 5l2-2h2l-2 2zm4 0l2-2h2l-2 2z" fill="#e39a2d"/>
+  <!-- 30: loose cable overlay -->
+  <path d="M241 2h4v1h1v3h2v1h-3V6h-1V4h-3z" fill="#15121a"/><rect x="247" y="6" width="1" height="1" fill="#d52b74"/>
+  <!-- 31: floor drain -->
+  <rect x="249" y="1" width="6" height="6" fill="#171820"/><rect x="250" y="2" width="4" height="4" fill="#4d5660"/><path d="M250 3h4v1h-4zm0 2h4v1h-4z" fill="#20252b"/>
 </svg>

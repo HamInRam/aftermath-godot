@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/levels/sandwich_shop.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/missions/cold_storage.tres" type="Resource" id="2"]
+[node name="ColdStorage" instance=ExtResource("1")]
+level_title = "COLD STORAGE"
+enemy_spawns = PackedVector2Array(52,44, 52,180, 164,52, 212,100, 164,188, 292,52, 348,92, 292,188, 348,188, 212,188)
+enemy_types = PackedStringArray("dog","melee","assault","heavy","gunner","dog","assault","heavy","melee","gunner")
+fixed_sentry_indices = PackedInt32Array(3,7)
+mission_profile = ExtResource("2")
+visual_theme = "ice"
+ammo_pickup_positions = PackedVector2Array(52,92, 188,92, 284,116, 348,196)
+disposal_positions = PackedVector2Array(44,204, 348,204)
+disposal_types = PackedStringArray("incinerator", "dumpster")
+cleanup_secret_positions = PackedVector2Array(60,52, 196,116, 340,196)
+cleanup_secret_types = PackedStringArray("clue", "clue", "valuable")
+cleanup_furniture_positions = PackedVector2Array(84,52, 180,172, 316,60)
+tactical_lure_positions = PackedVector2Array(132,116, 300,172)
+[node name="TileMap" parent="." index="0"]
+layout_id = "cold_storage"

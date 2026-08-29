@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "slaughterhouse"
+display_name = "CASE 10 // PACKING LINE"
+briefing = "THE SYNDICATE'S ENFORCERS ARE WAITING AMONG THE DRAINS. EXPECT HEAVY RESISTANCE."
+required_eliminations = -1
+completion_bonus = 1350
+alarm_penalty = 260
+maximum_player_shots_for_bonus = 12
+optional_quiet_bonus = 420
+scene_path = "res://scenes/levels/slaughterhouse.tscn"
+debrief_text = "THE LINE STOPS. A BROADCAST FREQUENCY IS SCRATCHED INTO THE FOREMAN'S KEY."
+unlock_after = "police_archive"
+campaign_order = 10
+cleanup_pressure_seconds = 110.0

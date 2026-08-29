@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/levels/after_hours.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/missions/police_archive.tres" type="Resource" id="2"]
+[node name="PoliceArchive" instance=ExtResource("1")]
+level_title = "BLUE FILES"
+enemy_spawns = PackedVector2Array(52,52, 92,180, 164,52, 220,92, 164,188, 228,188, 292,52, 348,92, 292,188, 348,188)
+enemy_types = PackedStringArray("heavy","gunner","assault","heavy","gunner","melee","assault","heavy","gunner","dog")
+fixed_sentry_indices = PackedInt32Array(0,3,7)
+mission_profile = ExtResource("2")
+visual_theme = "police"
+ammo_pickup_positions = PackedVector2Array(60,108, 180,76, 276,164, 348,108)
+disposal_positions = PackedVector2Array(44,204, 348,204)
+disposal_types = PackedStringArray("incinerator", "dumpster")
+cleanup_secret_positions = PackedVector2Array(76,52, 196,108, 340,188)
+cleanup_secret_types = PackedStringArray("clue", "clue", "valuable")
+cleanup_furniture_positions = PackedVector2Array(100,44, 228,180, 332,60)
+tactical_lure_positions = PackedVector2Array(148,132, 300,92)
+[node name="TileMap" parent="." index="0"]
+layout_id = "police_archive"

@@ -42,6 +42,10 @@ func _run() -> void:
 	enemies[4].alert_memory_time = 0.0
 	enemies[4]._update_alert_memory(0.1)
 	_expect(enemies[4].alert_level == enemies[4].AlertLevel.NORMAL, "suspicion should eventually return to normal")
+	CombatDirector.reset_kill_zones()
+	_expect(CombatDirector.request_fire_token(enemies[1]), "first ready gunner should receive a firing token")
+	_expect(not CombatDirector.request_fire_token(enemies[2]), "same-frame gunners should be staggered instead of forming an instant firing squad")
+	CombatDirector.release_fire_token(enemies[1])
 	if failures == 0: print("tactical alert regression: PASS")
 	for actor in enemies + [player]:
 		for audio_node in actor.find_children("*", "AudioStreamPlayer", true, false):

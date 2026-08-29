@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "broadcast_tower"
+display_name = "CASE 11 // DEAD AIR"
+briefing = "THE CALLS CAME FROM THIS TOWER. CLIMB THE CONTROL FLOOR AND KILL THE SIGNAL."
+required_eliminations = -1
+required_security_shutdowns = 2
+completion_bonus = 1450
+alarm_penalty = 275
+maximum_alarms_for_bonus = 0
+optional_quiet_bonus = 500
+scene_path = "res://scenes/levels/broadcast_tower.tscn"
+debrief_text = "THE VOICE ON THE PHONE IS FINALLY SILENT. ITS LAST MESSAGE NAMES THE ORIGINAL CLIENT."
+unlock_after = "slaughterhouse"
+campaign_order = 11
+cleanup_pressure_seconds = 105.0

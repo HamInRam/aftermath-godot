@@ -10,6 +10,8 @@ var cleanup_steps_remaining := 2
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
+	add_to_group("blood_source")
+	add_to_group("micro_blood_drop")
 
 func setup(strength: float, direction := Vector2.RIGHT, surface_profile := {}) -> void:
 	amount = clampf(strength, 0.2, 1.0)
@@ -23,10 +25,23 @@ func setup(strength: float, direction := Vector2.RIGHT, surface_profile := {}) -
 
 func clean_step() -> void:
 	cleanup_steps_remaining = maxi(0, cleanup_steps_remaining - 1)
-	if cleanup_steps_remaining == 0: queue_free()
+	if cleanup_steps_remaining == 0:
+		CleanupRegistry.unregister_target(self)
+		queue_free()
 	else:
 		amount = float(cleanup_steps_remaining) / float(cleanup_cost)
 		queue_redraw()
+
+func absorb_drop(strength: float, direction: Vector2) -> void:
+	amount = clampf(amount + strength * 0.28, 0.2, 1.0)
+	cleanup_steps_remaining = mini(cleanup_cost + 1, maxi(cleanup_steps_remaining, cleanup_cost))
+	if direction.length_squared() > 0.2:
+		elongated = true
+		rotation = lerp_angle(rotation, direction.angle(), 0.35)
+	queue_redraw()
+
+func get_cleanup_progress() -> float:
+	return 1.0 - float(cleanup_steps_remaining) / maxf(1.0, float(cleanup_cost))
 
 func get_cleanup_type() -> String: return "blood"
 func get_cleanup_cost() -> int: return cleanup_cost

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <!-- Compact original overhead operative, facing right. Connected clusters and one-pixel outline. -->
+  <!-- Legs are rendered independently so movement and aim never share rotation. -->
+  <path d="M4 3h2V2h5v2h2v2h2v5h-2v2h-2v1H6v-1H4z" fill="#17131d"/>
+  <path d="M5 4h2V3h3v1h2v2h1v5h-2v2H6v-1H5z" fill="#f0ece4"/>
+  <path d="M5 6h6v5H5z" fill="#d8e2df"/>
+  <path d="M6 6h2v5H6z" fill="#27c9ca"/>
+  <path d="M9 4h5v2h1v5h-1v1H9V9H8V6h1z" fill="#17131d"/>
+  <path d="M10 5h3v1h1v4h-1v1h-3V9H9V6h1z" fill="#e1a07f"/>
+  <path d="M13 6h1v4h-1z" fill="#f4c19c"/>
+  <path d="M14 7h1v2h-1z" fill="#4c2b31"/>
+  <path d="M6 2h4v1H6z" fill="#69f0e0"/>
+</svg>

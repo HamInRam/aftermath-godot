@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/levels/sandwich_shop.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/missions/slaughterhouse.tres" type="Resource" id="2"]
+[node name="Slaughterhouse" instance=ExtResource("1")]
+level_title = "PACKING LINE"
+enemy_spawns = PackedVector2Array(52,44, 148,44, 236,44, 340,44, 76,108, 156,116, 228,108, 324,116, 132,188, 300,188)
+enemy_types = PackedStringArray("heavy","melee","dog","heavy","assault","dog","heavy","melee","assault","gunner")
+fixed_sentry_indices = PackedInt32Array(0,3,6,10)
+mission_profile = ExtResource("2")
+visual_theme = "crimson"
+ammo_pickup_positions = PackedVector2Array(60,76, 180,116, 284,116, 348,188)
+disposal_positions = PackedVector2Array(44,204, 348,204)
+disposal_types = PackedStringArray("incinerator", "dumpster")
+cleanup_secret_positions = PackedVector2Array(76,52, 212,116, 340,196)
+cleanup_secret_types = PackedStringArray("clue", "clue", "valuable")
+cleanup_furniture_positions = PackedVector2Array(116,44, 260,116, 332,44)
+tactical_lure_positions = PackedVector2Array(156,76, 300,180)
+[node name="TileMap" parent="." index="0"]
+layout_id = "slaughterhouse"

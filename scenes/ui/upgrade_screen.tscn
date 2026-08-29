@@ -1,0 +1,78 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scripts/ui/upgrade_screen.gd" type="Script" id="1_upgrade"]
+
+[node name="UpgradeScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_upgrade")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.027, 0.036, 1)
+
+[node name="Panel" type="PanelContainer" parent="."]
+offset_left = 30.0
+offset_top = 6.0
+offset_right = 290.0
+offset_bottom = 174.0
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Header" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="Panel/VBox/Header"]
+custom_minimum_size = Vector2(54, 16)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "< BACK"
+
+[node name="Title" type="Label" parent="Panel/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.24, 0.48, 1)
+theme_override_font_sizes/font_size = 10
+text = "WORKSHOP"
+horizontal_alignment = 1
+
+[node name="Credits" type="Label" parent="Panel/VBox/Header"]
+custom_minimum_size = Vector2(72, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 1, 0.84, 1)
+theme_override_font_sizes/font_size = 7
+text = "BALANCE $0"
+horizontal_alignment = 2
+
+[node name="Description" type="Label" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 25)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.77, 0.86, 1)
+theme_override_font_sizes/font_size = 6
+text = "SELECT AN UPGRADE"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="UpgradeList" type="VBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Status" type="Label" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 13)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.84, 0.42, 1)
+theme_override_font_sizes/font_size = 7
+text = "CHOOSE A SYSTEM TO IMPROVE"
+horizontal_alignment = 1

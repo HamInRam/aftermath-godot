@@ -7,15 +7,21 @@
 
 [node name="AfterHours" instance=ExtResource("1_main")]
 level_title = "AFTER HOURS // VERTICAL SLICE"
-player_spawn = Vector2(44, 190)
-enemy_spawns = PackedVector2Array(72, 54, 142, 54, 212, 54, 292, 54, 340, 92, 82, 174, 150, 178, 222, 174, 286, 176, 342, 178)
-enemy_patrol_offsets = PackedVector2Array(48, 0, 0, 48, 48, 0, 0, 48, -48, 0, 0, -48, 48, 0, 0, -48, -48, 0, 0, -48)
-ammo_pickup_positions = PackedVector2Array(104, 120, 238, 120, 326, 144)
-ammo_pickup_weapon_ids = PackedStringArray("pistol", "smg", "lmg")
-ammo_pickup_rounds = PackedInt32Array(12, 24, 30)
+player_spawn = Vector2(44, 204)
+enemy_spawns = PackedVector2Array(60,52,132,76,180,44,236,52,316,76,364,44,76,164,164,196,252,164,340,196)
+enemy_patrol_offsets = PackedVector2Array(48,0,0,48,-48,0,56,0,0,48,-48,0,0,-48,48,0,0,-48,-48,0)
+ammo_pickup_positions = PackedVector2Array(100,116,244,116,316,164,364,116)
+ammo_pickup_weapon_ids = PackedStringArray("pistol", "smg", "lmg", "shotgun")
+ammo_pickup_rounds = PackedInt32Array(12, 24, 30, 8)
 enemy_types = PackedStringArray("dog", "gunner", "assault", "heavy", "melee", "gunner", "dog", "assault", "heavy", "melee")
 fixed_sentry_indices = PackedInt32Array(3, 8)
+disposal_positions = PackedVector2Array(364, 204, 44, 44)
+disposal_types = PackedStringArray("dumpster", "incinerator")
+cleanup_secret_positions = PackedVector2Array(60, 52, 252, 164, 364, 76)
+cleanup_secret_types = PackedStringArray("clue", "clue", "valuable")
+cleanup_furniture_positions = PackedVector2Array(132, 76, 252, 164, 340, 196)
 mission_profile = ExtResource("4_mission")
+visual_theme = "police"
 
 [node name="TileMap" parent="." index="0"]
 layout_id = "tactical_lab"

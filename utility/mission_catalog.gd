@@ -5,6 +5,15 @@ const MISSION_PROFILES: Array[MissionProfile] = [
 	preload("res://resources/missions/nightclub.tres"),
 	preload("res://resources/missions/sandwich_shop.tres"),
 	preload("res://resources/missions/after_hours.tres"),
+	preload("res://resources/missions/harbor_exchange.tres"),
+	preload("res://resources/missions/motel_witness.tres"),
+	preload("res://resources/missions/penthouse.tres"),
+	preload("res://resources/missions/cold_storage.tres"),
+	preload("res://resources/missions/casino_floor.tres"),
+	preload("res://resources/missions/police_archive.tres"),
+	preload("res://resources/missions/slaughterhouse.tres"),
+	preload("res://resources/missions/broadcast_tower.tres"),
+	preload("res://resources/missions/last_call.tres"),
 	preload("res://resources/missions/tactical_lab.tres"),
 ]
 

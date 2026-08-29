@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="MissionProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/mission_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+mission_id = "casino_floor"
+display_name = "CASE 08 // HOUSE EDGE"
+briefing = "THE HOUSE IS LAUNDERING MORE THAN MONEY. CUT THROUGH THE TABLES WITHOUT WAKING THE CITY."
+required_eliminations = -1
+required_security_shutdowns = 2
+completion_bonus = 1150
+alarm_penalty = 225
+maximum_alarms_for_bonus = 0
+optional_quiet_bonus = 450
+scene_path = "res://scenes/levels/casino_floor.tscn"
+debrief_text = "THE CHIPS STOP FALLING. A POLICE ARCHIVE RECEIPT EXPLAINS WHO PROTECTED THE HOUSE."
+unlock_after = "cold_storage"
+campaign_order = 8
+cleanup_pressure_seconds = 120.0

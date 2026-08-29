@@ -1,0 +1,14 @@
+{
+  "texture": "res://assets/sprites/aftermath_character_sheet_48.png",
+  "cell_size": [48, 48],
+  "columns": 8,
+  "rows": 4,
+  "anchor": [24, 24],
+  "filter": "nearest",
+  "row_actions": [
+    ["player_idle", "player_walk_a", "player_walk_b", "player_aim", "player_fire", "player_reload", "player_knife", "player_bat"],
+    ["gunner_idle", "gunner_walk_a", "gunner_walk_b", "gunner_aim", "gunner_fire", "gunner_reload", "gunner_knocked", "gunner_dead"],
+    ["melee_idle", "melee_walk_a", "melee_walk_b", "melee_windup", "melee_strike", "melee_staggered", "melee_knocked", "melee_dead"],
+    ["corpse_straight", "corpse_curled", "corpse_spread", "corpse_pistol", "corpse_smg", "corpse_head_destroyed", "corpse_arm_severed", "corpse_bisected"]
+  ]
+}

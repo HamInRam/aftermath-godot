@@ -3,6 +3,7 @@ extends Node
 var failures := 0
 
 func _ready() -> void:
+	_expect(int(RuntimeBudget.DEFAULT_LIMITS["footprint"]) >= 512, "mission-wide footprint evidence must not stop at the former 96-node ceiling")
 	RuntimeBudget.override_limits_for_test({"shell": 3})
 	var accepted: Array[Node] = []
 	for index in range(6):
@@ -11,6 +12,14 @@ func _ready() -> void:
 	_expect(accepted.size() == 3, "runtime budget should accept only the configured category limit")
 	_expect(RuntimeBudget.get_count("shell") == 3 and RuntimeBudget.get_peak("shell") == 3, "runtime budget should track active and peak counts")
 	_expect(RuntimeBudget.get_dropped("shell") == 3, "runtime budget should count denied instances")
+	RuntimeBudget.override_limits_for_test({"corpse": 1})
+	var persistent_a := Node.new()
+	var persistent_b := Node.new()
+	_expect(RuntimeBudget.add_persistent("corpse", persistent_a, self), "first persistent evidence should spawn")
+	_expect(RuntimeBudget.add_persistent("corpse", persistent_b, self), "persistent evidence must bypass visual-effect caps")
+	_expect(RuntimeBudget.get_count("corpse") == 2, "persistent corpse evidence must never be silently discarded")
+	persistent_a.queue_free()
+	persistent_b.queue_free()
 	for node in accepted: node.queue_free()
 	await get_tree().process_frame
 	_expect(RuntimeBudget.get_count("shell") == 0, "tree exit should release every category reservation")

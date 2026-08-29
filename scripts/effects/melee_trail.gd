@@ -8,18 +8,20 @@ var age := 0.0
 var effect_type := "fist"
 var punch_jitter := 0.0
 var air_motes: Array[Dictionary] = []
+var connected_hit := false
 
 func _ready() -> void:
 	var additive := CanvasItemMaterial.new()
 	additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	material = additive
 
-func setup(new_type: String, new_radius: float, new_arc_angle: float, new_life: float, new_color: Color) -> void:
+func setup(new_type: String, new_radius: float, new_arc_angle: float, new_life: float, new_color: Color, did_hit := false) -> void:
 	effect_type = new_type
 	radius = new_radius
 	arc_angle = new_arc_angle
 	life = new_life
 	trail_color = new_color
+	connected_hit = did_hit
 	punch_jitter = randf_range(-1.0, 1.0)
 	air_motes.clear()
 	var mote_count := 1 if effect_type == "knife" else (3 if effect_type == "bat" else 0)
@@ -50,7 +52,8 @@ func _draw() -> void:
 		draw_line(visual_offset + Vector2(0, -3), visual_offset + Vector2(radius, -3 + punch_jitter), punch_color, 1.0)
 		draw_line(visual_offset + Vector2(0, 3), visual_offset + Vector2(radius, 3 - punch_jitter), punch_color, 1.0)
 	elif effect_type == "knife":
-		var knife_color := Color(trail_color, alpha * 0.90)
+		var knife_base := trail_color.lerp(Color("ff244f"), 0.42) if connected_hit else trail_color
+		var knife_color := Color(knife_base, alpha * 0.90)
 		var knife_points := PackedVector2Array()
 		for index in range(7):
 			var t := float(index) / 6.0
@@ -59,6 +62,7 @@ func _draw() -> void:
 			knife_points.append(visual_offset + Vector2.RIGHT.rotated(angle) * dynamic_radius)
 		draw_polyline(knife_points, knife_color, 2.0)
 	else:
+		var bat_base := trail_color.lerp(Color("ff3d45"), 0.28) if connected_hit else trail_color
 		var bat_points := PackedVector2Array()
 		for index in range(13):
 			var t := float(index) / 12.0
@@ -66,8 +70,8 @@ func _draw() -> void:
 			var bulge := minf(2.0, radius * 0.18)
 			var dynamic_radius := radius - bulge + sin(t * PI) * bulge
 			bat_points.append(visual_offset + Vector2.RIGHT.rotated(angle) * dynamic_radius)
-		draw_polyline(bat_points, Color(trail_color, alpha * 0.35), 6.0)
-		draw_polyline(bat_points, Color(trail_color, alpha * 0.80), 1.5)
+		draw_polyline(bat_points, Color(bat_base, alpha * 0.35), 6.0)
+		draw_polyline(bat_points, Color(bat_base, alpha * 0.80), 1.5)
 	_draw_air_motes(alpha)
 
 func _draw_air_motes(alpha: float) -> void:

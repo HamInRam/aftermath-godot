@@ -12,18 +12,19 @@ signal impact_flash_requested(color: Color)
 @export_range(0.0, 200.0, 1.0) var extended_look_ahead := 125.0
 @export_range(0.0, 1.0, 0.05) var normal_look_weight := 0.25
 @export_range(0.0, 1.0, 0.05) var extended_look_weight := 0.55
-@export_range(1.0, 20.0, 0.5) var follow_speed := 7.5
+@export_range(1.0, 20.0, 0.5) var follow_speed_x := 7.5
+@export_range(1.0, 20.0, 0.5) var follow_speed_y := 6.5
 @export var camera_center_bounds := Rect2(160.0, 90.0, 64.0, 44.0)
 @export_group("Position Tilt")
-@export_range(0.0, 4.0, 0.1) var tilt_max_degrees := 1.4
+@export_range(0.0, 4.0, 0.05) var tilt_max_degrees := 0.55
 @export_range(0.0, 96.0, 1.0) var tilt_dead_zone := 24.0
 @export_range(32.0, 256.0, 1.0) var tilt_full_distance := 160.0
 @export_range(1.0, 20.0, 0.5) var tilt_smoothing := 6.5
 @export var tilt_room_center_x := 192.0
 @export_group("Ambient Drift")
 @export var ambient_drift_enabled := true
-@export_range(0.0, 3.0, 0.05) var drift_speed := 1.1
-@export_range(0.0, 0.02, 0.0005) var max_drift_angle := 0.005
+@export_range(0.0, 3.0, 0.05) var drift_speed := 0.42
+@export_range(0.0, 0.02, 0.0005) var max_drift_angle := 0.007
 
 var trauma := 0.0
 var noise_time := 0.0
@@ -48,7 +49,10 @@ func _ready() -> void:
 	smooth_follow_position = global_position
 
 func add_trauma(amount: float) -> void:
-	trauma = clampf(trauma + amount, 0.0, 1.0)
+	# Repeated impacts should intensify the shake without pinning the camera at its
+	# maximum for an entire automatic burst.
+	var headroom := 1.0 - trauma * 0.72
+	trauma = clampf(trauma + amount * headroom, 0.0, 1.0)
 
 func trigger_kill_effect(shake_power := 0.42, flash_type := "red") -> void:
 	add_trauma(shake_power)
@@ -73,7 +77,7 @@ func get_tilt_target(player_x: float) -> float:
 	var usable_distance := maxf(1.0, tilt_full_distance - tilt_dead_zone)
 	var percentage := clampf(distance_outside_buffer / usable_distance, 0.0, 1.0)
 	# Moving right tilts clockwise; moving left mirrors the angle.
-	return deg_to_rad(tilt_max_degrees) * -signf(signed_distance) * percentage
+	return deg_to_rad(tilt_max_degrees) * Settings.camera_tilt_strength * -signf(signed_distance) * percentage
 
 func _physics_process(delta: float) -> void:
 	drift_time += delta
@@ -81,7 +85,10 @@ func _physics_process(delta: float) -> void:
 		follow_target = get_tree().get_first_node_in_group("player") as Node2D
 	if is_instance_valid(follow_target):
 		var desired := get_follow_position(follow_target.global_position, get_global_mouse_position())
-		smooth_follow_position = smooth_follow_position.lerp(desired, 1.0 - exp(-follow_speed * delta))
+		# Independent axis damping keeps fast lateral strafes responsive while
+		# vertical room transitions retain a slightly heavier cinematic lag.
+		smooth_follow_position.x = lerpf(smooth_follow_position.x, desired.x, 1.0 - exp(-follow_speed_x * delta))
+		smooth_follow_position.y = lerpf(smooth_follow_position.y, desired.y, 1.0 - exp(-follow_speed_y * delta))
 		global_position = smooth_follow_position.round()
 		var desired_tilt := get_tilt_target(follow_target.global_position.x)
 		smooth_tilt = lerp_angle(smooth_tilt, desired_tilt, 1.0 - exp(-tilt_smoothing * delta))

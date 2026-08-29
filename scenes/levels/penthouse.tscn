@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource path="res://scenes/levels/after_hours.tscn" type="PackedScene" id="1"]
+[ext_resource path="res://resources/missions/penthouse.tres" type="Resource" id="2"]
+[node name="Penthouse" instance=ExtResource("1")]
+level_title = "GLASS HOUSE"
+enemy_spawns = PackedVector2Array(52,52, 132,76, 52,184, 132,184, 220,52, 300,68, 348,116, 236,188, 340,188)
+enemy_types = PackedStringArray("gunner","assault","gunner","heavy","gunner","dog","assault","melee","heavy")
+fixed_sentry_indices = PackedInt32Array(3,8)
+mission_profile = ExtResource("2")
+visual_theme = "gold"
+ammo_pickup_positions = PackedVector2Array(60,116, 172,76, 284,116, 348,188)
+disposal_positions = PackedVector2Array(44,204, 348,204)
+disposal_types = PackedStringArray("incinerator", "dumpster")
+cleanup_secret_positions = PackedVector2Array(76,52, 276,52, 340,188)
+cleanup_secret_types = PackedStringArray("clue", "valuable", "clue")
+cleanup_furniture_positions = PackedVector2Array(92,180, 244,52, 316,180)
+tactical_lure_positions = PackedVector2Array(164,116, 300,164)
+[node name="TileMap" parent="." index="0"]
+layout_id = "penthouse"

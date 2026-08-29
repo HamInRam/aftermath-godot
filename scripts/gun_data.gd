@@ -22,6 +22,9 @@ extends Resource
 @export_range(0.0, 4.0, 0.05) var spread_growth_per_shot := 0.0
 @export_range(0.0, 12.0, 0.1) var maximum_spread_bonus := 0.0
 @export_range(0.1, 12.0, 0.1) var spread_recovery := 4.0
+@export_range(0.0, 10.0, 0.1) var movement_spread_degrees := 2.0
+@export_range(0.0, 8.0, 0.1) var turn_spread_degrees := 1.5
+@export_range(1.0, 20.0, 0.5) var aim_follow_speed := 12.0
 @export_range(0.1, 5.0, 0.05) var reload_duration := 1.05
 @export_range(0.4, 1.2, 0.01) var movement_speed_multiplier := 1.0
 @export_range(0.3, 1.0, 0.01) var reload_movement_multiplier := 0.8
