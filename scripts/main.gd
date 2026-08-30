@@ -1227,7 +1227,9 @@ func _enter_cleanup_phase() -> void:
 	for corpse_node in get_tree().get_nodes_in_group("corpse"):
 		if is_instance_valid(corpse_node) and corpse_node.has_method("enter_cleanup_stable_state"):
 			corpse_node.enter_cleanup_stable_state()
-	for prop_node in get_tree().get_nodes_in_group("displaced_prop"):
+	# Freeze every physical decoration at the combat/cleanup boundary. Displaced
+	# objects remain draggable; untouched ones become immutable fixtures.
+	for prop_node in get_tree().get_nodes_in_group("destructible_prop"):
 		if is_instance_valid(prop_node) and prop_node.has_method("enter_cleanup_restore_state"):
 			prop_node.enter_cleanup_restore_state()
 	status_label.text = "CLEANUP REQUIRED"

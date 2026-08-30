@@ -34,6 +34,7 @@ var dragging_actor: Node2D
 var restoration_anchor: Node2D
 var snap_radius := 11.0
 var physics_active := false
+var restoration_locked := false
 
 func setup(kind: String, tint := Color("b25a38")) -> void:
 	prop_kind = kind
@@ -160,6 +161,10 @@ func _launch_movable(direction: Vector2, energy: float, attack_kind: String) -> 
 	_mark_displaced()
 
 func receive_actor_push(intended_velocity: Vector2, _contact_position: Vector2) -> void:
+	# Combat contact may shove loose dressing. Cleanup is a strict physics
+	# boundary: untouched scenery and anything already restored are kinematic
+	# fixtures, not objects the player can accidentally disturb again.
+	if cleanup_ready or restoration_locked or state == PropState.RESTORED: return
 	if not is_movable() or is_instance_valid(dragging_actor) or intended_velocity.length() < 24.0: return
 	velocity = (velocity + intended_velocity * 0.20).limit_length(34.0)
 	spin_velocity = clampf(spin_velocity + intended_velocity.y * 0.012, -2.5, 2.5)
@@ -230,8 +235,14 @@ func enter_cleanup_restore_state() -> void:
 	velocity = Vector2.ZERO
 	spin_velocity = 0.0
 	physics_active = false
+	# Tiny combat contact below the displacement threshold must not leave an
+	# apparently untouched prop a fraction of a pixel away from its authored slot.
+	if not displaced:
+		global_position = home_global_position
+		rotation = home_rotation
+		simulated_rotation = home_rotation
 	if is_instance_valid(restoration_anchor): restoration_anchor.set_cleanup_active(true)
-	if is_instance_valid(dragging_actor): set_physics_process(true)
+	set_physics_process(is_instance_valid(dragging_actor))
 
 func begin_drag(actor: Node2D) -> bool:
 	if not cleanup_ready or not displaced or not is_instance_valid(actor): return false
@@ -265,6 +276,7 @@ func _snap_home() -> void:
 	velocity = Vector2.ZERO
 	spin_velocity = 0.0
 	physics_active = false
+	restoration_locked = true
 	displaced = false
 	state = PropState.RESTORED
 	hp = 2
@@ -294,6 +306,7 @@ func interact() -> bool:
 	if displaced: return false
 	if state != PropState.DESTROYED: return false
 	state = PropState.RESTORED
+	restoration_locked = true
 	hp = 2
 	structural_stage = 0
 	rotation = 0.0

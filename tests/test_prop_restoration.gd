@@ -39,6 +39,21 @@ func _run() -> void:
 	_expect(CleanupRegistry.get_type_counts().get("furniture", 0) == 0, "snapping should resolve the furniture cleanup target")
 	_expect(restored_events == 1, "restoration should publish one scoring/UI event")
 	_expect(not anchor.visible, "restored objects should hide their ghost slot")
+	var restored_position := prop.global_position
+	prop.receive_actor_push(Vector2.RIGHT * 180.0, prop.global_position)
+	prop._physics_process(0.25)
+	_expect(prop.global_position.is_equal_approx(restored_position) and prop.velocity.is_zero_approx(), "a restored object should remain permanently fixed under later player contact")
+	var untouched := DestructibleProp.new()
+	untouched.setup("tv", Color("43cbd1"))
+	untouched.global_position = Vector2(105, 60)
+	add_child(untouched)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var untouched_home := untouched.global_position
+	untouched.enter_cleanup_restore_state()
+	untouched.receive_actor_push(Vector2.LEFT * 180.0, untouched.global_position)
+	untouched._physics_process(0.25)
+	_expect(untouched.global_position.is_equal_approx(untouched_home) and untouched.velocity.is_zero_approx(), "an untouched prop should be completely fixed throughout cleanup")
 	var fixture := DestructibleProp.new()
 	fixture.setup("sink", Color("71d4d8"))
 	fixture.global_position = Vector2(130, 60)

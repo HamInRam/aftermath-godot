@@ -8,6 +8,7 @@
 - Added safe wall collision, damped spin, prop-to-prop impacts and speed-gated enemy knockdown without permitting high-energy objects to tunnel through level geometry.
 - Added persistent original-position anchors for every movable object. Cyan hard-pixel ghosts remain hidden during combat and become visible only when a displaced object must be restored.
 - Added cleanup-phase object hauling through the existing `E` interaction. Props follow behind the player, can be deliberately dropped, and auto-snap to their exact authored transform when guided into the correct slot.
+- Fixed cleanup-phase physics locking: untouched props are reset and frozen at the phase boundary, while snapped or manually restored objects permanently reject actor push impulses.
 - Integrated displaced furniture into CleanupRegistry risk, workflow guidance, scoring, navigation solidity, context markers and extraction certification.
 - Added dedicated regression coverage for launch, partial damage, ghost visibility, hauling, exact snap restoration, cleanup resolution and restoration events.
 
