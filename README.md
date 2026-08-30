@@ -2,7 +2,9 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
-## v1.2.1 native pixel unification
+## v1.2.2 controlled corpse physics
+
+- Weapon impacts now separate expressive limb articulation from restrained body-mass travel, with per-weapon root-speed caps and hard wall damping that prevent corpses from launching through encounter geometry.
 
 - Every ground liquid now uses the same sparse hard-pixel simulation: plumbing water, oil, chemical spills and cleaner solution burst, spread, evaporate and clean at pixel density instead of appearing as smooth translucent discs.
 - Water crossing blood creates pale directional runoff, footsteps carry local liquid color, active plumbing must be repaired, and electricity follows only connected wet pixels across the floor.

@@ -164,7 +164,7 @@ func _physics_process(delta: float) -> void:
 	guard_alert_time = maxf(0.0, guard_alert_time - delta)
 	alert_transition_pulse = maxf(0.0, alert_transition_pulse - delta)
 	state_pose_pulse = maxf(0.0, state_pose_pulse - delta)
-	if is_instance_valid(legs_visual):
+	if is_instance_valid(legs_visual) and legs_visual.visible:
 		var local_motion := velocity.rotated(-rotation)
 		if local_motion.length_squared() > 0.5: legs_visual.rotation = local_motion.angle()
 		legs_visual.update_pose(delta, local_motion, move_speed, "attack" if state == State.ATTACK else "idle", clampf(state_pose_pulse / 0.22, 0.0, 1.0))
@@ -177,10 +177,11 @@ func _physics_process(delta: float) -> void:
 	if state != previous_visual_state:
 		state_pose_pulse = 0.22
 		previous_visual_state = state
+		queue_redraw()
 	_update_alert_memory(delta)
 	if tactical_role == "guard" and guard_alert_time <= 0.0: tactical_role = "none"
-	queue_redraw()
-	if melee_swing_time > 0.0: queue_redraw()
+	# The root only draws static compatibility/debug marks. State changes and
+	# explicit hit events request redraws; ordinary AI ticks do not need one.
 	if is_dead or not is_instance_valid(player) or player.is_dead:
 		velocity = velocity.move_toward(Vector2.ZERO, 125.0 * delta)
 		return
@@ -208,7 +209,7 @@ func _physics_process(delta: float) -> void:
 		return
 	vision_scan_cooldown -= delta
 	if vision_scan_cooldown <= 0.0:
-		vision_scan_cooldown = 0.035 if state in [State.CHASE, State.ATTACK] else (0.055 if alert_level != AlertLevel.NORMAL else 0.085)
+		vision_scan_cooldown = 0.060 if state in [State.CHASE, State.ATTACK] else (0.095 if alert_level != AlertLevel.NORMAL else 0.140)
 		cached_visual_contact = _can_see_player(distance, to_player)
 	var has_visual_contact := cached_visual_contact
 	player_in_sight = has_visual_contact
@@ -311,7 +312,7 @@ func _physics_process(delta: float) -> void:
 	if direct_chase:
 		path_points.clear()
 	elif path_refresh <= 0.0 and is_instance_valid(tile_world):
-		path_refresh = (0.07 + randf_range(0.0, 0.035)) if actor_type == "dog" else (0.12 + randf_range(0.0, 0.05))
+		path_refresh = (0.12 + randf_range(0.0, 0.04)) if actor_type == "dog" else (0.22 + randf_range(0.0, 0.06))
 		path_points = tile_world.get_navigation_path(global_position, target_position)
 	if not path_points.is_empty():
 		while not path_points.is_empty() and global_position.distance_to(path_points[0]) < 5.0:
@@ -971,10 +972,12 @@ func _update_alert_memory(delta: float) -> void:
 		alert_level = AlertLevel.SUSPICIOUS
 		alert_memory_time = suspicious_memory_duration
 		alertness = minf(alertness, 0.62)
+		queue_redraw()
 	else:
 		alert_level = AlertLevel.NORMAL
 		alertness = 0.0
 		if tactical_role == "observe": tactical_role = "none"
+		queue_redraw()
 
 func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	if is_dead: return

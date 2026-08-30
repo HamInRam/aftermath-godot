@@ -23,7 +23,6 @@ const SWING_DOOR_SCENE := preload("res://scenes/props/swing_door.tscn")
 const WORLD_CONTEXT_MARKER := preload("res://scripts/ui/world_context_marker.gd")
 const GAMEPLAY_RULES := preload("res://utility/gameplay_design_rules.gd")
 const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
-const PIXEL_LIGHTS := preload("res://utility/pixel_light_texture_factory.gd")
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 100)
@@ -84,6 +83,7 @@ var final_score := 0
 var final_grade := ""
 var interaction_scan_timer := 0.0
 var cleanup_scan_timer := 0.0
+var combat_hud_timer := 0.0
 var security_devices: Array[SecurityCamera] = []
 var security_devices_cached := false
 var performance_debug_enabled := false
@@ -193,7 +193,6 @@ func _apply_pixel_light_textures() -> void:
 		if node is not PointLight2D: continue
 		var light := node as PointLight2D
 		light.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		light.texture = PIXEL_LIGHTS.create_texture()
 		light.texture_scale = 1.0
 
 func _apply_visual_theme() -> void:
@@ -250,7 +249,11 @@ func _process(delta: float) -> void:
 	if performance_debug_enabled: hud.set_performance(PerformanceMonitor.get_debug_line())
 	if run_over: return
 	_update_ultraviolet_mode()
-	if phase == "combat": _update_combat_objective_hud()
+	if phase == "combat":
+		combat_hud_timer -= delta
+		if combat_hud_timer <= 0.0:
+			combat_hud_timer = 0.1
+			_update_combat_objective_hud()
 	if phase == "combat" and not transitioning_cleanup and mission_tracker.are_combat_objectives_complete():
 		combat_completion_hold += delta
 		if combat_completion_hold >= 0.22: _begin_cleanup_transition()

@@ -37,10 +37,10 @@ func setup(material_name: String, profile: Dictionary, direction: Vector2, inten
 	pending_velocity = direction.normalized().rotated(randf_range(-0.55, 0.55)) * randf_range(42.0, 92.0) * intensity
 	pending_angular_velocity = randf_range(-12.0, 12.0)
 	launch_delay = chunk_index * 0.025
-	freeze = launch_delay > 0.0
-	if not freeze:
-		linear_velocity = pending_velocity
-		angular_velocity = pending_angular_velocity
+	# setup() may run inside another body's collision signal. Rigid-body mode
+	# changes are illegal while PhysicsServer2D is flushing that query, so wake
+	# and launch only from the next safe idle step.
+	call_deferred("_configure_launch_state")
 	body_entered.connect(_on_body_entered)
 	add_to_group("environment_debris")
 	CleanupRegistry.register_target(self)
@@ -51,13 +51,23 @@ func _install_collision_shape(shape_node: CollisionShape2D) -> void:
 	if not is_instance_valid(shape_node) or shape_node.get_parent() != null: return
 	add_child(shape_node)
 
+func _configure_launch_state() -> void:
+	if launch_delay > 0.0:
+		freeze = true
+		return
+	_wake_with_velocity(pending_velocity, pending_angular_velocity)
+
+func _wake_with_velocity(new_velocity: Vector2, new_angular_velocity: float) -> void:
+	freeze = false
+	linear_velocity = new_velocity
+	angular_velocity = new_angular_velocity
+
 func _physics_process(delta: float) -> void:
 	if launch_delay > 0.0:
 		launch_delay -= delta
 		if launch_delay <= 0.0:
-			freeze = false
-			linear_velocity = pending_velocity
-			angular_velocity = pending_angular_velocity
+			launch_delay = 0.0
+			call_deferred("_wake_with_velocity", pending_velocity, pending_angular_velocity)
 		return
 	settle_time -= delta
 	if settle_time <= 0.0 or (linear_velocity.length() < 4.0 and absf(angular_velocity) < 0.5):
@@ -83,11 +93,11 @@ func receive_projectile_glance(impact_velocity: Vector2, hit_position: Vector2, 
 	var impulse_strength := clampf(impact_velocity.length() * 0.018 * maxi(1, damage), 7.0, 28.0)
 	var torque := (hit_position - global_position).cross(direction) * 0.8
 	if absf(torque) < 0.25: torque = -direction.x * 1.5 + direction.y * 1.5
-	freeze = false
 	set_physics_process(true)
 	settle_time = maxf(settle_time, 0.55)
-	linear_velocity = (linear_velocity + direction * impulse_strength).limit_length(115.0)
-	angular_velocity = clampf(angular_velocity + torque, -14.0, 14.0)
+	var glance_velocity := (linear_velocity + direction * impulse_strength).limit_length(115.0)
+	var glance_angular_velocity := clampf(angular_velocity + torque, -14.0, 14.0)
+	call_deferred("_wake_with_velocity", glance_velocity, glance_angular_velocity)
 	Events.publish_combat_noise(global_position, 26.0, "%s_debris_ping" % debris_material)
 
 func get_cleanup_type() -> String: return "debris"

@@ -63,6 +63,9 @@ func _ready() -> void:
 	for frame in 16: corpse._physics_process(1.0 / 60.0)
 	_expect(absf(corpse.simulated_rotation) >= 0.2 and not is_zero_approx(corpse.rotation), "quantized corpse frames must retain accumulated angular momentum")
 	_expect(corpse.can_receive_overkill(), "a fresh corpse should briefly accept controlled overkill")
+	corpse.velocity = Vector2.RIGHT * corpse.root_speed_limit
+	corpse.receive_projectile_overkill(Vector2.RIGHT, corpse.global_position, "shotgun", 900.0)
+	_expect(corpse.velocity.length() <= corpse.root_speed_limit + 0.01, "follow-up hits must not stack corpse velocity beyond the weapon-safe root cap")
 	corpse.enter_cleanup_stable_state()
 	_expect(not corpse.can_receive_overkill() and corpse.collision_layer == 0 and not corpse.ragdoll.frozen and corpse.cleanup_freeze_delay > 0.0, "cleanup should disable overkill while preserving the final ragdoll presentation tail")
 	for frame in 60: corpse._physics_process(1.0 / 60.0)

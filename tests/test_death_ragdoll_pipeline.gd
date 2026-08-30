@@ -28,11 +28,13 @@ func _run() -> void:
 		var corpse = corpses[0]
 		_expect(float(corpse.ragdoll.impact_profile.get("presentation_scale", 1.0)) > 1.0, "enemy corpses must receive the combat-readable ragdoll presentation profile")
 		_expect(corpse.ragdoll.active_time > 2.5, "enemy ragdolls must remain active long enough to read during continued combat")
+		_expect(corpse.velocity.length() <= corpse.root_speed_limit + 0.01, "weapon deaths must respect their authored corpse root-speed cap")
 		var spawn_position: Vector2 = corpse.global_position
 		var initial_limb: Vector2 = corpse.ragdoll.points.hand_b.position - corpse.ragdoll.points.pelvis.position
 		for frame in 18: await get_tree().physics_frame
 		var final_limb: Vector2 = corpse.ragdoll.points.hand_b.position - corpse.ragdoll.points.pelvis.position
-		_expect(corpse.global_position.distance_to(spawn_position) >= 4.0, "a pistol death must move the corpse root at least four world pixels in the live level")
+		var root_travel: float = corpse.global_position.distance_to(spawn_position)
+		_expect(root_travel >= 1.0 and root_travel <= 8.0, "a pistol death should shift body mass visibly without launching it across the room")
 		_expect(final_limb.distance_to(initial_limb) >= 2.0, "a pistol death must visibly articulate a limb by at least two world pixels in the live level")
 		_expect(not corpse.ragdoll.frozen, "a fresh live-level corpse must remain physically active during its opening death beat")
 		level._enter_cleanup_phase()

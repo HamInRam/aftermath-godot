@@ -35,6 +35,7 @@ var victim_role := "enemy"
 var ragdoll_impact_profile: Dictionary = {}
 var cleanup_tracking := true
 var cleanup_freeze_delay := 0.0
+var root_speed_limit := 30.0
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
@@ -71,19 +72,27 @@ func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, bl
 	if victim_role == "enemy":
 		ragdoll_impact_profile["presentation_scale"] = 1.55
 		ragdoll_impact_profile["settle_bonus"] = 0.85
-	var authored_root_scale := 1.0
+	# Root travel and internal articulation are deliberately separate. Limbs can
+	# snap visibly while the body mass stays inside the encounter room.
+	var authored_root_scale := 0.65
+	var minimum_root_speed := 12.0
+	root_speed_limit = 28.0
 	match attack_id:
-		"pistol": authored_root_scale = 1.36
-		"smg": authored_root_scale = 1.42
-		"lmg": authored_root_scale = 1.18
-		"shotgun": authored_root_scale = 1.05
-		"bat", "execution_bat", "door": authored_root_scale = 1.24
-		"fist", "knife", "hound_bite": authored_root_scale = 0.78
-	var minimum_readable_force := 18.0 if attack_id in ["fist", "knife", "hound_bite"] else 30.0
-	var resolved_linear := clampf(maxf(maxf(knockback * 0.65, float(ragdoll_impact_profile.linear_force) * authored_root_scale), minimum_readable_force), 12.0, 104.0)
-	if victim_role == "enemy": resolved_linear = minf(112.0, resolved_linear * 1.22)
+		"pistol": authored_root_scale = 0.82; minimum_root_speed = 18.0; root_speed_limit = 30.0
+		"smg": authored_root_scale = 0.68; minimum_root_speed = 16.0; root_speed_limit = 28.0
+		"lmg": authored_root_scale = 0.76; minimum_root_speed = 22.0; root_speed_limit = 42.0
+		"shotgun": authored_root_scale = 0.62; minimum_root_speed = 26.0; root_speed_limit = 52.0
+		"bat": authored_root_scale = 0.78; minimum_root_speed = 18.0; root_speed_limit = 38.0
+		"execution": authored_root_scale = 0.60; minimum_root_speed = 10.0; root_speed_limit = 24.0
+		"execution_knife": authored_root_scale = 0.45; minimum_root_speed = 8.0; root_speed_limit = 18.0
+		"execution_bat": authored_root_scale = 0.72; minimum_root_speed = 16.0; root_speed_limit = 34.0
+		"door": authored_root_scale = 0.75; minimum_root_speed = 18.0; root_speed_limit = 36.0
+		"fist": authored_root_scale = 0.55; minimum_root_speed = 8.0; root_speed_limit = 16.0
+		"knife": authored_root_scale = 0.42; minimum_root_speed = 6.0; root_speed_limit = 14.0
+		"hound_bite": authored_root_scale = 0.58; minimum_root_speed = 10.0; root_speed_limit = 20.0
+	var resolved_linear := clampf(maxf(knockback * 0.38, float(ragdoll_impact_profile.linear_force) * authored_root_scale), minimum_root_speed, root_speed_limit)
 	velocity = impact_direction.normalized() * resolved_linear
-	spin = randf_range(-2.2, 2.2) * float(ragdoll_impact_profile.spin_force) * clampf(resolved_linear / 30.0, 0.45, 2.2)
+	spin = randf_range(-1.4, 1.4) * float(ragdoll_impact_profile.spin_force) * clampf(resolved_linear / 28.0, 0.45, 1.3)
 	if Settings.ragdoll_enabled:
 		ragdoll = PIXEL_RAGDOLL.new() as PixelRagdoll2D
 		add_child(ragdoll)
@@ -180,6 +189,7 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		if bleed_time <= 0.0 and cleanup_freeze_delay <= 0.0: set_physics_process(false)
 		return
+	velocity = velocity.limit_length(root_speed_limit)
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
 		var impact_velocity := velocity
@@ -192,9 +202,11 @@ func _physics_process(delta: float) -> void:
 		if impact_velocity.length() >= 38.0:
 			_spawn_blood_drop(collision.get_position(), clampf(impact_velocity.length() / 110.0, 0.35, 0.9), -collision.get_normal())
 			Events.publish_combat_noise(collision.get_position(), clampf(impact_velocity.length() * 1.2, 48.0, 110.0), "corpse_impact")
-		velocity = velocity.slide(collision.get_normal()) * 0.3
-		spin *= 0.35
-	velocity = velocity.move_toward(Vector2.ZERO, 95.0 * delta)
+		# A corpse should thud and settle at a wall, not retain enough tangential
+		# energy to squeeze around thin corners or disabled door leaves.
+		velocity = velocity.slide(collision.get_normal()).limit_length(18.0) * 0.12
+		spin *= 0.22
+	velocity = velocity.move_toward(Vector2.ZERO, 130.0 * delta)
 	# Accumulate continuous angular momentum separately from the authored visual
 	# frames. Quantizing `rotation + spin * delta` directly discarded virtually
 	# every pistol/SMG impulse before it could cross a 22.5-degree frame.
@@ -277,7 +289,7 @@ func receive_projectile_overkill(direction: Vector2, hit_position: Vector2, weap
 	var followup := RAGDOLL_IMPACT.resolve(weapon_id, travel_distance, "torso", rig_kind)
 	if is_instance_valid(ragdoll):
 		ragdoll.apply_impact(direction, float(followup.limb_force) * 0.46, to_local(hit_position))
-	velocity += direction.normalized() * float(followup.linear_force) * 0.24
+	velocity = (velocity + direction.normalized() * float(followup.linear_force) * 0.16).limit_length(root_speed_limit)
 	spin += randf_range(-0.9, 0.9) * float(followup.spin_force)
 	queue_redraw()
 	return true
