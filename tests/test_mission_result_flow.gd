@@ -7,12 +7,8 @@ var failures := 0
 
 func _ready() -> void:
 	_expect(MissionResultBuilder.restoration_cost(2, 3, 4) == 182, "result builder should centralize restoration accounting")
-	_expect(MissionResultBuilder.restoration_cost(2, 3, 4, 2) == 32, "restored property should remove its damage charge while leaving evidence costs intact")
 	_expect(MissionResultBuilder.grade(1.0, 0, 0) == "S", "perfect silent restoration should retain the top grade")
-	_expect(MissionResultBuilder.grade(1.0, 0, 3, 3) == "S", "a fully restored chaotic scene should remain eligible for the top grade")
-	_expect(MissionResultBuilder.grade(1.0, 0, 3, 0) != "S", "unrestored destruction must prevent an otherwise perfect run from receiving S")
 	_expect(MissionResultBuilder.dominant_cost(2, 20, 1, 0) == "BALLISTIC", "result builder should expose the largest cleanup cost category")
-	_expect(MissionResultBuilder.dominant_cost(4, 2, 1, 0, 4) == "BALLISTIC", "restored furniture should not remain the report's dominant unresolved cost")
 	call_deferred("_run")
 
 func _run() -> void:

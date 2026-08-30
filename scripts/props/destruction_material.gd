@@ -11,29 +11,19 @@ const PROFILES := {
 	"liquid": {"resistance": 0.55, "noise": 88.0, "chunks": 2, "burst": 9, "primary": Color("62c9b1"), "secondary": Color("d5ff9a"), "hazard": "spill", "bounce": 0.1},
 }
 
-const KIND_HAZARDS := {
-	"fuel_drum": "fuel", "alcohol_shelf": "fuel", "grease_vat": "oil",
-	"sprinkler": "water", "coolant_pipe": "coolant", "chemical_tank": "spill",
-	"breaker": "electric", "extinguisher": "foam", "glass_rack": "glass",
-	"paper_archive": "dust", "gas_line": "fire",
-}
-
 static func for_kind(kind: String) -> Dictionary:
 	var material := material_for_kind(kind)
 	var profile: Dictionary = PROFILES.get(material, PROFILES.wood).duplicate(true)
 	profile["material"] = material
-	if KIND_HAZARDS.has(kind): profile["hazard"] = KIND_HAZARDS[kind]
 	return profile
 
 static func material_for_kind(kind: String) -> String:
 	if kind in ["sofa", "bed"]: return "fabric"
-	if kind in ["tv", "speaker", "console", "conveyor", "evidence_cabinet", "freezer", "fuel_drum", "grease_vat", "sprinkler", "coolant_pipe", "breaker", "extinguisher", "gas_line"]: return "metal"
+	if kind in ["tv", "speaker", "console", "conveyor", "evidence_cabinet", "freezer"]: return "metal"
 	if kind in ["sink", "toilet"]: return "ceramic"
 	if kind in ["vending", "slot_machine"]: return "plastic"
 	if kind in ["plant"]: return "ceramic"
-	if kind in ["bottle", "window", "alcohol_shelf", "glass_rack"]: return "glass"
-	if kind == "chemical_tank": return "liquid"
-	if kind == "paper_archive": return "wood"
+	if kind in ["bottle", "window"]: return "glass"
 	return "wood"
 
 static func energy_for_attack(attack_kind: String, raw_energy: float) -> float:

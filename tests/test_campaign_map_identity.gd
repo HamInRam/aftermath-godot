@@ -58,17 +58,7 @@ func _ready() -> void:
 		_expect(longest_fire_lane >= 10, "%s needs at least one readable ten-cell firearm lane" % mission_id)
 		var furniture_count := world.find_children("*", "DestructibleProp", true, false).size()
 		_expect(furniture_count >= 6, "%s needs authored destructible functional furniture" % mission_id)
-		_expect(furniture_count <= 16, "%s should preserve generous combat circulation instead of over-furnishing rooms (%d props)" % [mission_id, furniture_count])
-		var incident_prop_kinds := {
-			"fuel_drum": true, "alcohol_shelf": true, "grease_vat": true, "sprinkler": true,
-			"coolant_pipe": true, "chemical_tank": true, "breaker": true, "extinguisher": true,
-			"glass_rack": true, "paper_archive": true, "gas_line": true,
-		}
-		var authored_incidents := 0
-		for prop in world.find_children("*", "DestructibleProp", true, false):
-			if incident_prop_kinds.has(prop.prop_kind): authored_incidents += 1
-		_expect(authored_incidents >= 2, "%s needs at least two authored reactive props for an accidental incident chain" % mission_id)
-		_expect(world._get_surface_drain_cells().size() >= 1, "%s needs an authored runoff destination so liquid cleanup uses room layout" % mission_id)
+		_expect(furniture_count <= 14, "%s should preserve generous combat circulation instead of over-furnishing rooms (%d props)" % [mission_id, furniture_count])
 		var signature := ""
 		for cell: Vector2i in wall_cells: signature += "%d,%d;" % [cell.x, cell.y]
 		_expect(not signatures.has(signature), "%s must not reuse another mission's wall topology" % mission_id)

@@ -7,21 +7,12 @@ extends Node2D
 
 const CHUNK_SIZE := 32
 const PIXELS_PER_CHUNK := CHUNK_SIZE * CHUNK_SIZE
-const LIQUID_KINDS := [&"water", &"oil", &"spill", &"cleaner", &"fuel", &"coolant", &"foam"]
-const SURFACE_KINDS := [&"water", &"oil", &"spill", &"cleaner", &"fuel", &"coolant", &"foam", &"fire", &"smoke", &"ash", &"dust"]
-const REACTIVE_KINDS := [&"oil", &"spill", &"cleaner", &"fuel", &"coolant", &"foam", &"fire", &"smoke"]
+const LIQUID_KINDS := [&"water", &"oil", &"spill", &"cleaner"]
 const PROFILE := {
 	&"water": {"evaporation": 5, "spread": 1.0, "conductive": true, "flammable": false},
 	&"oil": {"evaporation": 0, "spread": 0.46, "conductive": false, "flammable": true},
 	&"spill": {"evaporation": 1, "spread": 0.68, "conductive": true, "flammable": false},
 	&"cleaner": {"evaporation": 8, "spread": 0.82, "conductive": true, "flammable": false},
-	&"fuel": {"evaporation": 3, "spread": 0.92, "conductive": false, "flammable": true},
-	&"coolant": {"evaporation": 2, "spread": 0.74, "conductive": true, "flammable": false},
-	&"foam": {"evaporation": 5, "spread": 0.66, "conductive": false, "flammable": false},
-	&"fire": {"evaporation": 0, "spread": 0.0, "conductive": false, "flammable": false},
-	&"smoke": {"evaporation": 18, "spread": 0.0, "conductive": false, "flammable": false},
-	&"ash": {"evaporation": 0, "spread": 0.0, "conductive": false, "flammable": false},
-	&"dust": {"evaporation": 0, "spread": 0.0, "conductive": false, "flammable": false},
 }
 
 class PixelLiquidChunk extends Node2D:
@@ -38,7 +29,7 @@ class PixelLiquidChunk extends Node2D:
 		system = owner_system
 		chunk_coordinate = coordinate
 		position = Vector2(coordinate * PixelLiquidSystem.CHUNK_SIZE)
-		for kind in PixelLiquidSystem.SURFACE_KINDS:
+		for kind in PixelLiquidSystem.LIQUID_KINDS:
 			var data := PackedByteArray()
 			data.resize(PixelLiquidSystem.PIXELS_PER_CHUNK)
 			data.fill(0)
@@ -89,7 +80,7 @@ class PixelLiquidChunk extends Node2D:
 		var occupied := false
 		for index in PixelLiquidSystem.PIXELS_PER_CHUNK:
 			var pixel_active := false
-			for kind in PixelLiquidSystem.SURFACE_KINDS:
+			for kind in PixelLiquidSystem.LIQUID_KINDS:
 				var data := channels[kind] as PackedByteArray
 				var value := int(data[index])
 				if value > 0:
@@ -114,7 +105,7 @@ class PixelLiquidChunk extends Node2D:
 	func _pixel_color(index: int, x: int, y: int) -> Color:
 		var dominant: StringName = &""
 		var dominant_amount := 0
-		for kind in PixelLiquidSystem.SURFACE_KINDS:
+		for kind in PixelLiquidSystem.LIQUID_KINDS:
 			var value := int((channels[kind] as PackedByteArray)[index])
 			if value > dominant_amount:
 				dominant_amount = value
@@ -131,22 +122,6 @@ class PixelLiquidChunk extends Node2D:
 				var oil := Color("18101e") if checker > 1 else (Color("9b3fb5") if checker == 0 else Color("2a8791"))
 				oil.a = 0.44 + density * 0.42
 				return oil
-			&"fuel":
-				var fuel := Color("f4a13b") if checker > 1 else Color("fff08a")
-				fuel.a = 0.28 + density * 0.52
-				return fuel
-			&"coolant":
-				return Color(0.32, 0.88, 1.0, 0.24 + density * 0.48) if checker > 0 else Color(0.8, 1.0, 1.0, 0.72)
-			&"foam":
-				return Color(0.82, 0.98, 1.0, 0.48 + density * 0.40) if checker > 1 else Color(1.0, 1.0, 1.0, 0.88)
-			&"fire":
-				return Color("ff3b28") if checker > 2 else (Color("ff9b32") if checker > 0 else Color("fff08a"))
-			&"smoke":
-				return Color(0.20, 0.18, 0.23, 0.20 + density * 0.42) if checker > 0 else Color(0.55, 0.52, 0.57, 0.34)
-			&"ash":
-				return Color(0.16, 0.14, 0.17, 0.40 + density * 0.34) if checker > 0 else Color(0.42, 0.39, 0.42, 0.62)
-			&"dust":
-				return Color(0.66, 0.58, 0.46, 0.24 + density * 0.38) if checker > 1 else Color(0.88, 0.79, 0.62, 0.56)
 			&"cleaner":
 				return Color(0.58, 0.96, 1.0, 0.18 + density * 0.34) if checker > 1 else Color(0.92, 1.0, 1.0, 0.62)
 			_:
@@ -159,11 +134,6 @@ var texture_accumulator := 0.0
 var surface_accumulator := 0.0
 var contact_accumulator := 0.0
 var actor_tracks: Dictionary = {}
-var actor_surface_cooldowns: Dictionary = {}
-var reaction_accumulator := 0.0
-var drain_accumulator := 0.0
-var reaction_cells: Dictionary = {}
-var drain_specs: Array[Dictionary] = []
 
 func _ready() -> void:
 	add_to_group("pixel_liquid_system")
@@ -184,8 +154,6 @@ func _process(delta: float) -> void:
 	texture_accumulator += delta
 	surface_accumulator += delta
 	contact_accumulator += delta
-	reaction_accumulator += delta
-	drain_accumulator += delta
 	if texture_accumulator >= 1.0 / 24.0:
 		texture_accumulator = 0.0
 		for chunk in chunks.values():
@@ -197,15 +165,9 @@ func _process(delta: float) -> void:
 	if contact_accumulator >= 0.12:
 		contact_accumulator = 0.0
 		_update_actor_contacts()
-	if reaction_accumulator >= 0.10:
-		reaction_accumulator = fmod(reaction_accumulator, 0.10)
-		_process_reactions(480)
-	if drain_accumulator >= 0.25:
-		drain_accumulator = fmod(drain_accumulator, 0.25)
-		_process_drains()
 
 func emit_burst(origin: Vector2, kind: StringName, direction := Vector2.RIGHT, strength := 1.0) -> void:
-	if kind not in SURFACE_KINDS: return
+	if kind not in LIQUID_KINDS: return
 	var forward := direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
 	var count := clampi(roundi(12.0 + strength * 12.0), 12, 34)
 	for index in count:
@@ -215,7 +177,7 @@ func emit_burst(origin: Vector2, kind: StringName, direction := Vector2.RIGHT, s
 		_stamp_sparse_line(origin + ray * 1.5, endpoint, kind, clampi(roundi(100.0 + strength * 82.0), 90, 240), 0.38)
 
 func deposit_source(origin: Vector2, kind: StringName, radius: float, strength: float, flow_direction := Vector2.ZERO) -> void:
-	if kind not in SURFACE_KINDS: return
+	if kind not in LIQUID_KINDS: return
 	var spread_scale := float((PROFILE[kind] as Dictionary).spread)
 	var effective_radius := maxf(2.0, radius * spread_scale)
 	var forward := flow_direction.normalized() if flow_direction.length_squared() > 0.01 else Vector2.RIGHT.rotated(randf_range(-PI, PI))
@@ -231,40 +193,11 @@ func deposit_source(origin: Vector2, kind: StringName, radius: float, strength: 
 		add_liquid_pixel(point, kind, clampi(roundi(58.0 + strength * randf_range(40.0, 105.0)), 44, 210), forward)
 
 func add_liquid_pixel(world_position: Vector2, kind: StringName, amount: int, flow_direction := Vector2.ZERO) -> void:
-	if kind not in SURFACE_KINDS: return
+	if kind not in LIQUID_KINDS: return
 	var cell := Vector2i(floori(world_position.x), floori(world_position.y))
 	var chunk := _get_or_create_chunk(_chunk_coordinate(cell))
 	chunk.add_local(_local_cell(cell), kind, amount)
-	if kind in [&"water", &"cleaner", &"coolant"]: _mix_with_blood(world_position, amount, flow_direction)
-	if kind in REACTIVE_KINDS: _queue_reaction(cell)
-
-func ignite_near(world_position: Vector2, radius := 5.0, strength := 1.0) -> int:
-	var ignited := 0
-	for y in range(floori(world_position.y - radius), ceili(world_position.y + radius) + 1):
-		for x in range(floori(world_position.x - radius), ceili(world_position.x + radius) + 1):
-			var cell := Vector2i(x, y)
-			if Vector2(cell).distance_squared_to(world_position) > radius * radius: continue
-			var fuel_load := _amount_cell(cell, &"fuel") + _amount_cell(cell, &"oil")
-			if fuel_load <= 18 and Vector2(cell).distance_to(world_position) > 2.2: continue
-			_add_cell(cell, &"fire", clampi(roundi(92.0 + strength * 92.0), 80, 255))
-			ignited += 1
-	if ignited == 0:
-		_add_cell(Vector2i(floori(world_position.x), floori(world_position.y)), &"fire", clampi(roundi(120.0 * strength), 72, 220))
-		ignited = 1
-	return ignited
-
-func register_drain(world_position: Vector2, radius := 9.0, efficiency := 1.0) -> void:
-	for spec in drain_specs:
-		if (spec.position as Vector2).distance_to(world_position) < 2.0: return
-	drain_specs.append({"position": world_position, "radius": radius, "efficiency": efficiency})
-
-func has_smoke_between(world_start: Vector2, world_end: Vector2) -> bool:
-	var distance := world_start.distance_to(world_end)
-	var steps := maxi(1, ceili(distance / 5.0))
-	for index in range(steps + 1):
-		var point := world_start.lerp(world_end, float(index) / float(steps))
-		if amount_near(point, 3.0, &"smoke") > 150: return true
-	return false
+	if kind in [&"water", &"cleaner"]: _mix_with_blood(world_position, amount, flow_direction)
 
 func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float, power: int, tool_name: String) -> bool:
 	var segment := world_end - world_start
@@ -281,16 +214,9 @@ func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float,
 				var chunk := _find_chunk_for_cell(cell)
 				if not is_instance_valid(chunk): continue
 				var local := _local_cell(cell)
-				for kind in SURFACE_KINDS:
+				for kind in LIQUID_KINDS:
 					var removal := _tool_removal(kind, tool_name, power)
-					var removed := chunk.remove_local(local, kind, removal)
-					if removed <= 0: continue
-					cleaned = true
-					# The washer erases most contamination but visibly drives a small
-					# remainder forward, making drains and room layout tactically useful.
-					if tool_name == "pressure_washer" and kind in [&"water", &"oil", &"spill", &"fuel", &"coolant", &"foam"]:
-						var push := segment.normalized() if segment.length_squared() > 0.01 else Vector2.RIGHT
-						add_liquid_pixel(Vector2(cell) + push * 5.0, kind, roundi(float(removed) * 0.18), push)
+					if chunk.remove_local(local, kind, removal) > 0: cleaned = true
 	return cleaned
 
 func stamp_cleaning_stroke(world_start: Vector2, world_end: Vector2, tool_name: String) -> void:
@@ -349,10 +275,10 @@ func has_conductive_connection(source_position: Vector2, target_position: Vector
 	return false
 
 func is_flammable_near(world_position: Vector2, radius: float) -> bool:
-	return amount_near(world_position, radius, &"oil") + amount_near(world_position, radius, &"fuel") > 48
+	return amount_near(world_position, radius, &"oil") > 48
 
 func consume_flammable(world_position: Vector2, radius: float, amount := 80) -> int:
-	return remove_near(world_position, radius, &"oil", amount) + remove_near(world_position, radius, &"fuel", amount)
+	return remove_near(world_position, radius, &"oil", amount)
 
 func get_debug_pixel_count(kind: StringName = &"") -> int:
 	var total := 0
@@ -378,16 +304,11 @@ func _update_actor_contacts() -> void:
 		var last: Vector2 = actor_tracks.get(id, actor.global_position)
 		var movement := actor.global_position - last
 		actor_tracks[id] = actor.global_position
-		var fire_load := amount_near(actor.global_position, 2.5, &"fire")
-		if fire_load > 80 and actor.has_method("take_damage") and float(actor_surface_cooldowns.get(id, 0.0)) <= 0.0:
-			actor_surface_cooldowns[id] = 0.8
-			var away := movement.normalized() if movement.length_squared() > 0.01 else Vector2.RIGHT
-			actor.take_damage(1, actor.global_position - away * 4.0)
 		if movement.length() < 1.5: continue
 		var kind := _dominant_kind_near(actor.global_position, 3.0)
 		if kind == &"": continue
 		if actor is CharacterBody2D:
-			var traction := 0.54 if kind in [&"oil", &"fuel", &"coolant"] else (0.84 if kind in [&"water", &"cleaner", &"foam"] else 0.72)
+			var traction := 0.58 if kind == &"oil" else (0.84 if kind in [&"water", &"cleaner"] else 0.72)
 			(actor as CharacterBody2D).velocity = (actor as CharacterBody2D).velocity.lerp((actor as CharacterBody2D).velocity.limit_length((actor as CharacterBody2D).velocity.length() * traction), 0.16)
 		var backward := -movement.normalized()
 		# Two hard pixels behind the feet read as wet/oily prints without adding nodes.
@@ -396,10 +317,7 @@ func _update_actor_contacts() -> void:
 		if movement.length() > 5.0:
 			add_liquid_pixel(actor.global_position + backward.orthogonal() * 3.0, kind, 34, backward)
 	for id in actor_tracks.keys():
-		if actor_surface_cooldowns.has(id): actor_surface_cooldowns[id] = maxf(0.0, float(actor_surface_cooldowns[id]) - 0.12)
-		if not alive_ids.has(id):
-			actor_tracks.erase(id)
-			actor_surface_cooldowns.erase(id)
+		if not alive_ids.has(id): actor_tracks.erase(id)
 
 func _dominant_kind_near(world_position: Vector2, radius: float) -> StringName:
 	var best: StringName = &""
@@ -418,11 +336,9 @@ func _mix_with_blood(world_position: Vector2, amount: int, flow_direction: Vecto
 
 func _tool_removal(kind: StringName, tool_name: String, power: int) -> int:
 	if tool_name == "mop":
-		if kind in [&"fire", &"smoke", &"ash", &"dust"]: return 0
-		return maxi(8, power * (30 if kind in [&"water", &"cleaner", &"foam", &"coolant"] else 18))
+		return maxi(8, power * (30 if kind in [&"water", &"cleaner"] else 18))
 	if tool_name == "pressure_washer":
-		if kind in [&"ash", &"dust"]: return 0
-		return maxi(6, power * (42 if kind in [&"fire", &"smoke"] else (18 if kind in [&"oil", &"fuel"] else 26)))
+		return maxi(6, power * (18 if kind == &"oil" else 26))
 	return 0
 
 func _nearest_conductive_cell(world_position: Vector2, search_radius: int) -> Vector2i:
@@ -443,91 +359,7 @@ func _conductive_amount(cell: Vector2i) -> int:
 	var chunk := _find_chunk_for_cell(cell)
 	if not is_instance_valid(chunk): return 0
 	var local := _local_cell(cell)
-	return chunk.amount_at(local, &"water") + chunk.amount_at(local, &"spill") + chunk.amount_at(local, &"cleaner") + chunk.amount_at(local, &"coolant")
-
-func _queue_reaction(cell: Vector2i) -> void:
-	reaction_cells[cell] = true
-	for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]: reaction_cells[cell + offset] = true
-
-func _process_reactions(limit: int) -> void:
-	var processed := 0
-	for value in reaction_cells.keys():
-		if processed >= limit: break
-		var cell: Vector2i = value
-		reaction_cells.erase(cell)
-		_react_cell(cell)
-		processed += 1
-
-func _react_cell(cell: Vector2i) -> void:
-	var fire := _amount_cell(cell, &"fire")
-	var water := _amount_cell(cell, &"water") + _amount_cell(cell, &"coolant")
-	var foam := _amount_cell(cell, &"foam")
-	var fuel := _amount_cell(cell, &"fuel") + _amount_cell(cell, &"oil")
-	var cleaner := _amount_cell(cell, &"cleaner")
-	var spill := _amount_cell(cell, &"spill")
-	if cleaner > 40 and (spill > 30 or _amount_cell(cell, &"oil") > 30):
-		var neutralized := mini(28, mini(cleaner, maxi(spill, _amount_cell(cell, &"oil"))))
-		_remove_cell(cell, &"cleaner", neutralized)
-		_remove_cell(cell, &"spill", neutralized)
-		_remove_cell(cell, &"oil", neutralized)
-		_add_cell(cell, &"foam", neutralized)
-	if fire > 0:
-		var suppression := water + foam * 2
-		if suppression > 40:
-			_remove_cell(cell, &"fire", clampi(suppression / 5, 18, 90))
-			_remove_cell(cell, &"foam", 10)
-			_remove_cell(cell, &"water", 8)
-			_add_cell(cell, &"smoke", 18)
-		else:
-			var burned := mini(32, fuel)
-			if burned > 0:
-				var oil_here := _amount_cell(cell, &"oil")
-				_remove_cell(cell, &"oil", mini(burned, oil_here))
-				_remove_cell(cell, &"fuel", burned)
-				_add_cell(cell, &"fire", 24)
-				_add_cell(cell, &"ash", maxi(3, burned / 4))
-				for offset: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
-					var next: Vector2i = cell + offset
-					if _amount_cell(next, &"fuel") + _amount_cell(next, &"oil") > 24:
-						_add_cell(next, &"fire", 54)
-			else:
-				_remove_cell(cell, &"fire", 26)
-			_add_cell(cell + Vector2i(0, -2), &"smoke", 26)
-	if _amount_cell(cell, &"smoke") > 0:
-		var drift := cell + Vector2i((posmod(cell.x + cell.y, 3) - 1), -1)
-		var moved := _remove_cell(cell, &"smoke", 18)
-		if moved > 0: _add_cell(drift, &"smoke", maxi(1, moved - 3))
-	if _cell_has_reactive_material(cell): _queue_reaction(cell)
-
-func _process_drains() -> void:
-	for spec in drain_specs:
-		var position: Vector2 = spec.position
-		var radius: float = float(spec.radius)
-		var efficiency: float = float(spec.efficiency)
-		for kind in [&"water", &"spill", &"cleaner", &"coolant", &"foam"]:
-			remove_near(position, radius, kind, roundi(28.0 * efficiency))
-		# Oil and fuel drain slowly, preserving their cleanup identity.
-		remove_near(position, radius, &"oil", roundi(5.0 * efficiency))
-		remove_near(position, radius, &"fuel", roundi(5.0 * efficiency))
-
-func _cell_has_reactive_material(cell: Vector2i) -> bool:
-	if _amount_cell(cell, &"fire") > 0 or _amount_cell(cell, &"smoke") > 0: return true
-	return _amount_cell(cell, &"cleaner") > 0 and (_amount_cell(cell, &"spill") > 0 or _amount_cell(cell, &"oil") > 0)
-
-func _amount_cell(cell: Vector2i, kind: StringName) -> int:
-	var chunk := _find_chunk_for_cell(cell)
-	return chunk.amount_at(_local_cell(cell), kind) if is_instance_valid(chunk) else 0
-
-func _add_cell(cell: Vector2i, kind: StringName, amount: int) -> int:
-	if amount <= 0 or kind not in SURFACE_KINDS: return 0
-	var chunk := _get_or_create_chunk(_chunk_coordinate(cell))
-	var added := chunk.add_local(_local_cell(cell), kind, amount)
-	if added > 0 and kind in REACTIVE_KINDS: _queue_reaction(cell)
-	return added
-
-func _remove_cell(cell: Vector2i, kind: StringName, amount: int) -> int:
-	var chunk := _find_chunk_for_cell(cell)
-	return chunk.remove_local(_local_cell(cell), kind, amount) if is_instance_valid(chunk) else 0
+	return chunk.amount_at(local, &"water") + chunk.amount_at(local, &"spill") + chunk.amount_at(local, &"cleaner")
 
 func _stamp_sparse_line(start: Vector2, finish: Vector2, kind: StringName, amount: int, density: float) -> void:
 	var steps := maxi(1, ceili(start.distance_to(finish)))

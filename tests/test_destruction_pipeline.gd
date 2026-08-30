@@ -25,17 +25,6 @@ func _ready() -> void:
 	var debris := get_tree().get_nodes_in_group("environment_debris")[0] as PhysicalDebris
 	_expect(debris.get_cleanup_type() == "debris", "major fragments should become explicit cleanup evidence")
 	debris.clean_step()
-	var volatile := DestructibleProp.new()
-	add_child(volatile)
-	volatile.position = Vector2(520, 40)
-	volatile.setup("fuel_drum", Color("d98534"))
-	volatile.receive_projectile_impact_context(Vector2.RIGHT * 650.0, volatile.global_position, "shotgun", 2)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var pixel_surface := get_tree().get_first_node_in_group("pixel_liquid_system") as PixelLiquidSystem
-	_expect(volatile.state == DestructibleProp.PropState.DESTROYED, "high-energy gunfire should rupture volatile authored cover")
-	_expect(is_instance_valid(pixel_surface) and pixel_surface.amount_near(volatile.global_position, 18.0, &"fuel") > 0, "ruptured fuel cover should leave a persistent pixel fuel field")
-	_expect(is_instance_valid(pixel_surface) and pixel_surface.amount_near(volatile.global_position, 18.0, &"fire") > 0, "ballistic rupture of volatile cover should ignite the scene incident chain")
 	var setpiece_kinds := ["dj_booth", "diner_counter", "training_target", "cargo_crane", "motel_sign", "city_window", "freezer_fans", "roulette", "evidence_wall", "conveyor", "broadcast_console", "broken_dj"]
 	for index in setpiece_kinds.size():
 		var landmark := LevelLandmark.new()

@@ -11,7 +11,6 @@ var security_shutdowns := 0
 var alarm_triggers := 0
 var player_shots := 0
 var property_damage := 0
-var property_restored := 0
 var weapon_shots: Dictionary = {}
 
 func configure(mission_profile: MissionProfile, total_enemies: int, total_security: int) -> void:
@@ -23,7 +22,6 @@ func configure(mission_profile: MissionProfile, total_enemies: int, total_securi
 	alarm_triggers = 0
 	player_shots = 0
 	property_damage = 0
-	property_restored = 0
 	weapon_shots.clear()
 	objectives_changed.emit()
 
@@ -65,13 +63,6 @@ func record_property_damage() -> void:
 	property_damage += 1
 	objectives_changed.emit()
 
-func record_property_restoration() -> void:
-	property_restored = mini(property_damage, property_restored + 1)
-	objectives_changed.emit()
-
-func get_unrestored_property_damage() -> int:
-	return maxi(0, property_damage - property_restored)
-
 func get_required_eliminations() -> int:
 	if profile == null or profile.required_eliminations < 0: return enemy_total
 	return mini(enemy_total, profile.required_eliminations)
@@ -96,4 +87,4 @@ func get_score_modifier() -> int:
 	var completion_score := profile.completion_bonus if are_combat_objectives_complete() else 0
 	var quiet_success := (profile.maximum_alarms_for_bonus < 0 or alarm_triggers <= profile.maximum_alarms_for_bonus) and (profile.maximum_player_shots_for_bonus < 0 or player_shots <= profile.maximum_player_shots_for_bonus)
 	var quiet_bonus := profile.optional_quiet_bonus if quiet_success and (profile.maximum_alarms_for_bonus >= 0 or profile.maximum_player_shots_for_bonus >= 0) else 0
-	return completion_score + quiet_bonus - alarm_triggers * profile.alarm_penalty - get_unrestored_property_damage() * profile.property_damage_penalty
+	return completion_score + quiet_bonus - alarm_triggers * profile.alarm_penalty - property_damage * profile.property_damage_penalty

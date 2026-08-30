@@ -90,10 +90,10 @@ func _setpiece_material() -> String:
 
 func _setpiece_hazard() -> String:
 	return {
-		"dj_booth": "fire", "diner_counter": "oil", "training_target": "smoke",
-		"cargo_crane": "fuel", "motel_sign": "electric", "city_window": "glass",
-		"freezer_fans": "coolant", "roulette": "fuel", "evidence_wall": "fire",
-		"conveyor": "oil", "broadcast_console": "electric", "broken_dj": "fire",
+		"dj_booth": "electric", "diner_counter": "spill", "training_target": "smoke",
+		"cargo_crane": "oil", "motel_sign": "electric", "city_window": "glass",
+		"freezer_fans": "smoke", "roulette": "spill", "evidence_wall": "smoke",
+		"conveyor": "oil", "broadcast_console": "electric", "broken_dj": "electric",
 	}.get(landmark_kind, "smoke")
 
 func _spawn_impact_burst(intensity: float) -> void:

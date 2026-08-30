@@ -1,16 +1,5 @@
 # Changelog
 
-## [v1.2.3] - Systemic Incident Ecology
-
-- Expanded the sparse one-pixel surface simulator with fuel, coolant, extinguisher foam, fire, smoke, ash and dust while retaining water, oil, chemicals and cleaner solution.
-- Added bounded material reactions: ballistic fuel ignition, spreading fuel/oil fire, water/foam/coolant suppression, cleaner neutralization, smoke drift, persistent ash and viscosity-aware floor drains.
-- Connected pixel smoke to enemy line-of-sight and fire pixels to actor damage; coolant, fuel and oil alter traction and all carried liquids leave material-colored tracks.
-- Added eleven reactive prop classes and authored at least two incident props plus a runoff destination in every campaign level.
-- Reworked every mission's operational intelligence around a specific physical incident, combat opportunity and cleanup route.
-- Moved active-hazard stabilization to the first cleanup stage and generalized source blocking beyond water/electricity to coolant, fire and smoke.
-- Made repaired property offset restoration cost and property-grade penalties, rewarding players who create spectacular tactical destruction and then rebuild the scene.
-- Added regression coverage for ignition, suppression, neutralization, smoke occlusion, drains, restored-property scoring and twelve-map incident identity.
-
 ## [v1.2.2] - Controlled Corpse Physics
 
 - Added adaptive actor simulation: calm living rigs solve at 30 Hz, idle silhouettes redraw at 12 Hz, moving silhouettes at 30 Hz, while impacts and knockdowns retain responsive 60 Hz physics.

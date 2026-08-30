@@ -3,7 +3,7 @@ extends Area2D
 
 const LIQUID_SYSTEM_SCRIPT := preload("res://scripts/effects/pixel_liquid_system.gd")
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
-const SURFACE_KINDS := [&"water", &"oil", &"spill", &"cleaner", &"fuel", &"coolant", &"foam", &"fire", &"smoke", &"ash", &"dust"]
+const LIQUID_KINDS := [&"water", &"oil", &"spill", &"cleaner"]
 
 var hazard_kind := "spill"
 var radius := 3.0
@@ -20,7 +20,7 @@ var flow_direction := Vector2.RIGHT
 func setup(kind: String, strength := 1.0) -> void:
 	hazard_kind = kind
 	target_radius = clampf(14.0 + strength * 8.0, 14.0, 30.0)
-	cleanup_steps = 3 if kind in ["glass", "dust", "ash"] else (7 if kind in ["fire", "fuel", "oil"] else 5)
+	cleanup_steps = 3 if kind == "glass" else 5
 	flow_direction = Vector2.RIGHT.rotated(randf_range(-PI, PI))
 	collision_layer = 0
 	collision_mask = 3
@@ -32,14 +32,11 @@ func setup(kind: String, strength := 1.0) -> void:
 	add_child(collision)
 	add_to_group("environment_hazard")
 	CleanupRegistry.register_target(self)
-	if StringName(hazard_kind) in SURFACE_KINDS:
+	if StringName(hazard_kind) in LIQUID_KINDS:
 		liquid_system = LIQUID_SYSTEM_SCRIPT.get_or_create(get_tree()) as Node2D
-		if hazard_kind == "fire":
-			liquid_system.ignite_near(global_position, 6.0, strength)
-		else:
-			liquid_system.emit_burst(global_position, StringName(hazard_kind), flow_direction, strength)
-			liquid_system.deposit_source(global_position, StringName(hazard_kind), 4.0, strength, flow_direction)
-		peak_liquid_load = maxi(1, _tracked_surface_load())
+		liquid_system.emit_burst(global_position, StringName(hazard_kind), flow_direction, strength)
+		liquid_system.deposit_source(global_position, StringName(hazard_kind), 4.0, strength, flow_direction)
+		peak_liquid_load = maxi(1, liquid_system.amount_near(global_position, target_radius * 1.45, StringName(hazard_kind)))
 	z_index = 1
 	queue_redraw()
 
@@ -47,31 +44,20 @@ func _physics_process(delta: float) -> void:
 	pulse += delta
 	radius = move_toward(radius, target_radius, delta * _spread_speed())
 	for key in damage_cooldowns: damage_cooldowns[key] = maxf(0.0, float(damage_cooldowns[key]) - delta)
-	if StringName(hazard_kind) in SURFACE_KINDS and is_instance_valid(liquid_system):
+	if StringName(hazard_kind) in LIQUID_KINDS and is_instance_valid(liquid_system):
 		source_accumulator += delta
 		if source_accumulator >= 0.18:
 			source_accumulator = 0.0
-			# Pipes, coolant loops, gas fires and smoke sources keep feeding the
-			# scene until their owning prop is restored. Containers remain finite.
-			if hazard_kind in ["water", "coolant"] and source_active:
-				liquid_system.deposit_source(global_position, StringName(hazard_kind), radius, 1.0, flow_direction)
-			elif hazard_kind == "fire" and source_active:
-				liquid_system.ignite_near(global_position, minf(radius, 8.0), 0.9)
-			elif hazard_kind == "smoke" and source_active:
-				liquid_system.deposit_source(global_position, &"smoke", minf(radius, 9.0), 0.75, Vector2.UP)
+			# Plumbing keeps feeding the puddle until repaired. Containers and oil
+			# complete one finite spill instead of creating liquid forever.
+			if hazard_kind == "water" and source_active:
+				liquid_system.deposit_source(global_position, &"water", radius, 1.0, flow_direction)
 			elif radius < target_radius - 0.5:
 				liquid_system.deposit_source(global_position, StringName(hazard_kind), radius, 0.8, flow_direction)
-			var remaining_surface := _tracked_surface_load()
-			peak_liquid_load = maxi(peak_liquid_load, remaining_surface)
-			var continuous_source := hazard_kind in ["water", "coolant", "fire", "smoke"]
-			# Finite spills and exhausted repaired sources remove their bookkeeping
-			# controller once the shared pixel surface no longer contains that material.
-			if remaining_surface <= 0 and (not continuous_source or not source_active):
-				_resolve()
-				return
+			peak_liquid_load = maxi(peak_liquid_load, liquid_system.amount_near(global_position, target_radius * 1.45, StringName(hazard_kind)))
 	elif hazard_kind == "electric" and source_active:
 		_apply_electric_damage()
-	if StringName(hazard_kind) not in SURFACE_KINDS: queue_redraw()
+	queue_redraw()
 
 func _apply_electric_damage() -> void:
 	if not is_instance_valid(liquid_system):
@@ -92,54 +78,36 @@ func set_source_active(active: bool) -> void:
 	source_active = active
 	queue_redraw()
 
-func get_cleanup_type() -> String:
-	if hazard_kind in ["glass", "dust", "ash"]: return "debris"
-	if hazard_kind == "fire" and is_instance_valid(liquid_system):
-		var burning: int = int(liquid_system.amount_near(global_position, target_radius * 1.45, &"fire")) + int(liquid_system.amount_near(global_position, target_radius * 1.45, &"smoke"))
-		if burning <= 0: return "debris"
-	return "spill"
-func get_cleanup_cost() -> int: return 3 if hazard_kind in ["glass", "dust", "ash"] else (7 if hazard_kind in ["fire", "fuel", "oil"] else 5)
+func get_cleanup_type() -> String: return "debris" if hazard_kind == "glass" else "spill"
+func get_cleanup_cost() -> int: return 3 if hazard_kind == "glass" else 5
 func get_cleanup_progress() -> float:
-	if StringName(hazard_kind) in SURFACE_KINDS and is_instance_valid(liquid_system):
-		var remaining := _tracked_surface_load()
+	if StringName(hazard_kind) in LIQUID_KINDS and is_instance_valid(liquid_system):
+		var remaining: int = int(liquid_system.amount_near(global_position, target_radius * 1.45, StringName(hazard_kind)))
 		return clampf(1.0 - float(remaining) / float(maxi(1, peak_liquid_load)), 0.0, 1.0)
 	return 1.0 - float(cleanup_steps) / float(get_cleanup_cost())
-func is_cleanup_blocked() -> bool: return source_active and hazard_kind in ["water", "electric", "coolant", "fire", "smoke"]
+func is_cleanup_blocked() -> bool: return source_active and hazard_kind in ["water", "electric"]
 
 func clean_step() -> void:
 	if is_cleanup_blocked(): return
-	if StringName(hazard_kind) in SURFACE_KINDS and is_instance_valid(liquid_system):
-		var removal := 54 if hazard_kind in ["oil", "fuel", "spill", "ash", "dust"] else 72
-		if hazard_kind == "fire":
-			liquid_system.remove_near(global_position, target_radius * 1.45, &"fire", removal)
-			liquid_system.remove_near(global_position, target_radius * 1.45, &"smoke", removal)
-			liquid_system.remove_near(global_position, target_radius * 1.45, &"ash", removal)
-		else:
-			liquid_system.remove_near(global_position, target_radius * 1.45, StringName(hazard_kind), removal)
-		if _tracked_surface_load() <= 0: _resolve()
+	if StringName(hazard_kind) in LIQUID_KINDS and is_instance_valid(liquid_system):
+		var removal := 54 if hazard_kind in ["oil", "spill"] else 72
+		liquid_system.remove_near(global_position, target_radius * 1.45, StringName(hazard_kind), removal)
+		if liquid_system.amount_near(global_position, target_radius * 1.45, StringName(hazard_kind)) <= 0: _resolve()
 		return
 	cleanup_steps = maxi(0, cleanup_steps - 1)
 	if cleanup_steps <= 0: _resolve()
 	queue_redraw()
 
 func _resolve() -> void:
-	if is_queued_for_deletion(): return
 	CleanupRegistry.unregister_target(self)
 	queue_free()
 
-func _tracked_surface_load() -> int:
-	if not is_instance_valid(liquid_system): return 0
-	var scan_radius := target_radius * 1.45
-	if hazard_kind == "fire":
-		return int(liquid_system.amount_near(global_position, scan_radius, &"fire")) + int(liquid_system.amount_near(global_position, scan_radius, &"smoke")) + int(liquid_system.amount_near(global_position, scan_radius, &"ash"))
-	return int(liquid_system.amount_near(global_position, scan_radius, StringName(hazard_kind)))
-
 func _spread_speed() -> float:
-	return {"water": 8.5, "cleaner": 7.0, "spill": 5.0, "oil": 3.4, "fuel": 7.8, "coolant": 5.5, "foam": 4.2, "fire": 8.0, "smoke": 10.0, "ash": 2.0, "dust": 3.0}.get(hazard_kind, 9.0)
+	return {"water": 8.5, "cleaner": 7.0, "spill": 5.0, "oil": 3.4}.get(hazard_kind, 9.0)
 
 func _draw() -> void:
 	# Liquids are exclusively rendered by PixelLiquidSystem; no smooth circles.
-	if StringName(hazard_kind) in SURFACE_KINDS: return
+	if StringName(hazard_kind) in LIQUID_KINDS: return
 	if hazard_kind == "glass":
 		for index in range(11):
 			var angle := float(index) * 2.399
