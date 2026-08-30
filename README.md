@@ -2,7 +2,13 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
-## v1.2.2 controlled corpse physics
+## v1.2.3 systemic incident ecology
+
+- Combat can now rupture authored fuel, alcohol, grease, coolant, chemical, sprinkler, electrical, glass, paper and gas-line props. These consequences persist into cleanup instead of ending as short-lived VFX.
+- A shared sparse pixel surface simulates fuel fire, smoke, foam, coolant, ash and dust alongside water, oil, chemicals and blood. Fire consumes connected fuel, smoke blocks AI sight, water and foam suppress flames, chemicals neutralize into foam, and drains remove runoff by material-specific rates.
+- Every campaign layout has its own two-prop incident pairing and floor-drain route, turning architecture into a different combat/cleanup problem rather than reskinning the same objective.
+- Cleanup now begins with source and hazard stabilization. Repaired furniture offsets its property penalty and fully restored destruction remains eligible for the top grade, supporting intentional chaos followed by deliberate reconstruction.
+- Reaction work remains bounded and chunk-based: no liquid, smoke, flame or footprint pixel creates an individual scene node.
 
 - Weapon impacts now separate expressive limb articulation from restrained body-mass travel, with per-weapon root-speed caps and hard wall damping that prevent corpses from launching through encounter geometry.
 

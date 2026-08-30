@@ -137,12 +137,28 @@ func _spawn_hazard(intensity: float, _attack_kind: String) -> void:
 	active_hazard.global_position = global_position
 	active_hazard.setup(hazard_kind, clampf(intensity, 0.7, 1.6))
 	Events.hazard_spawned.emit(global_position, hazard_kind)
+	# Ballistic rupture of volatile containers can turn a manageable spill into
+	# a room-scale fire. Melee still lets careful players create only a spill.
+	if prop_kind in ["fuel_drum", "alcohol_shelf"] and _attack_kind in ["projectile", "shotgun"] and intensity >= 1.0:
+		call_deferred("_ignite_volatile_spill", clampf(intensity, 0.8, 1.5))
+
+func _ignite_volatile_spill(intensity: float) -> void:
+	var fire_hazard := ENVIRONMENT_HAZARD.new() as EnvironmentHazard
+	var parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
+	if not RuntimeBudget.try_add("hazard", fire_hazard, parent): return
+	fire_hazard.global_position = global_position + last_impact_direction * 3.0
+	fire_hazard.setup("fire", intensity)
+	# The ruptured liquid is the fuel source; this controller only supplies the
+	# initial ignition and must not create fire forever after the fuel is gone.
+	fire_hazard.set_source_active(false)
+	Events.hazard_spawned.emit(fire_hazard.global_position, "fire")
 
 func get_interaction_prompt() -> String:
 	return "[ E ] RESTORE %s" % prop_kind.to_upper().replace("_", " ") if state == PropState.DESTROYED else ""
 
 func _get_size() -> Vector2:
-	if prop_kind in ["sofa", "bed", "table", "shelf", "console", "conveyor", "bar", "counter", "freezer", "evidence_cabinet"]: return Vector2(14, 8)
+	if prop_kind in ["sofa", "bed", "table", "shelf", "console", "conveyor", "bar", "counter", "freezer", "evidence_cabinet", "alcohol_shelf", "glass_rack", "paper_archive"]: return Vector2(14, 8)
+	if prop_kind in ["grease_vat", "chemical_tank"]: return Vector2(10, 9)
 	return Vector2(8, 8)
 
 func _draw() -> void:
@@ -199,6 +215,30 @@ func _draw() -> void:
 			_prop_panel(Rect2(-3, 1, 6, 4), Color("553126"), &"wood", 13)
 			PIXELS.line(self, Vector2(0, 1), Vector2(0, -4), Color("39784d"))
 			for point in [Vector2(-3,-4),Vector2(-2,-3),Vector2(-1,-4),Vector2(1,-3),Vector2(2,-2),Vector2(3,-3),Vector2(0,-5)]: PIXELS.pixel(self, point, Color("54a85f") if int(point.x + point.y) % 2 == 0 else Color("39784d"))
+		"fuel_drum", "grease_vat", "chemical_tank":
+			var tank_color := Color("d98534") if prop_kind == "fuel_drum" else (Color("66552e") if prop_kind == "grease_vat" else Color("58b56b"))
+			_prop_panel(Rect2(-half, size), tank_color, &"metal", 15)
+			PIXELS.line(self, Vector2(-half.x + 1, -1), Vector2(half.x - 1, -1), outline)
+			PIXELS.pixel(self, Vector2(0, -3), Color("fff08a") if prop_kind == "fuel_drum" else accent.lightened(0.3))
+		"sprinkler", "coolant_pipe", "gas_line":
+			var pipe_color := Color("68dceb") if prop_kind == "coolant_pipe" else (Color("ffb34b") if prop_kind == "gas_line" else Color("d7e2e5"))
+			PIXELS.line(self, Vector2(-4, 0), Vector2(4, 0), outline, 4)
+			PIXELS.line(self, Vector2(-4, 0), Vector2(4, 0), pipe_color, 2)
+			PIXELS.material_circle(self, Vector2(0, 0), 2, outline, pipe_color.lightened(0.2), pipe_color.darkened(0.25), 16)
+		"breaker", "extinguisher":
+			_prop_panel(Rect2(-half, size), Color("4d5661") if prop_kind == "breaker" else Color("d7443f"), &"metal", 17)
+			if prop_kind == "breaker":
+				for point in [Vector2(-2,-2), Vector2(1,-2), Vector2(-2,1), Vector2(1,1)]: PIXELS.pixel(self, point, Color("ffe06b"))
+			else:
+				PIXELS.line(self, Vector2(0,-2), Vector2(0,2), Color("fff3df"), 2)
+		"alcohol_shelf", "glass_rack":
+			_prop_panel(Rect2(-half, size), Color("563249"), &"wood", 18)
+			for x in range(-5, 6, 3):
+				var bottle_color := Color("ff4e8a") if prop_kind == "alcohol_shelf" else Color("b9ffff")
+				PIXELS.line(self, Vector2(x, -2), Vector2(x, 2), bottle_color, 2)
+		"paper_archive":
+			_prop_panel(Rect2(-half, size), Color("66503b"), &"wood", 19)
+			for x in range(-5, 6, 3): PIXELS.material_rect(self, Rect2(x, -2, 2, 4), Color("d8c69f"), Color("fff0ca"), Color("9f8969"), x + 20, &"grain")
 		_:
 			_prop_panel(Rect2(-half, size), base, &"grain", 14)
 	if state == PropState.DAMAGED:

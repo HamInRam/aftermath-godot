@@ -901,7 +901,8 @@ func _on_world_interaction_requested() -> void:
 		var furniture := _get_nearby_furniture()
 		if is_instance_valid(furniture) and furniture.interact():
 			furniture_restored += 1
-			detail_label.text = "FURNITURE RESTORED // %d/3" % furniture_restored
+			mission_tracker.record_property_restoration()
+			detail_label.text = "PROPERTY RESTORED // %d" % furniture_restored
 			return
 		return
 	if phase != "combat" or run_over: return
@@ -1397,7 +1398,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 	# can be removed. This check occurs before the shared liquid canvas is touched.
 	var active_liquid_source_near := false
 	for hazard in get_tree().get_nodes_in_group("environment_hazard"):
-		if not hazard is EnvironmentHazard or not hazard.source_active or hazard.hazard_kind not in ["water", "electric"]: continue
+		if not hazard is EnvironmentHazard or not hazard.has_method("is_cleanup_blocked") or not hazard.is_cleanup_blocked(): continue
 		if hazard.global_position.distance_to(world_position) <= hazard.target_radius * 1.6:
 			active_liquid_source_near = true
 			break
@@ -1511,12 +1512,12 @@ func _finish_run(left_evidence: bool) -> void:
 	left_evidence = left_evidence or cleanup_ratio < 0.999
 	var target_duration := mission_tracker.profile.target_duration_seconds if mission_tracker.profile != null else 600.0
 	var time_bonus := roundi(clampf((target_duration - elapsed) / maxf(target_duration, 1.0), 0.0, 1.0) * 500.0)
-	var restoration_cost := MissionResultBuilder.restoration_cost(mission_tracker.property_damage, ballistic_remaining, biological_remaining)
+	var restoration_cost := MissionResultBuilder.restoration_cost(mission_tracker.property_damage, ballistic_remaining, biological_remaining, mission_tracker.property_restored)
 	var room_verification_bonus := verified_cleanup_rooms.size() * 35
 	final_score += maxi(0, roundi(cleanup_ratio * 1000.0) + enemies_killed * 100 + time_bonus + mission_tracker.get_score_modifier() + clues_collected * 90 + valuables_secured * 80 + valuables_stolen * 130 + furniture_restored * 45 + room_verification_bonus + precision_reward_bonus - restoration_cost)
 	if Progression.get_run_mode() == "score_attack": final_score = roundi(final_score * 1.5)
 	elif Progression.get_run_mode() == "new_game_plus": final_score = roundi(final_score * 1.25)
-	final_grade = MissionResultBuilder.grade(cleanup_ratio, mission_tracker.alarm_triggers, mission_tracker.property_damage)
+	final_grade = MissionResultBuilder.grade(cleanup_ratio, mission_tracker.alarm_triggers, mission_tracker.property_damage, mission_tracker.property_restored)
 	status_label.text = "PERFECT CLEANUP" if cleanup_ratio >= 0.999 else ("SCENE CERTIFIED" if scene_certified else "SCENE ABANDONED")
 	var footprint_count := get_tree().get_nodes_in_group("footprint").size()
 	detail_label.text = "GRADE %s // %04d // %s // SHOTS %d // %d ALARMS // ENTER REPORT // R RETRY" % [final_grade, final_score, "CONTRACT OK" if contract_success else "CONTRACT FAILED", combat_shots_fired, mission_tracker.alarm_triggers]
@@ -1536,7 +1537,8 @@ func _build_forensic_report(cleanup_ratio: float) -> Dictionary:
 	if ballistic > 0: traces.append("%d BALLISTIC TRACE%s" % [ballistic, "" if ballistic == 1 else "S"])
 	if biological > 0: traces.append("%d BIOLOGICAL TRACE%s" % [biological, "" if biological == 1 else "S"])
 	if mission_tracker.alarm_triggers > 0: traces.append("SECURITY RESPONSE LOGGED")
-	if mission_tracker.property_damage > 0: traces.append("%d PROPERTY IMPACT%s" % [mission_tracker.property_damage, "" if mission_tracker.property_damage == 1 else "S"])
+	if mission_tracker.get_unrestored_property_damage() > 0: traces.append("%d UNRESTORED PROPERTY IMPACT%s" % [mission_tracker.get_unrestored_property_damage(), "" if mission_tracker.get_unrestored_property_damage() == 1 else "S"])
+	elif mission_tracker.property_restored > 0: traces.append("PROPERTY DAMAGE FULLY RESTORED")
 	if valuables_stolen > 0: traces.append("VALUABLES REPORTED MISSING")
 	if traces.is_empty(): traces.append("NO ACTIONABLE TRACE CHAIN")
 	var contract := ContractCatalog.get_contract(Progression.get_current_contract_id())
@@ -1551,8 +1553,10 @@ func _build_forensic_report(cleanup_ratio: float) -> Dictionary:
 		"ballistic": ballistic,
 		"biological": biological,
 		"property_damage": mission_tracker.property_damage,
-		"restoration_cost": MissionResultBuilder.restoration_cost(mission_tracker.property_damage, ballistic, biological),
-		"dominant_cost": MissionResultBuilder.dominant_cost(mission_tracker.property_damage, ballistic, biological, bodies),
+		"property_restored": mission_tracker.property_restored,
+		"unrestored_property": mission_tracker.get_unrestored_property_damage(),
+		"restoration_cost": MissionResultBuilder.restoration_cost(mission_tracker.property_damage, ballistic, biological, mission_tracker.property_restored),
+		"dominant_cost": MissionResultBuilder.dominant_cost(mission_tracker.property_damage, ballistic, biological, bodies, mission_tracker.property_restored),
 		"rooms_verified": verified_cleanup_rooms.size(),
 		"field_kit": Progression.get_current_kit_id(),
 		"traces": traces,

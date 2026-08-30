@@ -29,6 +29,28 @@ func _ready() -> void:
 
 	liquids.deposit_source(Vector2(92, 52), &"oil", 10.0, 1.0)
 	_expect(liquids.is_flammable_near(Vector2(92, 52), 12.0), "oil pixels must expose a flammable surface query")
+	liquids.add_liquid_pixel(Vector2(92, 52), &"cleaner", 180)
+	liquids._process_reactions(480)
+	_expect(liquids.amount_near(Vector2(92, 52), 3.0, &"foam") > 0, "cleaner crossing oil must create readable neutralizing foam")
+
+	var fire_origin := Vector2(118, 42)
+	liquids.add_liquid_pixel(fire_origin, &"fuel", 255)
+	liquids.ignite_near(fire_origin, 2.0, 1.2)
+	for reaction_pass in 3: liquids._process_reactions(480)
+	_expect(liquids.amount_near(fire_origin, 5.0, &"fire") > 0, "ignited fuel must sustain a pixel fire front")
+	_expect(liquids.amount_near(fire_origin, 6.0, &"ash") > 0, "burning fuel must leave persistent cleanup ash")
+	_expect(liquids.has_smoke_between(fire_origin + Vector2(0, 8), fire_origin + Vector2(0, -10)), "fire smoke must obstruct a sampled vision segment")
+	var fire_before_suppression: int = int(liquids.amount_near(fire_origin, 4.0, &"fire"))
+	liquids.add_liquid_pixel(fire_origin, &"foam", 255)
+	for reaction_pass in 3: liquids._process_reactions(480)
+	_expect(liquids.amount_near(fire_origin, 4.0, &"fire") < fire_before_suppression, "extinguisher foam must suppress fire instead of behaving like decoration")
+
+	var drain_origin := Vector2(146, 58)
+	liquids.register_drain(drain_origin, 8.0, 1.0)
+	liquids.deposit_source(drain_origin, &"water", 7.0, 1.0)
+	var drain_before: int = int(liquids.amount_near(drain_origin, 8.0, &"water"))
+	liquids._process_drains()
+	_expect(liquids.amount_near(drain_origin, 8.0, &"water") < drain_before, "authored floor drains must remove nearby runoff over time")
 	var water_before: int = int(liquids.amount_near(Vector2(24, 24), 16.0, &"water"))
 	_expect(liquids.clean_stroke(Vector2(14, 24), Vector2(34, 24), 4.0, 6, "mop"), "mop must remove a continuous pixel-liquid stroke")
 	_expect(liquids.amount_near(Vector2(24, 24), 16.0, &"water") < water_before, "liquid cleanup must reduce local density instead of hiding a whole circle")
@@ -51,10 +73,24 @@ func _ready() -> void:
 	hazard.set_source_active(false)
 	_expect(not hazard.is_cleanup_blocked(), "restoring plumbing must stop the source without deleting existing water")
 
+	var fire_residue := EnvironmentHazard.new()
+	add_child(fire_residue)
+	fire_residue.position = Vector2(170, 82)
+	fire_residue.setup("fire", 1.0)
+	fire_residue.set_source_active(false)
+	liquids.add_liquid_pixel(fire_residue.global_position, &"ash", 180)
+	liquids.remove_near(fire_residue.global_position, 18.0, &"fire", 255)
+	liquids.remove_near(fire_residue.global_position, 18.0, &"smoke", 255)
+	_expect(fire_residue.get_cleanup_type() == "debris", "extinguished fire must remain as collectable ash instead of silently completing")
+	for cleanup_pass in 4:
+		if not is_instance_valid(fire_residue) or fire_residue.is_queued_for_deletion(): break
+		fire_residue.clean_step()
+	_expect(liquids.amount_near(Vector2(170, 82), 18.0, &"ash") <= 0, "collecting fire residue must remove its persistent ash pixels")
+
 	await get_tree().process_frame
 	for chunk in liquids.chunks.values():
 		if is_instance_valid(chunk): chunk.flush_texture()
-	var preview := Image.create(160, 100, false, Image.FORMAT_RGBA8)
+	var preview := Image.create(192, 112, false, Image.FORMAT_RGBA8)
 	preview.fill(Color("18252b"))
 	for coordinate in liquids.chunks:
 		var chunk = liquids.chunks[coordinate]

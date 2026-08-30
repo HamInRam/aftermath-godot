@@ -6,6 +6,7 @@ const DEFAULT_MAP_SIZE := Vector2i(48, 28)
 const PIXEL_ENVIRONMENT_ATLAS := preload("res://utility/pixel_environment_atlas.gd")
 const GLASS_SHARDS_SCENE := preload("res://scenes/effects/glass_shards.tscn")
 const DESTRUCTIBLE_PROP := preload("res://scripts/props/destructible_prop.gd")
+const PIXEL_LIQUID_SYSTEM := preload("res://scripts/effects/pixel_liquid_system.gd")
 
 enum Tile { CONCRETE, WOOD, RED_CARPET, WALL, WINDOW, DARK_TILE, GRASS, STAIRS, CHECKER, BLACK_PLANK, TEAL_CARPET, CREAM, MAGENTA_STAGE, RED_BRICK, BATH_TILE, BRIGHT_WALL, SOFA, TABLE, TOILET, SINK, BED, TV, VENDING, PLANT, CRACK, PAPERS, GLASS_BITS, GRIME, NEON_ARROW, HAZARD, CABLE, DRAIN }
 
@@ -47,6 +48,7 @@ func _ready() -> void:
 	_build_variant_dressing()
 	_materialize_destructible_objects()
 	_spawn_signature_props()
+	_register_surface_drains()
 	_build_object_shadows()
 	_build_path_grid()
 
@@ -283,6 +285,7 @@ func _build_custom_decorations() -> void:
 		"last_call":
 			_place_decor([Vector2i(7,10), Vector2i(20,7), Vector2i(31,12), Vector2i(41,19)], Tile.GLASS_BITS)
 			_place_decor([Vector2i(13,22), Vector2i(25,18), Vector2i(38,6)], Tile.CABLE)
+	for drain_cell in _get_surface_drain_cells(): _place_decor([drain_cell], Tile.DRAIN)
 
 func _place_decor(cells: Array[Vector2i], tile: Tile) -> void:
 	for cell: Vector2i in cells:
@@ -585,18 +588,18 @@ func set_dynamic_obstacle(world_position: Vector2, solid: bool) -> void:
 
 func _spawn_signature_props() -> void:
 	var authored := {
-		"nightclub": [["speaker", Vector2i(17, 6)], ["speaker", Vector2i(29, 6)], ["bar", Vector2i(38, 10)]],
-		"sandwich_shop": [["counter", Vector2i(25, 9)], ["freezer", Vector2i(18, 22)], ["crate", Vector2i(32, 22)]],
-		"tactical_lab": [["console", Vector2i(28, 12)], ["crate", Vector2i(12, 22)], ["evidence_cabinet", Vector2i(44, 22)]],
-		"harbor_exchange": [["crate", Vector2i(8, 8)], ["crate", Vector2i(36, 8)], ["shelf", Vector2i(41, 23)]],
-		"motel_witness": [["counter", Vector2i(20, 13)], ["vending", Vector2i(32, 13)], ["shelf", Vector2i(42, 5)]],
-		"penthouse": [["bar", Vector2i(16, 20)], ["speaker", Vector2i(29, 5)], ["evidence_cabinet", Vector2i(41, 20)]],
-		"cold_storage": [["freezer", Vector2i(8, 14)], ["freezer", Vector2i(23, 14)], ["shelf", Vector2i(39, 14)]],
-		"casino_floor": [["slot_machine", Vector2i(13, 7)], ["slot_machine", Vector2i(34, 7)], ["bar", Vector2i(42, 16)]],
-		"police_archive": [["evidence_cabinet", Vector2i(8, 14)], ["evidence_cabinet", Vector2i(25, 14)], ["console", Vector2i(39, 14)]],
-		"slaughterhouse": [["conveyor", Vector2i(12, 13)], ["conveyor", Vector2i(34, 13)], ["freezer", Vector2i(38, 21)]],
-		"broadcast_tower": [["console", Vector2i(20, 13)], ["speaker", Vector2i(31, 8)], ["evidence_cabinet", Vector2i(41, 14)]],
-		"last_call": [["speaker", Vector2i(19, 7)], ["speaker", Vector2i(31, 7)], ["bar", Vector2i(40, 20)]],
+		"nightclub": [["speaker", Vector2i(17, 6)], ["speaker", Vector2i(29, 6)], ["bar", Vector2i(38, 10)], ["alcohol_shelf", Vector2i(25, 7)], ["extinguisher", Vector2i(30, 12)]],
+		"sandwich_shop": [["counter", Vector2i(25, 9)], ["freezer", Vector2i(18, 22)], ["crate", Vector2i(32, 22)], ["grease_vat", Vector2i(31, 10)], ["sprinkler", Vector2i(18, 18)]],
+		"tactical_lab": [["console", Vector2i(28, 12)], ["crate", Vector2i(12, 22)], ["evidence_cabinet", Vector2i(44, 22)], ["chemical_tank", Vector2i(35, 12)], ["breaker", Vector2i(30, 15)]],
+		"harbor_exchange": [["crate", Vector2i(8, 8)], ["crate", Vector2i(36, 8)], ["shelf", Vector2i(41, 23)], ["fuel_drum", Vector2i(27, 12)], ["sprinkler", Vector2i(10, 20)]],
+		"motel_witness": [["counter", Vector2i(20, 13)], ["vending", Vector2i(32, 13)], ["shelf", Vector2i(42, 5)], ["breaker", Vector2i(25, 13)], ["sprinkler", Vector2i(19, 20)]],
+		"penthouse": [["bar", Vector2i(16, 20)], ["speaker", Vector2i(29, 5)], ["evidence_cabinet", Vector2i(41, 20)], ["glass_rack", Vector2i(39, 10)], ["sprinkler", Vector2i(30, 18)]],
+		"cold_storage": [["freezer", Vector2i(8, 14)], ["freezer", Vector2i(23, 14)], ["shelf", Vector2i(39, 14)], ["coolant_pipe", Vector2i(27, 13)], ["breaker", Vector2i(20, 20)]],
+		"casino_floor": [["slot_machine", Vector2i(13, 7)], ["slot_machine", Vector2i(34, 7)], ["bar", Vector2i(42, 16)], ["alcohol_shelf", Vector2i(26, 14)], ["sprinkler", Vector2i(16, 20)]],
+		"police_archive": [["evidence_cabinet", Vector2i(8, 14)], ["evidence_cabinet", Vector2i(25, 14)], ["console", Vector2i(39, 14)], ["paper_archive", Vector2i(27, 11)], ["sprinkler", Vector2i(38, 20)]],
+		"slaughterhouse": [["conveyor", Vector2i(12, 13)], ["conveyor", Vector2i(34, 13)], ["freezer", Vector2i(38, 21)], ["grease_vat", Vector2i(29, 13)], ["gas_line", Vector2i(27, 16)]],
+		"broadcast_tower": [["console", Vector2i(20, 13)], ["speaker", Vector2i(31, 8)], ["evidence_cabinet", Vector2i(41, 14)], ["breaker", Vector2i(26, 14)], ["sprinkler", Vector2i(20, 20)]],
+		"last_call": [["speaker", Vector2i(19, 7)], ["speaker", Vector2i(31, 7)], ["bar", Vector2i(40, 20)], ["alcohol_shelf", Vector2i(29, 12)], ["gas_line", Vector2i(20, 12)]],
 	}
 	for entry: Array in authored.get(layout_variant, []):
 		var cell: Vector2i = entry[1]
@@ -608,6 +611,26 @@ func _spawn_signature_props() -> void:
 		prop.solidity_changed.connect(_on_prop_solidity_changed.bind(cell))
 		add_child(prop)
 		destructible_cells.append(cell)
+
+func _get_surface_drain_cells() -> Array[Vector2i]:
+	var authored := {
+		"nightclub": [Vector2i(9, 22)], "sandwich_shop": [Vector2i(18, 21), Vector2i(30, 18)],
+		"tactical_lab": [Vector2i(34, 20)], "harbor_exchange": [Vector2i(29, 20)],
+		"motel_witness": [Vector2i(18, 21)], "penthouse": [Vector2i(35, 22)],
+		"cold_storage": [Vector2i(8, 8), Vector2i(24, 14), Vector2i(40, 20)],
+		"casino_floor": [Vector2i(40, 20)], "police_archive": [Vector2i(39, 20)],
+		"slaughterhouse": [Vector2i(5, 7), Vector2i(21, 14), Vector2i(38, 13)],
+		"broadcast_tower": [Vector2i(28, 19)], "last_call": [Vector2i(25, 18)],
+	}
+	var result: Array[Vector2i] = []
+	for cell: Vector2i in authored.get(layout_variant, []): result.append(cell)
+	return result
+
+func _register_surface_drains() -> void:
+	var surface := PIXEL_LIQUID_SYSTEM.get_or_create(get_tree()) as PixelLiquidSystem
+	if not is_instance_valid(surface): return
+	for cell in _get_surface_drain_cells():
+		surface.register_drain(floor_layer.to_global(floor_layer.map_to_local(cell)), 10.0, 1.0)
 
 func _build_path_grid() -> void:
 	path_grid.region = Rect2i(Vector2i.ZERO, map_size)

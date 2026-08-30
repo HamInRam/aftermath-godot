@@ -7,10 +7,12 @@ const CORPSE_DISPOSAL := preload("res://scripts/props/corpse_disposal.gd")
 var failures := 0
 
 func _ready() -> void:
-	var stage := CleanupWorkflow.get_stage({"corpse": 2, "shell": 8, "blood": 20})
-	_expect(int(stage.index) == 1 and str(stage.tool) == "body_bag", "cleanup workflow should stabilize bodies before handling detail evidence")
+	var stage := CleanupWorkflow.get_stage({"spill": 2, "corpse": 2, "shell": 8, "blood": 20})
+	_expect(int(stage.index) == 1 and str(stage.label) == "STABILIZE HAZARDS", "cleanup workflow should stop active incident spread before moving evidence through it")
+	stage = CleanupWorkflow.get_stage({"corpse": 2, "shell": 8, "blood": 20})
+	_expect(int(stage.index) == 2 and str(stage.tool) == "body_bag", "cleanup workflow should stabilize bodies after environmental hazards")
 	stage = CleanupWorkflow.get_stage({"shell": 3, "blood": 20})
-	_expect(int(stage.index) == 2 and str(stage.tool) == "evidence_bag", "cleanup workflow should recover loose evidence before wet cleaning")
+	_expect(int(stage.index) == 3 and str(stage.tool) == "evidence_bag", "cleanup workflow should recover loose evidence before biological cleaning")
 	_expect(CleanupWorkflow.get_required_tool("spill") == "mop", "workflow should centralize tool compatibility outside the level controller")
 	_expect("gore" in CleanupWorkflow.get_compatible_types("mop") and "gore" not in CleanupWorkflow.get_compatible_types("pressure_washer"), "mop and washer must retain distinct solid-versus-liquid cleanup roles")
 	call_deferred("_run")

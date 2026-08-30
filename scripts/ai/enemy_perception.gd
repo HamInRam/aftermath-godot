@@ -25,6 +25,9 @@ static func _blocked_by_smoke(observer: Node, from: Vector2, to: Vector2) -> boo
 		var t := clampf((node.global_position - from).dot(segment) / length_squared, 0.0, 1.0)
 		var nearest := from + segment * t
 		if nearest.distance_to(node.global_position) <= node.radius: return true
+	var pixel_surface := observer.get_tree().get_first_node_in_group("pixel_liquid_system")
+	if is_instance_valid(pixel_surface) and pixel_surface.has_method("has_smoke_between"):
+		return bool(pixel_surface.has_smoke_between(from, to))
 	return false
 
 static func evaluate_noise(observer: CollisionObject2D, world_position: Vector2, radius: float, collision_mask: int) -> Dictionary:
