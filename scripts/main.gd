@@ -373,10 +373,12 @@ func _update_interaction_prompt() -> void:
 		if is_instance_valid(world_context_marker): world_context_marker.hide_target()
 		return
 	if phase == "cleanup":
-		if is_instance_valid(player.dragged_corpse) and is_instance_valid(_get_nearby_disposal()): interaction_label.text = _get_nearby_disposal().get_interaction_prompt()
+		if is_instance_valid(player.dragged_restoration_prop): interaction_label.text = "[ E ] DROP OBJECT // ALIGN WITH CYAN OUTLINE"
+		elif is_instance_valid(player.dragged_corpse) and is_instance_valid(_get_nearby_disposal()): interaction_label.text = _get_nearby_disposal().get_interaction_prompt()
 		elif is_instance_valid(player.dragged_corpse): interaction_label.text = "[ E ] DROP BODY"
 		elif is_instance_valid(extraction_zone) and extraction_zone.contains_position(player.global_position): interaction_label.text = "[ E ] LEAVE SCENE // RISK %d" % CleanupRegistry.get_remaining_value()
 		elif _is_player_near_sink(): interaction_label.text = "[ E ] RINSE MOP // DIRTY %d%%" % roundi(player.get_mop_saturation_ratio() * 100.0)
+		elif is_instance_valid(player.get_nearby_restoration_prop()): interaction_label.text = player.get_nearby_restoration_prop().get_interaction_prompt()
 		elif is_instance_valid(player.get_nearby_draggable_corpse()):
 			var corpse: Node2D = player.get_nearby_draggable_corpse()
 			interaction_label.text = "[ E ] DRAG BAG" if corpse.is_bagged() else "[ E ] BAG BODY // %d%%" % roundi(corpse.get_cleanup_progress() * 100.0)
@@ -431,10 +433,20 @@ func _update_world_context_marker() -> void:
 				if is_instance_valid(target): kind = "target"; color = Color("82d8ff")
 				else: target = _get_nearby_noise_lure()
 	else:
-		target = player.get_nearby_draggable_corpse()
+		if is_instance_valid(player.dragged_restoration_prop):
+			target = player.dragged_restoration_prop.get_restoration_anchor()
+			kind = "target"
+			color = Color("73f7e4")
+		else: target = player.get_nearby_restoration_prop()
+		if is_instance_valid(target) and (is_instance_valid(player.dragged_restoration_prop) or target.is_in_group("displaced_prop")):
+			kind = "target"
+			color = Color("73f7e4")
+		else:
+			target = player.get_nearby_draggable_corpse()
 		if is_instance_valid(target):
-			kind = "bag" if target.is_bagged() else "body"
-			progress = target.get_cleanup_progress()
+			if target.is_in_group("corpse"):
+				kind = "bag" if target.is_bagged() else "body"
+				progress = target.get_cleanup_progress()
 		else:
 			target = _get_nearby_loose_evidence()
 			if is_instance_valid(target): kind = "evidence"; color = Color("82d8ff")
@@ -458,6 +470,7 @@ func _connect_events() -> void:
 	Events.door_impact.connect(_on_door_impact)
 	Events.glass_shattered.connect(_on_glass_shattered)
 	Events.prop_destroyed.connect(_on_prop_destroyed)
+	Events.prop_restored.connect(_on_prop_restored)
 	Events.prop_impacted.connect(_on_prop_impacted)
 	Events.hazard_spawned.connect(_on_hazard_spawned)
 	Events.setpiece_triggered.connect(_on_setpiece_triggered)
@@ -482,6 +495,11 @@ func _on_prop_destroyed(_world_position: Vector2, prop_kind: String) -> void:
 	if phase == "combat": mission_tracker.record_property_damage()
 	trauma_camera.add_trauma(0.1 if prop_kind in ["plant", "toilet", "sink"] else 0.16)
 	_show_scene_consequence("PROPERTY +1 // %s" % prop_kind.to_upper().replace("_", " "))
+
+func _on_prop_restored(_world_position: Vector2, prop_kind: String) -> void:
+	if phase != "cleanup": return
+	furniture_restored += 1
+	detail_label.text = "%s RESET // OBJECTS RESTORED %d" % [prop_kind.to_upper().replace("_", " "), furniture_restored]
 
 func _show_scene_consequence(text: String) -> void:
 	if phase != "combat" or run_over: return
@@ -850,6 +868,10 @@ func _get_nearby_noise_lure() -> NoiseLure:
 
 func _on_world_interaction_requested() -> void:
 	if phase == "cleanup":
+		if is_instance_valid(player.dragged_restoration_prop):
+			player.attempt_restoration_prop_drag()
+			detail_label.text = "OBJECT RELEASED // GUIDE IT INTO THE CYAN OUTLINE"
+			return
 		if is_instance_valid(player.dragged_corpse):
 			var disposal := _get_nearby_disposal()
 			if is_instance_valid(disposal) and disposal.dispose(player.dragged_corpse):
@@ -861,6 +883,10 @@ func _on_world_interaction_requested() -> void:
 		if _is_player_near_sink():
 			if player.rinse_mop(): detail_label.text = "MOP RINSED // CLEAN WATER"
 			else: detail_label.text = "MOP ALREADY CLEAN"
+			return
+		var displaced_prop: Node2D = player.get_nearby_restoration_prop()
+		if is_instance_valid(displaced_prop) and player.attempt_restoration_prop_drag():
+			detail_label.text = "OBJECT SECURED // RETURN IT TO THE CYAN OUTLINE"
 			return
 		var corpse: Node2D = player.get_nearby_draggable_corpse()
 		if is_instance_valid(corpse):
@@ -900,8 +926,9 @@ func _on_world_interaction_requested() -> void:
 			return
 		var furniture := _get_nearby_furniture()
 		if is_instance_valid(furniture) and furniture.interact():
-			furniture_restored += 1
-			detail_label.text = "FURNITURE RESTORED // %d/3" % furniture_restored
+			if furniture is ResettableFurniture:
+				furniture_restored += 1
+				detail_label.text = "FURNITURE RESTORED // %d/3" % furniture_restored
 			return
 		return
 	if phase != "combat" or run_over: return
@@ -1200,6 +1227,9 @@ func _enter_cleanup_phase() -> void:
 	for corpse_node in get_tree().get_nodes_in_group("corpse"):
 		if is_instance_valid(corpse_node) and corpse_node.has_method("enter_cleanup_stable_state"):
 			corpse_node.enter_cleanup_stable_state()
+	for prop_node in get_tree().get_nodes_in_group("displaced_prop"):
+		if is_instance_valid(prop_node) and prop_node.has_method("enter_cleanup_restore_state"):
+			prop_node.enter_cleanup_restore_state()
 	status_label.text = "CLEANUP REQUIRED"
 	detail_label.text = "GET CLOSE // HOLD LMB"
 	hud.set_objective("OBJECTIVES COMPLETE // ERASE ALL EVIDENCE")
@@ -1267,6 +1297,7 @@ func _get_nearby_furniture() -> Node2D:
 	var nearest_distance := 22.0 * 22.0
 	for node in get_tree().get_nodes_in_group("resettable_furniture"):
 		if not node is Node2D or not node.has_method("interact") or not node.has_method("get_interaction_prompt"): continue
+		if node.has_method("is_displaced") and node.is_displaced(): continue
 		if node is ResettableFurniture and node.restored: continue
 		var distance := player.global_position.distance_squared_to(node.global_position)
 		if distance <= nearest_distance: nearest = node; nearest_distance = distance

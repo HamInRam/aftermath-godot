@@ -50,6 +50,7 @@ var cached_execution_target: CharacterBody2D
 var execution_query_cooldown := 0.0
 var current_cleanup_tool := "mop"
 var dragged_corpse: Node2D
+var dragged_restoration_prop: Node2D
 var controls_enabled := true
 var melee_input_buffer := 0.0
 var execution_input_buffer := 0.0
@@ -173,7 +174,8 @@ func _physics_process(delta: float) -> void:
 		# The scan flash is time-driven and must redraw independently of cleaning input.
 		queue_redraw()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	var drag_multiplier := minf(0.94, 0.72 + Progression.get_upgrade_level("body_handling") * 0.07) if is_instance_valid(dragged_corpse) else 1.0
+	var hauling := is_instance_valid(dragged_corpse) or is_instance_valid(dragged_restoration_prop)
+	var drag_multiplier := minf(0.94, 0.72 + Progression.get_upgrade_level("body_handling") * 0.07) if hauling else 1.0
 	var executioner_mobility := 1.0 + Progression.get_specialization_level("executioner") * 0.03
 	velocity = input_direction * move_speed * get_equipped_movement_multiplier() * drag_multiplier * executioner_mobility * field_movement_multiplier
 	var intended_velocity := velocity
@@ -312,7 +314,7 @@ func _update_procedural_motion(delta: float) -> void:
 		if gun.is_reloading and not cleanup_mode:
 			pose_rotation = -0.18
 			pose_position = Vector2(-1.5, 1.0)
-		elif is_instance_valid(dragged_corpse):
+		elif is_instance_valid(dragged_corpse) or is_instance_valid(dragged_restoration_prop):
 			pose_rotation = -0.13
 			pose_position = Vector2(-1.2, 0.8)
 		elif cleanup_mode and cleanup_action_pulse > 0.0:
@@ -499,6 +501,9 @@ func set_controls_enabled(enabled: bool) -> void:
 	if is_instance_valid(dragged_corpse):
 		dragged_corpse.end_drag(self)
 		dragged_corpse = null
+	if is_instance_valid(dragged_restoration_prop):
+		dragged_restoration_prop.end_drag(self)
+		dragged_restoration_prop = null
 
 func get_cleanup_efficiency(cleanup_type: String) -> int:
 	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]:
@@ -522,6 +527,7 @@ func get_nearby_draggable_corpse() -> Node2D:
 
 func attempt_corpse_drag() -> bool:
 	if not cleanup_mode or is_dead: return false
+	if is_instance_valid(dragged_restoration_prop): return false
 	if is_instance_valid(dragged_corpse):
 		dragged_corpse.end_drag(self)
 		dragged_corpse = null
@@ -530,6 +536,31 @@ func attempt_corpse_drag() -> bool:
 	if not is_instance_valid(corpse) or not corpse.has_method("is_bagged") or not corpse.is_bagged() or not corpse.begin_drag(self): return false
 	dragged_corpse = corpse
 	return true
+
+func get_nearby_restoration_prop() -> Node2D:
+	var nearest: Node2D
+	var nearest_distance := 20.0 * 20.0
+	for node in get_tree().get_nodes_in_group("displaced_prop"):
+		if not node is Node2D or not node.has_method("begin_drag"): continue
+		var distance := global_position.distance_squared_to(node.global_position)
+		if distance <= nearest_distance:
+			nearest = node
+			nearest_distance = distance
+	return nearest
+
+func attempt_restoration_prop_drag() -> bool:
+	if not cleanup_mode or is_dead or is_instance_valid(dragged_corpse): return false
+	if is_instance_valid(dragged_restoration_prop):
+		dragged_restoration_prop.end_drag(self)
+		dragged_restoration_prop = null
+		return true
+	var prop := get_nearby_restoration_prop()
+	if not is_instance_valid(prop) or not prop.begin_drag(self): return false
+	dragged_restoration_prop = prop
+	return true
+
+func clear_dragged_restoration_prop(prop: Node2D) -> void:
+	if dragged_restoration_prop == prop: dragged_restoration_prop = null
 
 func _start_melee_attack() -> void:
 	if is_melee_attacking or melee_cooldown > 0.0 or is_dead or cleanup_mode: return
@@ -737,6 +768,9 @@ func set_cleanup_mode(enabled: bool) -> void:
 	if not enabled and is_instance_valid(dragged_corpse):
 		dragged_corpse.end_drag(self)
 		dragged_corpse = null
+	if not enabled and is_instance_valid(dragged_restoration_prop):
+		dragged_restoration_prop.end_drag(self)
+		dragged_restoration_prop = null
 	if enabled:
 		melee_animation_generation += 1
 		is_melee_attacking = false

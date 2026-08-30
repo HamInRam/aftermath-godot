@@ -11,6 +11,7 @@ const EVIDENCE_VALUES := {
 	"shell": 1,
 	"debris": 2,
 	"spill": 4,
+	"furniture": 8,
 }
 
 var _targets: Dictionary = {}

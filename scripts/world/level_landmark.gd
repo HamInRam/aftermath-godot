@@ -80,6 +80,7 @@ func interact() -> bool:
 	solidity_changed.emit(true)
 	remove_from_group("resettable_furniture")
 	if is_instance_valid(active_hazard): active_hazard.set_source_active(false)
+	Events.prop_restored.emit(global_position, landmark_kind)
 	queue_redraw()
 	return true
 

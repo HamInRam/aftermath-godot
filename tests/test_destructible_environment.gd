@@ -10,7 +10,15 @@ func _ready() -> void:
 	await get_tree().process_frame
 	var props := level.get_tree().get_nodes_in_group("destructible_prop")
 	_expect(props.size() >= 10, "rebuilt levels should contain a meaningful density of destructible low-pixel props")
-	var prop := props[0] as DestructibleProp
+	var prop: DestructibleProp
+	for candidate in props:
+		if candidate is DestructibleProp and not candidate.is_movable():
+			prop = candidate
+			break
+	_expect(is_instance_valid(prop), "campaign maps should retain heavy fixtures that partially break before collapsing")
+	if not is_instance_valid(prop):
+		get_tree().quit(failures)
+		return
 	var original_cell := (level.get_node("TileMap") as TileWorld).floor_layer.local_to_map(prop.position)
 	prop.take_damage(1, prop.global_position - Vector2.RIGHT)
 	_expect(prop.state == DestructibleProp.PropState.DAMAGED, "first impact should expose a readable damaged state")

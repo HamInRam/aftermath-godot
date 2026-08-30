@@ -15,18 +15,21 @@ static func get_required_tool(cleanup_type: String) -> String:
 	if cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]: return "mop"
 	if cleanup_type in ["shell", "dropped_weapon", "debris"]: return "evidence_bag"
 	if cleanup_type == "corpse": return "body_bag"
+	if cleanup_type == "furniture": return "hands"
 	return "mop"
 
 static func get_stage(counts: Dictionary) -> Dictionary:
 	var bodies := int(counts.get("corpse", 0))
+	var furniture := int(counts.get("furniture", 0))
 	var ballistic := int(counts.get("shell", 0)) + int(counts.get("dropped_weapon", 0)) + int(counts.get("debris", 0))
 	var spills := int(counts.get("spill", 0))
 	var biological := int(counts.get("blood", 0)) + int(counts.get("blood_pool", 0)) + int(counts.get("blood_footprint", 0)) + int(counts.get("gore", 0))
 	if bodies > 0: return {"index": 1, "label": "BAG BODIES", "remaining": bodies, "tool": "body_bag"}
-	if ballistic > 0: return {"index": 2, "label": "RECOVER EVIDENCE", "remaining": ballistic, "tool": "evidence_bag"}
-	if spills > 0: return {"index": 3, "label": "CONTAIN SPILLS", "remaining": spills, "tool": "mop"}
-	if biological > 0: return {"index": 4, "label": "CLEAN BIOLOGICAL", "remaining": biological, "tool": "mop"}
-	return {"index": 5, "label": "UV VERIFY", "remaining": 0, "tool": "scanner"}
+	if furniture > 0: return {"index": 2, "label": "RESET DISPLACED OBJECTS", "remaining": furniture, "tool": "hands"}
+	if ballistic > 0: return {"index": 3, "label": "RECOVER EVIDENCE", "remaining": ballistic, "tool": "evidence_bag"}
+	if spills > 0: return {"index": 4, "label": "CONTAIN SPILLS", "remaining": spills, "tool": "mop"}
+	if biological > 0: return {"index": 5, "label": "CLEAN BIOLOGICAL", "remaining": biological, "tool": "mop"}
+	return {"index": 6, "label": "UV VERIFY", "remaining": 0, "tool": "scanner"}
 
 static func get_hint(counts: Dictionary) -> String:
 	var stage := get_stage(counts)

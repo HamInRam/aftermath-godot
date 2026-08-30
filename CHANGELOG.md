@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.2.3] - Physical Set Dressing
+
+- Reverted the postponed incident-ecology experiment so fire, smoke, responder and generalized liquid-chain features are not part of this version.
+- Converted destructible dressing to controlled CharacterBody2D objects while retaining sleeping physics for untouched and settled props.
+- Added material-, attack- and mass-aware launch response for light furniture and appliances; heavy fixtures keep progressive cracks, partial fragments and full structural collapse.
+- Added safe wall collision, damped spin, prop-to-prop impacts and speed-gated enemy knockdown without permitting high-energy objects to tunnel through level geometry.
+- Added persistent original-position anchors for every movable object. Cyan hard-pixel ghosts remain hidden during combat and become visible only when a displaced object must be restored.
+- Added cleanup-phase object hauling through the existing `E` interaction. Props follow behind the player, can be deliberately dropped, and auto-snap to their exact authored transform when guided into the correct slot.
+- Integrated displaced furniture into CleanupRegistry risk, workflow guidance, scoring, navigation solidity, context markers and extraction certification.
+- Added dedicated regression coverage for launch, partial damage, ghost visibility, hauling, exact snap restoration, cleanup resolution and restoration events.
+
 ## [v1.2.2] - Controlled Corpse Physics
 
 - Added adaptive actor simulation: calm living rigs solve at 30 Hz, idle silhouettes redraw at 12 Hz, moving silhouettes at 30 Hz, while impacts and knockdowns retain responsive 60 Hz physics.

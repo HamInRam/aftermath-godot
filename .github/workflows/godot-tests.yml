@@ -41,6 +41,7 @@ jobs:
             tests/test_campaign_map_identity.tscn \
             tests/test_destructible_environment.tscn \
             tests/test_destruction_pipeline.tscn \
+            tests/test_prop_restoration.tscn \
             tests/test_death_ragdoll_pipeline.tscn \
             tests/test_corpse_wall_safety.tscn \
             tests/test_projectile_collision.tscn \

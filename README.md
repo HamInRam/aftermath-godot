@@ -2,6 +2,14 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.3 physical set dressing
+
+- Scene dressing now has two readable physical outcomes: heavy fixtures chip and progressively collapse, while lighter props such as plants, televisions, speakers, crates, machines and tables receive material/weapon-weighted launch impulses.
+- Movable props remain recognizable after impact, collide safely with walls and actors, can knock enemies down at meaningful speed, and settle without continuous off-screen simulation.
+- Every displaced object becomes explicit forensic cleanup work. Its exact authored position appears as a cyan hard-pixel ghost only after combat, and `E` lets the player drag the object with the existing body-handling language.
+- Guiding an object into its slot automatically snaps position and rotation, restores solidity, resolves cleanup risk and awards restoration credit; unfinished objects prevent a perfect scene certification.
+- Original navigation cells open while props are displaced and close on restoration, preserving combat routes without allowing invisible blockers.
+
 ## v1.2.2 controlled corpse physics
 
 - Weapon impacts now separate expressive limb articulation from restrained body-mass travel, with per-weapon root-speed caps and hard wall damping that prevent corpses from launching through encounter geometry.
