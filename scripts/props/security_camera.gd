@@ -1,6 +1,8 @@
 class_name SecurityCamera
 extends StaticBody2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 signal alarm_triggered(camera: SecurityCamera, player_position: Vector2)
 signal disabled(camera: SecurityCamera)
 
@@ -30,7 +32,7 @@ func _physics_process(delta: float) -> void:
 	if is_offline: return
 	if not is_instance_valid(player): player = get_tree().get_first_node_in_group("player") as Node2D
 	scan_time += delta * scan_speed
-	rotation = base_rotation + sin(scan_time) * deg_to_rad(scan_arc_degrees * 0.5)
+	rotation = snappedf(base_rotation + sin(scan_time) * deg_to_rad(scan_arc_degrees * 0.5), PI / 16.0)
 	var sees_player := is_instance_valid(player) and not bool(player.get("is_dead")) and _can_see_player()
 	if sees_player:
 		hidden_time = 0.0
@@ -74,19 +76,20 @@ func get_interaction_prompt() -> String:
 func _draw() -> void:
 	var body_color := Color("454552") if is_offline else Color("c8d5db")
 	var lens_color := Color("3b4548") if is_offline else (Color("ff315c") if alarm_latched else Color("65f7ff"))
-	draw_line(Vector2(-7, 0), Vector2(-3, 0), body_color, 2.0)
-	draw_rect(Rect2(-3, -4, 8, 8), body_color)
-	draw_polygon(PackedVector2Array([Vector2(5, -3), Vector2(9, 0), Vector2(5, 3)]), PackedColorArray([body_color]))
-	draw_circle(Vector2(5, 0), 1.5, lens_color)
+	PIXELS.line(self, Vector2(-7, 0), Vector2(-3, 0), body_color)
+	PIXELS.material_panel(self, Rect2(-3, -4, 8, 8), Color("17131b"), body_color, body_color.lightened(0.18), body_color.darkened(0.22), 28, &"metal")
+	PIXELS.line(self, Vector2(5, -2), Vector2(5, 2), body_color)
+	PIXELS.pixel(self, Vector2(7, -1), body_color); PIXELS.pixel(self, Vector2(8, 0), body_color)
+	PIXELS.line(self, Vector2(6, -1), Vector2(6, 1), lens_color)
 	if is_offline:
-		draw_line(Vector2(-2, -5), Vector2(7, 5), Color("ffcf66"), 1.5)
+		PIXELS.line(self, Vector2(-2, -5), Vector2(7, 5), Color("ffcf66"))
 		return
 	var vision_color := Color(1.0, 0.14, 0.3, 0.08 + detection_progress * 0.16)
 	var half_fov := deg_to_rad(vision_fov_degrees * 0.5)
-	var points := PackedVector2Array([Vector2.ZERO])
-	for index in range(9):
-		points.append(Vector2.RIGHT.rotated(lerpf(-half_fov, half_fov, index / 8.0)) * detection_range)
-	draw_colored_polygon(points, vision_color)
-	draw_arc(Vector2.ZERO, 12.0, -half_fov, half_fov, 12, lens_color, 1.0)
+	for ray_index in range(7):
+		var angle := lerpf(-half_fov, half_fov, float(ray_index) / 6.0)
+		var end := Vector2.RIGHT.rotated(angle) * detection_range
+		PIXELS.line(self, Vector2(9, 0), end, vision_color)
+	PIXELS.arc(self, Vector2.ZERO, 12, -half_fov, half_fov, lens_color, 12)
 	if detection_progress > 0.0:
-		draw_arc(Vector2.ZERO, 15.0, -PI * 0.5, -PI * 0.5 + TAU * detection_progress, 16, Color("ff315c"), 1.5)
+		PIXELS.arc(self, Vector2.ZERO, 15, -PI * 0.5, -PI * 0.5 + TAU * detection_progress, Color("ff315c"), 16)

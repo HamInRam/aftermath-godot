@@ -3,7 +3,7 @@ extends Node2D
 
 const TILE_SIZE := Vector2i(8, 8)
 const DEFAULT_MAP_SIZE := Vector2i(48, 28)
-const ATLAS_TEXTURE := preload("res://assets/tiles/environment_tiles_8x8.svg")
+const PIXEL_ENVIRONMENT_ATLAS := preload("res://utility/pixel_environment_atlas.gd")
 const GLASS_SHARDS_SCENE := preload("res://scenes/effects/glass_shards.tscn")
 const DESTRUCTIBLE_PROP := preload("res://scripts/props/destructible_prop.gd")
 
@@ -25,6 +25,7 @@ var path_grid := AStarGrid2D.new()
 var destructible_cells: Array[Vector2i] = []
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	layout_variant = layout_id
 	layout_id = _get_layout_family(layout_variant)
 	floor_layer.tile_set = _create_tile_set(false)
@@ -364,7 +365,7 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 		tile_set.set_physics_layer_collision_layer(2, 32)
 		tile_set.set_physics_layer_collision_mask(2, 0)
 	var atlas := TileSetAtlasSource.new()
-	atlas.texture = ATLAS_TEXTURE
+	atlas.texture = PIXEL_ENVIRONMENT_ATLAS.create_texture()
 	atlas.texture_region_size = TILE_SIZE
 	for tile_index in range(32):
 		var atlas_coordinate := Vector2i(tile_index, 0)

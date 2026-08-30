@@ -1,6 +1,8 @@
 class_name CorpseDisposal
 extends Node2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 var disposal_type := "dumpster"
 var capacity := 2
 var used := 0
@@ -36,6 +38,8 @@ func get_interaction_prompt() -> String:
 
 func _draw() -> void:
 	var color := Color("e06a36") if disposal_type == "incinerator" else Color("477c70")
-	draw_rect(Rect2(-8, -5, 16, 10), Color(color, 0.9 if active else 0.45))
-	draw_rect(Rect2(-7, -4, 14, 2), Color("1e2527"))
-	if active: draw_arc(Vector2.ZERO, 10.0, 0.0, TAU, 20, Color(color, 0.5), 1.0)
+	var body := Color(color, 0.9 if active else 0.45)
+	PIXELS.material_panel(self, Rect2(-8, -5, 16, 10), Color("17131b"), body, body.lightened(0.18), body.darkened(0.28), 22, &"metal")
+	PIXELS.line(self, Vector2(-6, -3), Vector2(5, -3), Color("1e2527"))
+	for x in range(-5, 6, 4): PIXELS.pixel(self, Vector2(x, 2), color.lightened(0.25))
+	if active: PIXELS.circle(self, Vector2.ZERO, 10, Color(color, 0.5), true)

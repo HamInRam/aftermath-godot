@@ -1,6 +1,8 @@
 class_name DetachedLimb
 extends CharacterBody2D
 
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+
 var limb_kind := "arm"
 var blood_amount := 1.0
 var spin := 0.0
@@ -36,7 +38,7 @@ func _physics_process(delta: float) -> void:
 		trail_distance = 0.0
 	previous_position = global_position
 	velocity = velocity.move_toward(Vector2.ZERO, 110.0 * delta)
-	rotation += spin * delta
+	rotation = snappedf(rotation + spin * delta, PI / 4.0)
 	spin = move_toward(spin, 0.0, 10.0 * delta)
 	if velocity.length() < 2.0:
 		settled = true
@@ -60,11 +62,12 @@ func _draw() -> void:
 	var flesh := Color(0.94, 0.42, 0.44, blood_amount)
 	var blood := Color(0.58, 0.005, 0.035, blood_amount)
 	if limb_kind == "leg":
-		draw_rect(Rect2(-5, -2, 8, 4), outline); draw_rect(Rect2(-4, -1, 6, 2), cloth)
-		draw_rect(Rect2(2, -1, 3, 2), flesh); draw_rect(Rect2(4, -1, 2, 2), blood)
+		PIXEL_PAINTER.material_panel(self, Rect2(-5, -2, 8, 4), outline, cloth, cloth.lightened(0.14), cloth.darkened(0.18), 3, &"fabric")
+		PIXEL_PAINTER.material_rect(self, Rect2(2, -1, 3, 2), flesh, flesh.lightened(0.12), blood, 5)
 	elif limb_kind == "head":
-		draw_rect(Rect2(-3, -3, 6, 6), outline); draw_rect(Rect2(-2, -2, 4, 4), flesh)
-		draw_rect(Rect2(1, -2, 2, 3), blood); draw_rect(Rect2(-1, -1, 1, 1), Color(0.96, 0.88, 0.76, blood_amount))
+		PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 3, outline, outline.lightened(0.1), outline.darkened(0.2), 7)
+		PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 2, flesh, flesh.lightened(0.12), blood, 11)
+		PIXEL_PAINTER.pixel(self, Vector2(-1, -1), Color(0.96, 0.88, 0.76, blood_amount))
 	else:
-		draw_rect(Rect2(-4, -2, 7, 4), outline); draw_rect(Rect2(-3, -1, 5, 2), cloth)
-		draw_rect(Rect2(2, -1, 3, 2), flesh); draw_rect(Rect2(3, -1, 2, 2), blood)
+		PIXEL_PAINTER.material_panel(self, Rect2(-4, -2, 7, 4), outline, cloth, cloth.lightened(0.14), cloth.darkened(0.18), 13, &"fabric")
+		PIXEL_PAINTER.material_rect(self, Rect2(2, -1, 3, 2), flesh, flesh.lightened(0.12), blood, 17)

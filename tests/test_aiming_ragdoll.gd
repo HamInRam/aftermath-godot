@@ -51,9 +51,22 @@ func _ready() -> void:
 	corpse.setup(0.0, Vector2.RIGHT, 30.0, 1.2, "firearm", "torso", "pistol")
 	_expect(is_instance_valid(corpse.ragdoll), "corpses should use the modular ragdoll presentation when enabled")
 	_expect(corpse.ragdoll.points.size() == 11, "human enemy corpses should initialize their ragdoll rig")
+	_expect(float(corpse.ragdoll.impact_profile.get("presentation_scale", 1.0)) > 1.0, "enemy corpses should receive the continued-combat presentation boost")
+	var initial_relative_limb: Vector2 = corpse.ragdoll.points.hand_b.position - corpse.ragdoll.points.pelvis.position
+	for frame in 8: corpse.ragdoll._physics_process(1.0 / 60.0)
+	var animated_relative_limb: Vector2 = corpse.ragdoll.points.hand_b.position - corpse.ragdoll.points.pelvis.position
+	_expect(animated_relative_limb.distance_to(initial_relative_limb) >= 2.0, "fresh deaths must show at least two world pixels of relative limb articulation")
+	corpse.death_twitch = 0.0
+	corpse.velocity = Vector2.RIGHT * 30.0
+	corpse.spin = 2.0
+	corpse.simulated_rotation = corpse.rotation
+	for frame in 16: corpse._physics_process(1.0 / 60.0)
+	_expect(absf(corpse.simulated_rotation) >= 0.2 and not is_zero_approx(corpse.rotation), "quantized corpse frames must retain accumulated angular momentum")
 	_expect(corpse.can_receive_overkill(), "a fresh corpse should briefly accept controlled overkill")
 	corpse.enter_cleanup_stable_state()
-	_expect(not corpse.can_receive_overkill() and corpse.collision_layer == 0 and corpse.ragdoll.frozen, "cleanup should disable overkill and freeze corpse simulation")
+	_expect(not corpse.can_receive_overkill() and corpse.collision_layer == 0 and not corpse.ragdoll.frozen and corpse.cleanup_freeze_delay > 0.0, "cleanup should disable overkill while preserving the final ragdoll presentation tail")
+	for frame in 60: corpse._physics_process(1.0 / 60.0)
+	_expect(corpse.ragdoll.frozen, "cleanup should freeze the corpse after its short presentation tail")
 
 	var reticle := RETICLE_SCRIPT.new() as CombatReticle
 	add_child(reticle)

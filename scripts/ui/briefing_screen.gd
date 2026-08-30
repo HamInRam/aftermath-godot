@@ -6,6 +6,8 @@ var profile: MissionProfile
 func _ready() -> void:
 	UIDefaults.decorate_buttons(self)
 	UIDefaults.animate_screen_intro($Panel)
+	$HandlerPortrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	$HandlerPortrait.texture = _make_handler_portrait()
 	PIXEL_ICONS.assign($Panel/VBox/Actions/BackButton, "back", Color("bdaebe"))
 	PIXEL_ICONS.assign($Panel/VBox/Actions/IntelButton, "target", Color("82d8ff"))
 	PIXEL_ICONS.assign($Panel/VBox/Actions/ContractButton, "case", Color("c77dff"))
@@ -38,6 +40,27 @@ func _ready() -> void:
 		if bool(achieved): medal_count += 1
 	$Panel/VBox/Record.text = ("NO PRIOR RECORD" if best.is_empty() else "BEST // %s // %04d PTS" % [best.grade, int(best.score)]) + " // MASTERY %d/5" % medal_count
 	$Panel/VBox/Actions/DeployButton.grab_focus()
+
+func _make_handler_portrait() -> ImageTexture:
+	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	image.fill(Color("100b16"))
+	for y in range(4, 29):
+		for x in range(4, 28):
+			var border := x in [4, 27] or y in [4, 28]
+			var color := Color("73f7e4") if border else Color("24172c")
+			image.set_pixel(x, y, color)
+	# Hand-authored one-pixel cells: headset, hair, face, collar and microphone.
+	for y in range(8, 20):
+		for x in range(9, 23):
+			if abs(x - 16) + abs(y - 14) <= 10: image.set_pixel(x, y, Color("2b1722") if y < 11 else Color("d28c70"))
+	for x in range(10, 22): image.set_pixel(x, 8, Color("17141b"))
+	for y in range(9, 18): image.set_pixel(8, y, Color("ff3d78")); image.set_pixel(23, y, Color("ff3d78"))
+	for x in range(12, 15): image.set_pixel(x, 14, Color("17141b"))
+	for x in range(18, 21): image.set_pixel(x, 14, Color("17141b"))
+	for x in range(12, 21): image.set_pixel(x, 21, Color("d8e2df"))
+	for y in range(18, 24): image.set_pixel(24, y, Color("73f7e4"))
+	image.set_pixel(23, 23, Color("73f7e4"))
+	return ImageTexture.create_from_image(image)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"): _back_to_menu()

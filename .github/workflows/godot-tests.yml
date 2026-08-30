@@ -41,6 +41,8 @@ jobs:
             tests/test_campaign_map_identity.tscn \
             tests/test_destructible_environment.tscn \
             tests/test_destruction_pipeline.tscn \
+            tests/test_death_ragdoll_pipeline.tscn \
+            tests/test_projectile_collision.tscn \
             tests/test_door_passage.tscn \
             tests/test_visual_readability.tscn \
             tests/test_mission_objectives.tscn \
@@ -56,6 +58,7 @@ jobs:
             tests/test_blood_forensics.tscn \
             tests/test_pixel_blood_canvas.tscn \
             tests/test_pixel_liquid_system.tscn \
+            tests/test_pixel_environment.tscn \
             tests/test_character_animation.tscn \
             tests/test_character_eight_way_visual.tscn \
             tests/test_combat_audio_director.tscn \

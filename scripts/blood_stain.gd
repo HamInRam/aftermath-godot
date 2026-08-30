@@ -1,6 +1,7 @@
 extends Node2D
 
 const SPLAT_STREAM := preload("res://assets/audio/sfx/blood_splat.wav")
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 
 var amount := 1.0
 var lobes: Array[Dictionary] = []
@@ -229,8 +230,8 @@ func get_cleanup_progress() -> float:
 func _draw() -> void:
 	if ultraviolet_residue:
 		if ultraviolet_visible:
-			draw_circle(Vector2.ZERO, 4.0, Color(0.20, 1.0, 0.46, 0.34))
-			draw_arc(Vector2.ZERO, 6.0, 0.0, TAU, 12, Color(0.45, 1.0, 0.72, 0.22), 1.0)
+			PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 4, Color(0.20, 1.0, 0.46, 0.18), Color(0.45, 1.0, 0.72, 0.34), Color(0.1, 0.45, 0.26, 0.2), 17)
+			PIXEL_PAINTER.circle(self, Vector2.ZERO, 6, Color(0.45, 1.0, 0.72, 0.22), true)
 		return
 	var dilution := 1.0 - amount
 	var coagulation := floorf(clampf(stain_age / maxf(8.0, 18.0 / surface_absorption), 0.0, 0.99) * 4.0) / 3.0
@@ -241,24 +242,24 @@ func _draw() -> void:
 	blood.a *= clampf(amount * 1.35, 0.08, 1.0)
 	dark.a *= clampf(amount * 1.35, 0.08, 1.0)
 	for streak in streaks:
-		draw_line(streak.start, streak.end, dark, maxf(0.35, streak.width))
+		PIXEL_PAINTER.line(self, streak.start, streak.end, dark)
 	for lobe in lobes:
-		draw_circle(lobe.position, maxf(0.35, lobe.radius), dark if lobe.dark else blood)
-		if surface_kind == "tile" and stain_age < 8.0: draw_circle((lobe.position as Vector2) + Vector2(-0.5, -0.5), 0.35, Color(1, 0.5, 0.58, 0.3 * amount))
-	var core_radius := (3.2 if wall_stain else 4.6) * minf(1.35, base_intensity)
+		var lobe_center: Vector2 = (lobe.position as Vector2).round()
+		var lobe_color: Color = dark if lobe.dark else blood
+		PIXEL_PAINTER.material_circle(self, lobe_center, maxi(1, roundi(float(lobe.radius))), lobe_color, lobe_color.lightened(0.12), lobe_color.darkened(0.2), roundi(lobe_center.x) * 13 + roundi(lobe_center.y) * 7)
+		if surface_kind == "tile" and stain_age < 8.0: PIXEL_PAINTER.pixel(self, lobe_center - Vector2.ONE, Color(1, 0.5, 0.58, 0.3 * amount))
+	var core_radius := roundi((3.2 if wall_stain else 4.6) * minf(1.35, base_intensity))
 	if wound_kind in ["slash", "dismember"]:
-		draw_line(Vector2(-core_radius, -1), Vector2(core_radius, 1), dark, 1.5)
+		PIXEL_PAINTER.line(self, Vector2(-core_radius, -1), Vector2(core_radius, 1), dark)
 	elif wound_kind in ["blast", "torn"]:
-		draw_circle(Vector2.ZERO, core_radius * 1.25, dark)
-		draw_rect(Rect2(-core_radius, -1, core_radius * 2.0, 2), blood)
+		PIXEL_PAINTER.material_circle(self, Vector2.ZERO, roundi(core_radius * 1.25), dark, blood, dark.darkened(0.2), 23)
 	elif wound_kind in ["crush", "execution"]:
-		draw_circle(Vector2.ZERO, core_radius * 1.15, dark)
-		draw_circle(Vector2(2, -1), core_radius * 0.65, blood)
+		PIXEL_PAINTER.material_circle(self, Vector2.ZERO, roundi(core_radius * 1.15), dark, blood, dark.darkened(0.2), 29)
 	elif wound_kind == "drag":
-		draw_line(Vector2(-core_radius * 1.4, -1.2), Vector2(core_radius * 1.5, 0.8), dark, 2.5)
-		draw_line(Vector2(-core_radius, 1.8), Vector2(core_radius * 1.2, 2.6), blood, 1.0)
+		PIXEL_PAINTER.material_line(self, Vector2(-core_radius * 1.4, -1), Vector2(core_radius * 1.5, 1), dark, 2, 31, &"grain")
+		PIXEL_PAINTER.line(self, Vector2(-core_radius, 2), Vector2(core_radius * 1.2, 3), blood)
 	else:
-		draw_circle(Vector2.ZERO, core_radius, blood)
+		PIXEL_PAINTER.material_circle(self, Vector2.ZERO, core_radius, blood, blood.lightened(0.12), dark, 37)
 	if not wall_stain and amount > 0.7:
-		draw_line(Vector2(-2, -1), Vector2(2, -1), Color(1.0, 0.34, 0.45, 0.28 * amount), 1.0)
-	if surface_kind == "wood": draw_line(Vector2(-5, 2), Vector2(7, 2), dark, 0.6)
+		PIXEL_PAINTER.line(self, Vector2(-2, -1), Vector2(2, -1), Color(1.0, 0.34, 0.45, 0.28 * amount))
+	if surface_kind == "wood": PIXEL_PAINTER.line(self, Vector2(-5, 2), Vector2(7, 2), dark)

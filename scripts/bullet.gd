@@ -1,6 +1,17 @@
 extends CharacterBody2D
 
 const WALL_SPARKS_SCENE := preload("res://scenes/effects/wall_sparks.tscn")
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+
+const PLAYER_LAYER := 1
+const ENEMY_LAYER := 2
+const SOLID_LAYER := 4
+const GLASS_LAYER := 8
+const CORPSE_LAYER := 32
+const PLAYER_PROJECTILE_MASK := ENEMY_LAYER | SOLID_LAYER | GLASS_LAYER | CORPSE_LAYER
+const ENEMY_PROJECTILE_MASK := PLAYER_LAYER | SOLID_LAYER | GLASS_LAYER
+const DEBRIS_PENETRATION_SPEED_RETENTION := 0.9
+const DEBRIS_CLEARANCE := 5.0
 
 signal blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool, hit_zone: String)
 signal damage_impact(context: DamageContext)
@@ -17,22 +28,46 @@ var travel_distance := 0.0
 var shot_id := -1
 var resolution_emitted := false
 var passed_overkill_target := false
+var source_actor: CollisionObject2D
 
-func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0) -> void:
+func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0, shooter: CollisionObject2D = null) -> void:
 	direction = dir.normalized()
 	enemy_owned = is_enemy_bullet
 	damage = hit_damage
 	weapon_id = source_weapon
 	spawn_position = origin
 	speed = projectile_speed
+	source_actor = shooter
+	# Only query the opposing actor layer. This prevents allied bodies from
+	# silently consuming rounds and does not rely on the muzzle sitting outside
+	# the shooter's collision shape on every animation frame.
+	collision_mask = ENEMY_PROJECTILE_MASK if enemy_owned else PLAYER_PROJECTILE_MASK
 	rotation = direction.angle()
 	velocity = direction * speed
+	if is_inside_tree(): _install_source_exception()
+
+func _ready() -> void:
+	_install_source_exception()
+
+func _install_source_exception() -> void:
+	if is_instance_valid(source_actor): add_collision_exception_with(source_actor)
 
 func _physics_process(delta: float) -> void:
 	travel_distance += velocity.length() * delta
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
 		var collider := collision.get_collider()
+		# Prop fragments share the evidence/occluder layer with corpses, but are
+		# not ballistic blockers. Kick the tiny fragment aside and continue the
+		# round instead of making it appear to vanish in open floor space.
+		if collider is Node and collider.is_in_group("environment_debris"):
+			if collider.has_method("receive_projectile_glance"):
+				collider.receive_projectile_glance(velocity, collision.get_position(), weapon_id, damage)
+			if collider is CollisionObject2D: add_collision_exception_with(collider)
+			global_position = collision.get_position() + direction * DEBRIS_CLEARANCE
+			velocity *= DEBRIS_PENETRATION_SPEED_RETENTION
+			speed = velocity.length()
+			return
 		if not enemy_owned and collider is Node and collider.is_in_group("corpse") and collider.has_method("can_receive_overkill") and collider.can_receive_overkill():
 			var overkill_context := DamageContext.create(collision.get_position(), direction, damage, weapon_id, travel_distance, false, "torso", spawn_position, collider)
 			damage_impact.emit(overkill_context)
@@ -82,5 +117,5 @@ func _resolve_shot(outcome: String, lethal: bool) -> void:
 
 func _draw() -> void:
 	var color := Color("ffe48a") if not enemy_owned else Color("ff3868")
-	draw_line(Vector2(-5, 0), Vector2.ZERO, Color(color, 0.3), 1.0)
-	draw_rect(Rect2(-1, -1, 2, 2), color)
+	PIXEL_PAINTER.line(self, Vector2(-5, 0), Vector2(-1, 0), Color(color, 0.3))
+	PIXEL_PAINTER.pixel(self, Vector2.ZERO, color)

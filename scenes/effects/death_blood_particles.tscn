@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource path="res://assets/casing/casing_2x1.png" type="Texture2D" id="1_particle"]
+[ext_resource path="res://scripts/effects/pixel_gpu_particles.gd" type="Script" id="2_pixel_script"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcess_blood"]
 direction = Vector3(1, 0, 0)
@@ -10,8 +10,8 @@ initial_velocity_max = 170.0
 gravity = Vector3(0, 0, 0)
 damping_min = 65.0
 damping_max = 95.0
-scale_min = 0.55
-scale_max = 1.4
+scale_min = 1.0
+scale_max = 1.0
 color = Color(0.69, 0.005, 0.055, 0.9)
 
 [node name="DeathBloodParticles" type="GPUParticles2D"]
@@ -25,4 +25,4 @@ randomness = 0.42
 local_coords = false
 visibility_rect = Rect2(-64, -64, 128, 128)
 process_material = SubResource("ParticleProcess_blood")
-texture = ExtResource("1_particle")
+script = ExtResource("2_pixel_script")

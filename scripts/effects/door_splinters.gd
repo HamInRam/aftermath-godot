@@ -11,7 +11,7 @@ func setup(direction: Vector2) -> void:
 			"velocity": forward.rotated(randf_range(-0.62, 0.62)) * randf_range(70.0, 160.0),
 			"spin": randf_range(-8.0, 8.0),
 			"angle": randf_range(-PI, PI),
-			"size": Vector2(randf_range(1.0, 3.0), 1.0),
+			"double": index % 5 == 0,
 		})
 	queue_redraw()
 
@@ -27,6 +27,8 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var alpha := clampf(lifetime / 0.45, 0.0, 1.0)
 	for particle in particles:
-		draw_set_transform(particle.position, particle.angle)
-		draw_rect(Rect2(-particle.size * 0.5, particle.size), Color(0.72, 0.42, 0.17, alpha))
-	draw_set_transform(Vector2.ZERO, 0.0)
+		var point: Vector2 = Vector2(particle.position).round()
+		draw_rect(Rect2(point, Vector2.ONE), Color(0.72, 0.42, 0.17, alpha))
+		if particle.double:
+			var tail := Vector2.RIGHT.rotated(float(particle.angle)).round()
+			draw_rect(Rect2(point + tail, Vector2.ONE), Color(0.48, 0.25, 0.12, alpha * 0.78))

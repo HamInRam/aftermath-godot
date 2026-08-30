@@ -1,14 +1,11 @@
 extends "res://scripts/actor.gd"
 
-signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
+signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String, shooter: CollisionObject2D)
 signal died_at(world_position: Vector2, facing: float)
 
-const HUMAN_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_blocktop_16x16.svg")
-const MELEE_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_melee_blocktop_16x16.svg")
-const ASSAULT_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_assault_blocktop_16x16.svg")
-const HEAVY_OVERHEAD_TEXTURE := preload("res://assets/player/enemy_heavy_blocktop_16x16.svg")
-const HOUND_OVERHEAD_TEXTURE := preload("res://assets/player/hound_blocktop_16x16.svg")
 const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+const PIXEL_ACTOR_FRAMES := preload("res://utility/pixel_actor_texture_factory.gd")
 
 @export var preferred_distance := 65.0
 @export var shoot_range := 152.0
@@ -148,6 +145,7 @@ func _ready() -> void:
 	actor_died.connect(_on_actor_died)
 	hit_received.connect(_on_hit_received)
 	progress_anchor = global_position
+	_apply_compatibility_frame()
 	legs_visual.visible = false
 	$Sprite2D.visible = false
 	$FakeShadow.visible = false
@@ -437,14 +435,12 @@ func configure_combat(type_name: String) -> void:
 	gun.set_process(uses_gun)
 	# Strict top-down bodies and weapons remain separate layers so aim rotation
 	# never turns a baked three-quarter weapon into a sideways silhouette.
-	gun.get_node("WeaponPivot/WeaponSprite").visible = uses_gun
-	gun.get_node("WeaponPivot/FakeShadow").visible = uses_gun
-	var human_texture: Texture2D = HEAVY_OVERHEAD_TEXTURE if archetype_id == "heavy" else (ASSAULT_OVERHEAD_TEXTURE if archetype_id == "assault" else (MELEE_OVERHEAD_TEXTURE if enemy_type == "melee" else HUMAN_OVERHEAD_TEXTURE))
-	$Sprite2D.texture = HOUND_OVERHEAD_TEXTURE if actor_type == "dog" else human_texture
-	$FakeShadow.texture = $Sprite2D.texture
+	gun.get_node("WeaponPivot/WeaponSprite").visible = false
+	gun.get_node("WeaponPivot/FakeShadow").visible = false
 	# Identity colors are authored into the limited-palette sprites. Runtime
 	# tinting previously collapsed gunner, melee and heavy silhouettes together.
 	$Sprite2D.modulate = Color.WHITE
+	_apply_compatibility_frame()
 	if is_instance_valid(legs_visual):
 		var role_color := Color("7c235b")
 		var role_accent := Color("f23d78")
@@ -454,6 +450,12 @@ func configure_combat(type_name: String) -> void:
 			"melee": role_color = Color("7d163f"); role_accent = Color("ff4f91")
 		legs_visual.configure("dog" if actor_type == "dog" else "enemy", role_color, role_accent)
 		if is_instance_valid(lifecycle_rig): lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("6e4a37") if actor_type == "dog" else role_color, Color("e8d8c8") if actor_type == "dog" else role_accent, "hound" if actor_type == "dog" else archetype_id)
+
+func _apply_compatibility_frame() -> void:
+	var frame_role := "hound" if actor_type == "dog" else archetype_id
+	var texture := PIXEL_ACTOR_FRAMES.get_frame(frame_role)
+	$Sprite2D.texture = texture
+	$FakeShadow.texture = texture
 
 func configure_fixed_sentry() -> void:
 	is_fixed_sentry = true
@@ -1033,23 +1035,27 @@ func _set_knockdown_visual(enabled: bool) -> void:
 
 func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if is_instance_valid(lifecycle_rig): lifecycle_rig.trigger_weapon_recoil(0.85)
-	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
+	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id, self)
 
 func _on_actor_died(source_position: Vector2) -> void:
 	_release_corpse_claim()
 	collision_layer = 0
 	collision_mask = 0
 	set_physics_process(false)
-	var death_particles: GPUParticles2D = $DeathBloodParticles
 	var spray_direction := (global_position - source_position).normalized()
 	if spray_direction.length_squared() < 0.001: spray_direction = Vector2.RIGHT.rotated(rotation)
-	death_particles.rotation = spray_direction.angle()
-	var death_parent := get_tree().current_scene
-	if is_instance_valid(death_parent):
-		death_particles.reparent(death_parent, true)
-		death_particles.restart()
-		death_particles.emitting = true
-		get_tree().create_timer(death_particles.lifetime + 0.4).timeout.connect(death_particles.queue_free)
+	# Blood particles are presentation-only. Asset hot reloads, low-VFX variants,
+	# or future enemy scenes may omit the node; that must never abort the gameplay
+	# death signal that creates the persistent corpse and its ragdoll.
+	var death_particles := get_node_or_null("DeathBloodParticles") as GPUParticles2D
+	if is_instance_valid(death_particles):
+		death_particles.rotation = spray_direction.angle()
+		var death_parent := get_tree().current_scene
+		if is_instance_valid(death_parent):
+			death_particles.reparent(death_parent, true)
+			death_particles.restart()
+			death_particles.emitting = true
+			get_tree().create_timer(death_particles.lifetime + 0.4).timeout.connect(death_particles.queue_free)
 	died_at.emit(global_position, rotation)
 	queue_free()
 
@@ -1089,11 +1095,11 @@ func _draw() -> void:
 		draw_line(Vector2(-8, 7), Vector2(-4, 7), threat_color, 1.0)
 		draw_line(Vector2(8, -7), Vector2(5, -7), threat_color, 1.0)
 	if melee_swing_time > 0.0:
-		draw_arc(Vector2.ZERO, melee_range, -0.65, 0.65, 10, Color("ffd0a8"), 2.0)
+		PIXEL_PAINTER.arc(self, Vector2.ZERO, roundi(melee_range), -0.65, 0.65, Color("ffd0a8"), 10)
 	if state == State.ATTACK and attack_windup_time > 0.0:
 		var charge := 1.0 - clampf(attack_windup_time / maxf(0.001, attack_windup_duration), 0.0, 1.0)
-		draw_arc(Vector2.ZERO, 9.0, -0.48, lerpf(-0.48, 0.48, charge), 8, Color("ffe56b"), 1.5)
-		draw_circle(Vector2(7, 0), 1.2 + charge * 0.7, Color("fff3b0"))
+		PIXEL_PAINTER.arc(self, Vector2.ZERO, 9, -0.48, lerpf(-0.48, 0.48, charge), Color("ffe56b"), 8)
+		PIXEL_PAINTER.pixel(self, Vector2(7, 0), Color("fff3b0"))
 		# A short two-pixel tell communicates the committed firing lane without
 		# turning combat into a full laser-sight overlay.
 		draw_line(Vector2(9, -1), Vector2(13 + charge * 3.0, -1), Color(1.0, 0.38, 0.2, 0.35 + charge * 0.45), 1.0)
@@ -1105,35 +1111,38 @@ func _draw() -> void:
 		for index in range(17):
 			var angle := lerpf(-half_fov, half_fov, float(index) / 16.0)
 			points.append(Vector2.RIGHT.rotated(angle) * detection_range)
-		draw_colored_polygon(points, vision_color)
-		draw_arc(Vector2.ZERO, detection_range, -half_fov, half_fov, 24, Color(vision_color, 0.5), 1.0)
-		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(-half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
-		draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(half_fov) * detection_range, Color(vision_color, 0.5), 1.0)
+		PIXEL_PAINTER.arc(self, Vector2.ZERO, roundi(detection_range), -half_fov, half_fov, Color(vision_color, 0.5), 24)
+		PIXEL_PAINTER.line(self, Vector2.ZERO, Vector2.RIGHT.rotated(-half_fov) * detection_range, Color(vision_color, 0.5))
+		PIXEL_PAINTER.line(self, Vector2.ZERO, Vector2.RIGHT.rotated(half_fov) * detection_range, Color(vision_color, 0.5))
+		for angle_step in range(-3, 4):
+			var ray_angle := half_fov * float(angle_step) / 3.0
+			for distance in range(16, roundi(detection_range), 16):
+				PIXEL_PAINTER.pixel(self, (Vector2.RIGHT.rotated(ray_angle) * distance).round(), vision_color)
 	draw_set_transform(Vector2.ZERO, -rotation, Vector2.ONE)
 	if alert_transition_pulse > 0.0:
 		var pulse_alpha := clampf(alert_transition_pulse / 0.32, 0.0, 1.0)
 		var pulse_color := Color("ff385f", pulse_alpha) if alert_level == AlertLevel.ALERT else Color("ffd166", pulse_alpha)
-		draw_arc(Vector2(0, -9), 4.0 + (1.0 - pulse_alpha) * 3.0, 0.0, TAU, 12, pulse_color, 1.0)
+		PIXEL_PAINTER.circle(self, Vector2(0, -9), roundi(4.0 + (1.0 - pulse_alpha) * 3.0), pulse_color, true)
 	if state == State.INVESTIGATE:
 		if is_instance_valid(claimed_corpse):
 			# A compact body silhouette distinguishes corpse discovery from an
 			# ordinary sound investigation without adding floating text.
-			draw_circle(Vector2(0, -11), 1.2, Color("82d8ff"))
-			draw_line(Vector2(-3, -8.5), Vector2(3, -8.5), Color("82d8ff"), 1.2)
+			PIXEL_PAINTER.pixel(self, Vector2(0, -11), Color("82d8ff"))
+			PIXEL_PAINTER.line(self, Vector2(-3, -9), Vector2(3, -9), Color("82d8ff"))
 			draw_line(Vector2(-2, -8), Vector2(-3, -6), Color("82d8ff"), 1.0)
 			draw_line(Vector2(2, -8), Vector2(3, -6), Color("82d8ff"), 1.0)
 		else:
-			draw_arc(Vector2(0, -10), 2.4, -PI * 0.85, PI * 0.35, 7, Color("ffd166"), 1.0)
-			draw_circle(Vector2(0, -6.5), 0.8, Color("ffd166"))
+			PIXEL_PAINTER.arc(self, Vector2(0, -10), 2, -PI * 0.85, PI * 0.35, Color("ffd166"), 7)
+			PIXEL_PAINTER.pixel(self, Vector2(0, -7), Color("ffd166"))
 	elif state == State.SEARCH:
-		draw_arc(Vector2(0, -9), 3.0, -PI * 0.2, PI * 1.3, 9, Color("66e0ff"), 1.0)
+		PIXEL_PAINTER.arc(self, Vector2(0, -9), 3, -PI * 0.2, PI * 1.3, Color("66e0ff"), 9)
 		draw_line(Vector2(2, -7), Vector2(4, -5), Color("66e0ff"), 1.0)
 	elif state == State.RETURN:
 		draw_line(Vector2(-3, -9), Vector2(3, -9), Color("9cc8ff"), 1.0)
 		draw_line(Vector2(-3, -9), Vector2(-1, -11), Color("9cc8ff"), 1.0)
 	elif state in [State.CHASE, State.ATTACK]:
-		draw_line(Vector2(0, -12), Vector2(0, -8), Color("ff385f"), 1.5)
-		draw_circle(Vector2(0, -6.5), 0.9, Color("ff385f"))
+		PIXEL_PAINTER.line(self, Vector2(0, -12), Vector2(0, -8), Color("ff385f"))
+		PIXEL_PAINTER.pixel(self, Vector2(0, -7), Color("ff385f"))
 	elif tactical_role == "guard" and guard_alert_time > 0.0:
 		draw_line(Vector2(-3, -9), Vector2(3, -9), Color("9cf7c8"), 1.0)
 		draw_line(Vector2(-3, -9), Vector2(0, -6), Color("9cf7c8"), 1.0)

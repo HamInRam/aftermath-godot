@@ -2,6 +2,7 @@ class_name WorldContextMarker
 extends Node2D
 
 const PIXEL_ICONS := preload("res://utility/pixel_icon_factory.gd")
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 
 var icon := Sprite2D.new()
 var ring_progress := -1.0
@@ -28,10 +29,10 @@ func hide_target() -> void:
 func _process(delta: float) -> void:
 	if not visible: return
 	pulse = maxf(0.0, pulse - delta * 4.0)
-	icon.position.y = -11.0 + sin(Time.get_ticks_msec() * 0.008) * 0.75
-	icon.scale = Vector2.ONE * (1.0 + pulse * 0.18)
+	icon.position.y = -11 + roundi(sin(Time.get_ticks_msec() * 0.008))
+	icon.scale = Vector2.ONE
 	queue_redraw()
 
 func _draw() -> void:
 	if ring_progress < 0.0: return
-	draw_arc(Vector2(0, -11), 6.0, -PI * 0.5, -PI * 0.5 + TAU * clampf(ring_progress, 0.0, 1.0), 12, Color("73f7e4"), 1.0)
+	PIXEL_PAINTER.arc(self, Vector2(0, -11), 6, -PI * 0.5, -PI * 0.5 + TAU * clampf(ring_progress, 0.0, 1.0), Color("73f7e4"), 12)

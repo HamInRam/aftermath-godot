@@ -1,7 +1,7 @@
 [gd_scene load_steps=7 format=3]
 
 [ext_resource path="res://scripts/props/swing_door.gd" type="Script" id="1_door"]
-[ext_resource path="res://scripts/effects/fake_polygon_shadow.gd" type="Script" id="2_shadow"]
+[ext_resource path="res://scripts/props/pixel_door_frame.gd" type="Script" id="2_frame"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_panel"]
 size = Vector2(4, 16)
@@ -25,6 +25,7 @@ collision_mask = 0
 [node name="Frame" type="StaticBody2D" parent="."]
 collision_layer = 36
 collision_mask = 19
+script = ExtResource("2_frame")
 
 [node name="TopCollision" type="CollisionShape2D" parent="Frame"]
 position = Vector2(0, -2)
@@ -35,10 +36,12 @@ position = Vector2(0, 18)
 shape = SubResource("RectangleShape_frame")
 
 [node name="TopFrame" type="Polygon2D" parent="Frame"]
+visible = false
 polygon = PackedVector2Array(-3, -3, 3, -3, 3, 0, -3, 0)
 color = Color(0.18, 0.13, 0.2, 1)
 
 [node name="BottomFrame" type="Polygon2D" parent="Frame"]
+visible = false
 polygon = PackedVector2Array(-3, 16, 3, 16, 3, 19, -3, 19)
 color = Color(0.18, 0.13, 0.2, 1)
 
@@ -68,21 +71,24 @@ position = Vector2(0, 8)
 shape = SubResource("RectangleShape_hit")
 
 [node name="FakeShadow" type="Polygon2D" parent="Door"]
+visible = false
 z_index = -1
 polygon = PackedVector2Array(-2, 0, 2, 0, 2, 16, -2, 16)
 color = Color(0.035, 0.02, 0.05, 0.54)
-script = ExtResource("2_shadow")
 
 [node name="Panel" type="Polygon2D" parent="Door"]
+visible = false
 polygon = PackedVector2Array(-2, 0, 2, 0, 2, 16, -2, 16)
 color = Color(0.52, 0.25, 0.17, 1)
 
 [node name="Edge" type="Line2D" parent="Door"]
+visible = false
 points = PackedVector2Array(1, 1, 1, 15)
 width = 1.0
 default_color = Color(0.82, 0.48, 0.27, 1)
 
 [node name="Handle" type="Polygon2D" parent="Door"]
+visible = false
 polygon = PackedVector2Array(-1, 13, 1, 13, 1, 15, -1, 15)
 color = Color(0.95, 0.75, 0.3, 1)
 

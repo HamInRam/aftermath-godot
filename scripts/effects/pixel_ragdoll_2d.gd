@@ -1,8 +1,9 @@
 class_name PixelRagdoll2D
 extends Node2D
 
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 const FIXED_STEP := 1.0 / 60.0
-const SETTLE_TIME := 1.35
+const SETTLE_TIME := 2.15
 const WALL_MASK := 4
 
 var points: Dictionary = {}
@@ -30,7 +31,7 @@ func setup(impact_direction: Vector2, intensity: float, missing: PackedStringArr
 			point.previous = initial_pose[name]
 			points[name] = point
 	_apply_initial_impulse(impact_direction, float(impact_profile.get("limb_force", intensity)))
-	active_time = SETTLE_TIME + clampf(float(impact_profile.get("linear_force", intensity)) / 145.0, 0.0, 1.0) * 0.35
+	active_time = SETTLE_TIME + clampf(float(impact_profile.get("linear_force", intensity)) / 145.0, 0.0, 1.0) * 0.65 + clampf(float(impact_profile.get("settle_bonus", 0.0)), 0.0, 1.2)
 	frozen = false
 	set_physics_process(true)
 	queue_redraw()
@@ -136,12 +137,15 @@ func _simulate_step(delta: float) -> void:
 		if _module_missing_for_point(name): continue
 		var point: Dictionary = points[name]
 		var position: Vector2 = point.position
-		var motion: Vector2 = (position - (point.previous as Vector2)) * 0.88
+		var motion: Vector2 = (position - (point.previous as Vector2)) * 0.93
 		point.previous = position
 		var candidate := position + motion
 		point.position = _resolve_wall_collision(position, candidate)
 		points[name] = point
-	for iteration in range(5):
+	# Three early passes preserve readable elbow/knee lag. Tighten the final pose
+	# only after the energetic phase, so the body never looks like one rigid tile.
+	var solve_iterations := 2 if active_time > 0.72 else (3 if active_time > 0.35 else 5)
+	for iteration in range(solve_iterations):
 		for constraint in constraints:
 			_satisfy_constraint(constraint)
 
@@ -173,18 +177,27 @@ func _satisfy_constraint(constraint: Dictionary) -> void:
 func _apply_initial_impulse(world_direction: Vector2, intensity: float) -> void:
 	var local_direction := world_direction.rotated(-global_rotation).normalized()
 	if local_direction.length_squared() < 0.001: local_direction = Vector2.RIGHT
-	var power := clampf(intensity, 8.0, 180.0)
+	var power := clampf(intensity, 12.0, 180.0)
 	var spin_power := float(impact_profile.get("spin_force", 0.8))
+	var presentation_scale := clampf(float(impact_profile.get("presentation_scale", 1.0)), 0.75, 2.0)
 	var spin_sign := -1.0 if randf() < 0.5 else 1.0
+	# Low-calibre hits previously moved most joints by less than one world pixel;
+	# after pixel snapping that was invisible. Scale relative articulation more at
+	# low power while keeping shotgun extremes controlled.
+	var articulation_scale := lerpf(4.35, 2.05, clampf(power / 170.0, 0.0, 1.0)) * presentation_scale
+	var point_index := 0
 	for name in points:
 		var point: Dictionary = points[name]
-		var variation := local_direction.rotated(randf_range(-0.52, 0.52))
+		var variation_angle := randf_range(-0.68, 0.68) + sin(float(point_index) * 2.17) * 0.16
+		var variation := local_direction.rotated(variation_angle)
 		var is_extremity: bool = name.begins_with("hand") or name.begins_with("foot") or name.begins_with("front_paw") or name.begins_with("rear_paw")
-		var limb_scale := 1.34 if is_extremity else (0.92 if name in ["head", "neck"] else 0.78)
+		var limb_scale := 1.82 if is_extremity else (1.22 if name in ["head", "neck"] else (0.28 if name == "pelvis" else 0.64))
 		var radial: Vector2 = (point.position as Vector2).normalized()
-		var tangential := radial.orthogonal() * spin_sign * power * 0.24 * spin_power
-		point.previous = point.position - (variation * power * limb_scale + tangential) * FIXED_STEP
+		var alternating_sign := spin_sign * (-1.0 if point_index % 2 == 0 else 1.0)
+		var tangential := radial.orthogonal() * alternating_sign * power * 0.56 * spin_power
+		point.previous = point.position - (variation * power * limb_scale + tangential) * articulation_scale * FIXED_STEP
 		points[name] = point
+		point_index += 1
 
 func _point(position: Vector2) -> Dictionary:
 	return {"position": position, "previous": position}
@@ -221,14 +234,12 @@ func _draw() -> void:
 	_draw_bone("knee_b", "foot_b", Color("17141b"), 3.0)
 	if not _module_missing_for_point("head"):
 		var head := _snap_pixel(points.head.position)
-		# Square pixel clusters stay sharp under arbitrary corpse rotation. A
-		# procedural circle introduced fractional coverage before integer scaling.
-		draw_rect(Rect2(head - Vector2(3, 3), Vector2(7, 7)), Color("17141b"))
-		draw_rect(Rect2(head - Vector2(1, 1), Vector2(3, 3)), Color("e1a07f"))
+		PIXEL_PAINTER.material_circle(self, head, 3, Color("17141b"), Color("30242d"), Color("09070c"), 31)
+		PIXEL_PAINTER.material_block(self, head, Vector2(3, 3), Color("e1a07f"), 37, &"grain")
 	for missing in missing_modules:
 		var wound_point := _snap_pixel(_wound_point_for_module(missing))
-		draw_rect(Rect2(wound_point - Vector2.ONE, Vector2(3, 3)), Color("7b001b"))
-		draw_rect(Rect2(wound_point, Vector2.ONE), Color("f2a3a8"))
+		PIXEL_PAINTER.material_circle(self, wound_point, 1, Color("7b001b"), Color("c31338"), Color("34000b"), str(missing).hash())
+		PIXEL_PAINTER.pixel(self, wound_point, Color("f2a3a8"))
 
 func _draw_hound() -> void:
 	var fur := Color("6e4a37")
@@ -246,13 +257,13 @@ func _draw_hound() -> void:
 	_draw_bone("rear_knee_b", "rear_paw_b", fur_light, 2.0)
 	if not _module_missing_for_point("head"):
 		var head := _snap_pixel(points.head.position)
-		draw_rect(Rect2(head - Vector2(3, 2), Vector2(6, 5)), Color("17141b"))
-		draw_rect(Rect2(head - Vector2(2, 1), Vector2(4, 3)), fur_light)
-		draw_rect(Rect2(head + Vector2(2, 0), Vector2(2, 1)), Color("d8e2df"))
+		PIXEL_PAINTER.material_block(self, head, Vector2(6, 5), Color("17141b"), 41, &"grain")
+		PIXEL_PAINTER.material_block(self, head, Vector2(4, 3), fur_light, 43, &"fabric")
+		PIXEL_PAINTER.material_block(self, head + Vector2(2, 0), Vector2(2, 1), Color("d8e2df"), 47, &"grain")
 	for missing in missing_modules:
 		var wound_point := _snap_pixel(_wound_point_for_module(missing))
-		draw_rect(Rect2(wound_point - Vector2.ONE, Vector2(3, 3)), Color("7b001b"))
-		draw_rect(Rect2(wound_point, Vector2.ONE), Color("f2a3a8"))
+		PIXEL_PAINTER.material_circle(self, wound_point, 1, Color("7b001b"), Color("c31338"), Color("34000b"), str(missing).hash())
+		PIXEL_PAINTER.pixel(self, wound_point, Color("f2a3a8"))
 
 func _draw_bone(a_name: String, b_name: String, color: Color, width: float) -> void:
 	if _module_missing_for_point(a_name) or _module_missing_for_point(b_name): return
@@ -265,17 +276,7 @@ func _draw_bone(a_name: String, b_name: String, color: Color, width: float) -> v
 	_draw_pixel_segment(start, finish, color, roundi(width))
 
 func _draw_pixel_segment(start: Vector2, finish: Vector2, color: Color, pixel_width: int) -> void:
-	var delta := finish - start
-	var steps := maxi(1, ceili(maxf(absf(delta.x), absf(delta.y))))
-	var size_value := maxi(1, pixel_width)
-	var block_size := Vector2(size_value, size_value)
-	var half := Vector2(floori(size_value / 2.0), floori(size_value / 2.0))
-	var last_pixel := Vector2(INF, INF)
-	for index in range(steps + 1):
-		var pixel := _snap_pixel(start.lerp(finish, float(index) / float(steps)))
-		if pixel == last_pixel: continue
-		draw_rect(Rect2(pixel - half, block_size), color)
-		last_pixel = pixel
+	PIXEL_PAINTER.material_line(self, _snap_pixel(start), _snap_pixel(finish), color, maxi(1, pixel_width), roundi(start.x) * 11 + roundi(start.y) * 17 + pixel_width, &"fabric")
 
 func _snap_pixel(value: Vector2) -> Vector2:
 	return Vector2(roundi(value.x), roundi(value.y))

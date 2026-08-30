@@ -4,6 +4,7 @@ extends StaticBody2D
 const MATERIAL_BURST := preload("res://scripts/effects/material_burst.gd")
 const PHYSICAL_DEBRIS := preload("res://scripts/props/physical_debris.gd")
 const ENVIRONMENT_HAZARD := preload("res://scripts/effects/environment_hazard.gd")
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 signal solidity_changed(solid: bool)
 
@@ -129,57 +130,66 @@ func _draw() -> void:
 	var ink := Color("17141d")
 	var metal := Color("6f7781")
 	if destroyed:
+		var part_index := 0
 		for part: Rect2 in [Rect2(-18,-4,10,6), Rect2(-5,3,8,5), Rect2(7,-6,12,7), Rect2(14,5,5,4)]:
-			draw_rect(part, ink); draw_rect(Rect2(part.position + Vector2.ONE, part.size - Vector2.ONE), accent.darkened(0.5))
+			_landmark_panel(part, accent.darkened(0.5), &"metal", 40 + part_index)
+			part_index += 1
 		return
 	match landmark_kind:
 		"dj_booth":
-			draw_rect(Rect2(-22, -9, 44, 18), ink)
-			draw_circle(Vector2(-11, 0), 6, Color("4b4057")); draw_circle(Vector2(11, 0), 6, Color("4b4057"))
-			draw_rect(Rect2(-4, -4, 8, 8), accent.darkened(0.35)); draw_line(Vector2(-18, 7), Vector2(18, 7), accent, 2)
+			_landmark_panel(Rect2(-22, -9, 44, 18), Color("292431"), &"metal", 41)
+			_landmark_disc(Vector2(-11, 0), 6, Color("4b4057"), 42); _landmark_disc(Vector2(11, 0), 6, Color("4b4057"), 43)
+			_landmark_panel(Rect2(-4, -4, 8, 8), accent.darkened(0.35), &"metal", 44); PIXELS.line(self, Vector2(-18, 7), Vector2(18, 7), accent)
 		"diner_counter":
-			draw_rect(Rect2(-24, -6, 48, 12), ink); draw_rect(Rect2(-22, -4, 44, 8), Color("a94f31"))
-			draw_line(Vector2(-20, -2), Vector2(20, -2), Color("ead3a5"), 2)
-			for x in range(-16, 17, 8): draw_circle(Vector2(x, 8), 3, accent)
+			_landmark_panel(Rect2(-24, -6, 48, 12), Color("a94f31"), &"wood", 45)
+			PIXELS.line(self, Vector2(-20, -2), Vector2(20, -2), Color("ead3a5"))
+			for x in range(-16, 17, 8): _landmark_disc(Vector2(x, 8), 2, accent, x + 46)
 		"training_target":
-			draw_rect(Rect2(-4, -18, 8, 36), ink); draw_circle(Vector2(0, -5), 9, Color("d5d1bf"))
-			draw_circle(Vector2(0, -5), 5, accent); draw_circle(Vector2(0, -5), 2, ink)
+			_landmark_panel(Rect2(-4, -18, 8, 36), Color("52484a"), &"wood", 47); _landmark_disc(Vector2(0, -5), 9, Color("d5d1bf"), 48)
+			_landmark_disc(Vector2(0, -5), 5, accent, 49); PIXELS.material_circle(self, Vector2(0, -5), 2, ink, ink.lightened(0.08), ink.darkened(0.08), 50)
 		"cargo_crane":
-			draw_rect(Rect2(-18, -5, 36, 10), ink); draw_rect(Rect2(-15, -3, 26, 5), Color("b7652b"))
-			draw_line(Vector2(10, -2), Vector2(18, 12), metal, 3); draw_line(Vector2(18, 12), Vector2(18, 20), accent, 1)
+			_landmark_panel(Rect2(-18, -5, 36, 10), Color("b7652b"), &"metal", 51)
+			PIXELS.line(self, Vector2(10, -2), Vector2(18, 12), metal); PIXELS.line(self, Vector2(18, 12), Vector2(18, 20), accent)
 		"motel_sign":
-			draw_rect(Rect2(-19, -8, 38, 16), ink); draw_rect(Rect2(-17, -6, 34, 12), accent.darkened(0.45))
-			for x in range(-14, 15, 6): draw_circle(Vector2(x, 0), 1.5, accent)
-			draw_string(ThemeDB.fallback_font, Vector2(-13, 4), "MOTEL", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color.WHITE)
+			_landmark_panel(Rect2(-19, -8, 38, 16), accent.darkened(0.45), &"metal", 52)
+			for x in range(-14, 15, 6): PIXELS.pixel(self, Vector2(x, 5), accent)
+			PIXELS.text(self, "MOTEL", Vector2(-10, -3), Color.WHITE)
 		"city_window":
-			draw_rect(Rect2(-22, -10, 44, 20), ink)
+			_landmark_panel(Rect2(-22, -10, 44, 20), Color("253a46"), &"glass", 53)
 			for x in range(-19, 20, 8):
-				for y in range(-7, 8, 6): draw_rect(Rect2(x, y, 3, 3), accent if (x + y) % 3 else Color("52d9ff"))
+				for y in range(-7, 8, 6): PIXELS.material_rect(self, Rect2(x, y, 3, 3), accent, Color("b9ffff"), Color("277899"), x + y, &"glass")
 		"freezer_fans":
 			for x in [-12.0, 12.0]:
-				draw_circle(Vector2(x, 0), 9, ink); draw_circle(Vector2(x, 0), 6, Color("9ccbd0"))
-				for angle in [0.0, PI * 0.5, PI, PI * 1.5]: draw_line(Vector2(x, 0), Vector2(x, 0) + Vector2.RIGHT.rotated(angle) * 6, metal, 2)
+				_landmark_disc(Vector2(x, 0), 9, Color("9ccbd0"), 54 + int(x))
+				for angle in [0.0, PI * 0.5, PI, PI * 1.5]: PIXELS.line(self, Vector2(x, 0), Vector2(x, 0) + Vector2.RIGHT.rotated(angle) * 6, metal)
 		"roulette":
-			draw_circle(Vector2.ZERO, 17, ink); draw_circle(Vector2.ZERO, 14, Color("b51d39"))
-			for angle in range(0, 360, 30): draw_line(Vector2.ZERO, Vector2.RIGHT.rotated(deg_to_rad(angle)) * 14, Color("f5d27a"), 1)
-			draw_circle(Vector2.ZERO, 4, accent)
+			_landmark_disc(Vector2.ZERO, 17, Color("b51d39"), 55)
+			for angle in range(0, 360, 30): PIXELS.line(self, Vector2.ZERO, Vector2.RIGHT.rotated(deg_to_rad(angle)) * 14, Color("f5d27a"))
+			_landmark_disc(Vector2.ZERO, 4, accent, 56)
 		"evidence_wall":
-			draw_rect(Rect2(-22, -12, 44, 24), Color("493629"))
+			_landmark_panel(Rect2(-22, -12, 44, 24), Color("493629"), &"wood", 57)
 			var points := PackedVector2Array([Vector2(-14,-6), Vector2(2,-8), Vector2(13,-2), Vector2(-6,6), Vector2(10,7)])
-			for p: Vector2 in points: draw_rect(Rect2(p - Vector2(3, 3), Vector2(7, 6)), Color("ddd3b7"))
-			draw_polyline(points, accent, 1)
+			for p: Vector2 in points: PIXELS.material_panel(self, Rect2(p - Vector2(3, 3), Vector2(7, 6)), ink, Color("ddd3b7"), Color("fff4dc"), Color("aa9d87"), int(p.x + p.y), &"grain")
+			PIXELS.polyline(self, points, accent)
 		"conveyor":
-			draw_rect(Rect2(-24, -7, 48, 14), ink); draw_rect(Rect2(-21, -4, 42, 8), Color("75272b"))
-			for x in range(-18, 19, 7): draw_circle(Vector2(x, 0), 2, metal)
+			_landmark_panel(Rect2(-24, -7, 48, 14), Color("75272b"), &"metal", 58)
+			for x in range(-18, 19, 7): _landmark_disc(Vector2(x, 0), 2, metal, x + 59)
 		"broadcast_console":
-			draw_rect(Rect2(-24, -11, 48, 22), ink)
+			_landmark_panel(Rect2(-24, -11, 48, 22), Color("24252e"), &"metal", 60)
 			for x in range(-19, 20, 10):
-				draw_rect(Rect2(x, -7, 7, 6), accent.darkened(0.45)); draw_circle(Vector2(x + 3, 5), 1.5, accent)
+				PIXELS.material_panel(self, Rect2(x, -7, 7, 6), ink, accent.darkened(0.45), accent, accent.darkened(0.7), x + 61, &"metal"); PIXELS.pixel(self, Vector2(x + 3, 5), accent)
 		"broken_dj":
-			draw_rect(Rect2(-22, -10, 44, 20), ink)
-			draw_circle(Vector2(-11, 0), 7, Color("4b4057")); draw_circle(Vector2(11, 0), 7, Color("4b4057"))
-			draw_line(Vector2(-4,-8), Vector2(4,8), accent, 2); draw_line(Vector2(4,-8), Vector2(-4,8), accent, 2)
+			_landmark_panel(Rect2(-22, -10, 44, 20), Color("292431"), &"metal", 62)
+			_landmark_disc(Vector2(-11, 0), 7, Color("4b4057"), 63); _landmark_disc(Vector2(11, 0), 7, Color("4b4057"), 64)
+			PIXELS.line(self, Vector2(-4,-8), Vector2(4,8), accent); PIXELS.line(self, Vector2(4,-8), Vector2(-4,8), accent)
 	if damaged:
-		draw_line(Vector2(-14, -7), Vector2(-5, 1), Color("f1d2bc"), 1)
-		draw_line(Vector2(-5, 1), Vector2(3, -3), ink, 1)
-		draw_line(Vector2(3, -3), Vector2(13, 7), Color("f1d2bc"), 1)
+		PIXELS.line(self, Vector2(-14, -7), Vector2(-5, 1), Color("f1d2bc"))
+		PIXELS.line(self, Vector2(-5, 1), Vector2(3, -3), ink)
+		PIXELS.line(self, Vector2(3, -3), Vector2(13, 7), Color("f1d2bc"))
+
+func _landmark_panel(area: Rect2, color: Color, pattern: StringName, seed: int) -> void:
+	PIXELS.material_panel(self, area, Color("17141d"), color, color.lightened(0.16), color.darkened(0.22), seed, pattern)
+
+func _landmark_disc(center: Vector2, radius: int, color: Color, seed: int) -> void:
+	PIXELS.material_circle(self, center, radius, Color("17141d"), Color("17141d"), Color("0b0910"), seed)
+	if radius > 1: PIXELS.material_circle(self, center, radius - 1, color, color.lightened(0.18), color.darkened(0.24), seed + 1)

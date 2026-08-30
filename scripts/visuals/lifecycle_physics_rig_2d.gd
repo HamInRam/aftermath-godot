@@ -1,6 +1,8 @@
 class_name LifecyclePhysicsRig2D
 extends Node2D
 
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+
 # A controlled Verlet skeleton is present for the actor's entire lifetime.
 # Locomotion supplies targets, impacts displace individual joints, knockdown
 # releases the targets, and recovery blends the same points back to animation.
@@ -483,10 +485,10 @@ func _draw_human_prone() -> void:
 	_draw_segment("pelvis", "knee_a", cloth.darkened(0.52), 3); _draw_segment("knee_a", "foot_a", Color("17141b"), 3)
 	_draw_segment("pelvis", "knee_b", cloth.darkened(0.52), 3); _draw_segment("knee_b", "foot_b", Color("17141b"), 3)
 	var head := _snap(points.head.position)
-	draw_rect(Rect2(head - Vector2(3, 3), Vector2(7, 7)), Color("17141b"))
-	draw_rect(Rect2(head - Vector2(2, 2), Vector2(4, 5)), skin_color.lerp(Color.WHITE, flash_amount * 0.35))
-	draw_rect(Rect2(head + Vector2(1, -1), Vector2(1, 2)), Color("35202b"))
-	draw_rect(Rect2(_snap(points.chest.position) + Vector2(-2, -4), Vector2(4, 1)), accent_color)
+	_draw_block(head, Vector2(7, 7), Color("17141b"), &"grain")
+	_draw_block(head, Vector2(4, 5), skin_color.lerp(Color.WHITE, flash_amount * 0.35), &"grain")
+	_draw_block(head + Vector2(1, -1), Vector2(1, 2), Color("35202b"), &"grain")
+	_draw_block(_snap(points.chest.position) + Vector2(0, -4), Vector2(4, 1), accent_color, &"fabric")
 
 func _draw_hound_standing(collapse := 0.0) -> void:
 	var fur := body_color.lerp(Color.WHITE, flash_amount * 0.38)
@@ -535,9 +537,9 @@ func _draw_hound_prone() -> void:
 		_draw_segment("pelvis", "rear_knee_" + suffix, fur.darkened(0.08), 2)
 		_draw_segment("rear_knee_" + suffix, "rear_paw_" + suffix, fur.lightened(0.08), 2)
 	var head := _snap(points.head.position)
-	draw_rect(Rect2(head - Vector2(3, 2), Vector2(6, 5)), Color("17141b"))
-	draw_rect(Rect2(head - Vector2(2, 1), Vector2(4, 3)), fur.lightened(0.12))
-	draw_rect(Rect2(head + Vector2(2, 0), Vector2(2, 1)), Color("e8d8c8"))
+	_draw_block(head, Vector2(6, 5), Color("17141b"), &"grain")
+	_draw_block(head, Vector2(4, 3), fur.lightened(0.12), &"fabric")
+	_draw_block(head + Vector2(2, 0), Vector2(2, 1), Color("e8d8c8"), &"grain")
 
 func _joint_visual_offset(joint_name: String, maximum: float) -> Vector2:
 	if not points.has(joint_name): return Vector2.ZERO
@@ -549,20 +551,12 @@ func _joint_visual_offset(joint_name: String, maximum: float) -> Vector2:
 
 func _draw_pixel_disc(center: Vector2, radius: int, outline: Color, fill: Color) -> void:
 	var snapped := _snap(center)
-	var outer_size := radius * 2 + 1
-	draw_rect(Rect2(snapped - Vector2(radius, radius - 1), Vector2(outer_size, maxi(1, outer_size - 2))), outline)
-	draw_rect(Rect2(snapped - Vector2(radius - 1, radius), Vector2(maxi(1, outer_size - 2), outer_size)), outline)
-	if radius <= 1:
-		draw_rect(Rect2(snapped, Vector2.ONE), fill)
-		return
-	var inner := radius - 1
-	var inner_size := inner * 2 + 1
-	draw_rect(Rect2(snapped - Vector2(inner, inner - 1), Vector2(inner_size, maxi(1, inner_size - 2))), fill)
-	draw_rect(Rect2(snapped - Vector2(inner - 1, inner), Vector2(maxi(1, inner_size - 2), inner_size)), fill)
+	PIXEL_PAINTER.circle(self, snapped, radius, outline)
+	if radius <= 1: PIXEL_PAINTER.pixel(self, snapped, fill)
+	else: PIXEL_PAINTER.material_circle(self, snapped, radius - 1, fill, fill.lightened(0.14), fill.darkened(0.18), facing_sector * 17 + radius)
 
-func _draw_block(center: Vector2, size: Vector2, color: Color) -> void:
-	var snapped_size := Vector2(maxi(1, roundi(size.x)), maxi(1, roundi(size.y)))
-	draw_rect(Rect2(_snap(center) - (snapped_size / 2.0).floor(), snapped_size), color)
+func _draw_block(center: Vector2, size: Vector2, color: Color, pattern: StringName = &"fabric") -> void:
+	PIXEL_PAINTER.material_block(self, _snap(center), size, color, facing_sector * 19 + roundi(center.x) * 3 + roundi(center.y) * 5, pattern)
 
 func should_draw_legs() -> bool:
 	return movement_ratio > 0.12 and mode != Mode.KNOCKED_DOWN
@@ -582,16 +576,7 @@ func _draw_segment(a_name: String, b_name: String, color: Color, width: int) -> 
 	_draw_pixel_line(start, finish, color, width)
 
 func _draw_pixel_line(start: Vector2, finish: Vector2, color: Color, width: int) -> void:
-	var delta := finish - start
-	var steps := maxi(1, ceili(maxf(absf(delta.x), absf(delta.y))))
-	var block := Vector2(width, width)
-	var half := Vector2(floori(width / 2.0), floori(width / 2.0))
-	var previous := Vector2(INF, INF)
-	for index in range(steps + 1):
-		var pixel := _snap(start.lerp(finish, float(index) / float(steps)))
-		if pixel == previous: continue
-		draw_rect(Rect2(pixel - half, block), color)
-		previous = pixel
+	PIXEL_PAINTER.material_line(self, _snap(start), _snap(finish), color, maxi(1, width), facing_sector * 23 + width, &"fabric")
 
 func _snap(value: Vector2) -> Vector2:
 	return Vector2(roundi(value.x), roundi(value.y))

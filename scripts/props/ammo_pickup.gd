@@ -1,6 +1,8 @@
 class_name AmmoPickup
 extends Area2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 @export var weapon_id := "pistol"
 @export var rounds := 12
 
@@ -18,7 +20,7 @@ func _on_body_entered(body: Node) -> void:
 	if body.add_reserve_ammo(weapon_id, rounds): queue_free()
 
 func _draw() -> void:
-	draw_rect(Rect2(-6, -4, 12, 8), Color("182238"), true)
-	draw_rect(Rect2(-6, -4, 12, 8), Color("66e0ff"), false, 1.0)
-	for x in [-3.5, 0.0, 3.5]:
-		draw_rect(Rect2(x - 0.7, -2.5, 1.4, 5), Color("ffd166"), true)
+	PIXELS.material_panel(self, Rect2(-6, -4, 12, 8), Color("17131b"), Color("182238"), Color("66e0ff"), Color("0b1020"), 21, &"metal")
+	for x in [-4, 0, 4]:
+		PIXELS.line(self, Vector2(x, -2), Vector2(x, 2), Color("ffd166"))
+		PIXELS.pixel(self, Vector2(x, -2), Color("fff0a3"))

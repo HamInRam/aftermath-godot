@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+
 var spin := 0.0
 var chunk_kind := 0
 var amount := 1.0
@@ -24,7 +26,7 @@ func _physics_process(delta: float) -> void:
 		velocity = velocity.bounce(collision.get_normal()) * 0.28
 		spin *= 0.45
 	velocity = velocity.move_toward(Vector2.ZERO, 88.0 * delta)
-	rotation += spin * delta
+	rotation = snappedf(rotation + spin * delta, PI / 4.0)
 	spin = move_toward(spin, 0.0, 12.0 * delta)
 	if velocity.length() < 1.0:
 		settled = true
@@ -49,22 +51,19 @@ func _draw() -> void:
 	var tissue := Color(0.96, 0.38, 0.48, amount)
 	var bone := Color(0.94, 0.86, 0.72, amount)
 	if chunk_kind == 0:
-		draw_rect(Rect2(-3, -1, 6, 3), blood)
-		draw_rect(Rect2(-1, -1, 2, 1), tissue)
+		PIXEL_PAINTER.material_rect(self, Rect2(-3, -1, 6, 3), blood, tissue, blood.darkened(0.3), 3)
+		PIXEL_PAINTER.line(self, Vector2(-1, 0), Vector2(0, 0), tissue)
 	elif chunk_kind == 1:
-		draw_rect(Rect2(-1, -3, 3, 6), blood)
-		draw_rect(Rect2(-1, -3, 1, 2), bone)
+		PIXEL_PAINTER.material_rect(self, Rect2(-1, -3, 3, 6), blood, tissue, blood.darkened(0.3), 7)
+		PIXEL_PAINTER.line(self, Vector2(-1, -3), Vector2(-1, -2), bone)
 	elif chunk_kind == 2:
-		draw_rect(Rect2(-2, -2, 4, 4), blood)
-		draw_rect(Rect2(0, -1, 2, 2), tissue)
+		PIXEL_PAINTER.material_rect(self, Rect2(-2, -2, 4, 4), blood, tissue, blood.darkened(0.3), 11)
 	elif chunk_kind == 3:
-		draw_rect(Rect2(-2, -2, 4, 4), tissue)
-		draw_rect(Rect2(-1, -1, 2, 2), blood)
+		PIXEL_PAINTER.material_rect(self, Rect2(-2, -2, 4, 4), tissue, bone, blood, 13)
 	elif chunk_kind == 4:
-		draw_rect(Rect2(-4, -1, 8, 3), blood)
-		draw_rect(Rect2(-4, 0, 3, 1), bone)
+		PIXEL_PAINTER.material_rect(self, Rect2(-4, -1, 8, 3), blood, tissue, blood.darkened(0.3), 17)
+		PIXEL_PAINTER.line(self, Vector2(-4, 0), Vector2(-2, 0), bone)
 	else:
-		draw_rect(Rect2(-3, -2, 6, 4), blood)
-		draw_rect(Rect2(-2, -3, 4, 6), blood)
-		draw_rect(Rect2(-1, -2, 3, 2), tissue)
-		draw_rect(Rect2(1, -1, 2, 1), bone)
+		PIXEL_PAINTER.material_rect(self, Rect2(-3, -2, 6, 4), blood, tissue, blood.darkened(0.3), 19)
+		PIXEL_PAINTER.material_rect(self, Rect2(-2, -3, 4, 6), blood, tissue, blood.darkened(0.3), 23)
+		PIXEL_PAINTER.line(self, Vector2(1, -1), Vector2(2, -1), bone)

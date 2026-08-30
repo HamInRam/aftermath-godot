@@ -1,7 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource path="res://scripts/ui/briefing_screen.gd" type="Script" id="1_briefing"]
-[ext_resource path="res://assets/portraits/handler_64.svg" type="Texture2D" id="2_portrait"]
 
 [node name="BriefingScreen" type="Control"]
 layout_mode = 3
@@ -32,7 +31,6 @@ offset_left = 251.0
 offset_top = 20.0
 offset_right = 283.0
 offset_bottom = 52.0
-texture = ExtResource("2_portrait")
 expand_mode = 1
 stretch_mode = 5
 mouse_filter = 2

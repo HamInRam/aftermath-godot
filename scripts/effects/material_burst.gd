@@ -12,7 +12,7 @@ func setup(direction: Vector2, profile: Dictionary, intensity := 1.0) -> void:
 		particles.append({
 			"position": Vector2.ZERO,
 			"velocity": velocity,
-			"size": 2.0 if index < 3 else 1.0,
+			"double": index < 3,
 			"color": profile.secondary if index % 4 == 0 else profile.primary,
 		})
 	z_index = 8
@@ -31,5 +31,9 @@ func _draw() -> void:
 	for particle in particles:
 		var color: Color = particle.color
 		color.a = alpha
-		var size := float(particle.size)
-		draw_rect(Rect2(Vector2(particle.position).round() - Vector2.ONE * size * 0.5, Vector2.ONE * size), color)
+		var point: Vector2 = Vector2(particle.position).round()
+		draw_rect(Rect2(point, Vector2.ONE), color)
+		if particle.double:
+			var velocity: Vector2 = particle.velocity
+			var tail := -velocity.normalized().round() if velocity.length_squared() > 0.01 else Vector2.LEFT
+			draw_rect(Rect2(point + tail, Vector2.ONE), Color(color, color.a * 0.7))

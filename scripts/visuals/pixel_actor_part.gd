@@ -1,6 +1,8 @@
 class_name PixelActorPart
 extends Node2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 @export_enum("legs", "upper") var part := "upper"
 @export_enum("player", "enemy", "dog") var actor_kind := "enemy"
 @export var body_color := Color("7c235b")
@@ -46,8 +48,8 @@ func _draw() -> void:
 func _draw_legs() -> void:
 	if actor_kind == "dog":
 		var dog_step := sin(stride_phase * 2.0) * 2.0 * movement_ratio
-		draw_rect(Rect2(-4 + dog_step, -4, 4, 2), Color("271b2b"))
-		draw_rect(Rect2(-4 - dog_step, 2, 4, 2), Color("271b2b"))
+		_block(Rect2(-4 + roundf(dog_step), -4, 4, 2), Color("271b2b"), 3)
+		_block(Rect2(-4 - roundf(dog_step), 2, 4, 2), Color("271b2b"), 5)
 		return
 	# Legs deliberately extend beyond the 16 px upper-body core. The previous
 	# five-pixel blocks were almost completely hidden and read as body jitter.
@@ -57,18 +59,18 @@ func _draw_legs() -> void:
 	var shoe := Color("17141b")
 	# Rear-facing top-down anatomy: hips connect beneath the torso while the two
 	# feet remain separated by a full pixel channel even when standing still.
-	draw_rect(Rect2(-8 + step, -5, 7, 3), shoe)
-	draw_rect(Rect2(-8 - step, 2, 7, 3), shoe)
-	draw_rect(Rect2(-6 + step, -4, 5, 2), trouser)
-	draw_rect(Rect2(-6 - step, 2, 5, 2), trouser)
-	draw_rect(Rect2(-9 + step, -5, 2, 3), accent_color.darkened(0.22 + plant * 0.08))
-	draw_rect(Rect2(-9 - step, 2, 2, 3), accent_color.darkened(0.22 + plant * 0.08))
+	_block(Rect2(-8 + step, -5, 7, 3), shoe, 7)
+	_block(Rect2(-8 - step, 2, 7, 3), shoe, 11)
+	_block(Rect2(-6 + step, -4, 5, 2), trouser, 13)
+	_block(Rect2(-6 - step, 2, 5, 2), trouser, 17)
+	_block(Rect2(-9 + step, -5, 2, 3), accent_color.darkened(0.22 + plant * 0.08), 19)
+	_block(Rect2(-9 - step, 2, 2, 3), accent_color.darkened(0.22 + plant * 0.08), 23)
 	# One bright heel pixel makes alternating motion readable over dark floors.
 	if movement_ratio > 0.12:
-		draw_rect(Rect2(-9 + step, -5, 1, 1), accent_color)
-		draw_rect(Rect2(-9 - step, 4, 1, 1), accent_color)
+		PIXELS.pixel(self, Vector2(-9 + step, -5), accent_color)
+		PIXELS.pixel(self, Vector2(-9 - step, 4), accent_color)
 	if movement_ratio > 0.82:
-		draw_line(Vector2(-10 - step, 5), Vector2(-12 - step, 5), Color(accent_color, 0.32), 1.0)
+		PIXELS.line(self, Vector2(-10 - step, 5), Vector2(-12 - step, 5), Color(accent_color, 0.32))
 
 func _draw_upper() -> void:
 	if actor_kind == "dog":
@@ -83,30 +85,33 @@ func _draw_upper() -> void:
 	elif action == "hit": lean = -hit_direction * 2.0 * action_amount
 	elif action == "execute": lean = Vector2(2.0, 0)
 	# Back arm, torso, head, front arm. Large color blocks keep the silhouette readable at 3x.
-	draw_line(lean + Vector2(-1, 3), lean + Vector2(4 + arm_swing, 5), body_color.darkened(0.28), 2.0)
-	draw_rect(Rect2(lean + Vector2(-4, -4), Vector2(8, 8)), body_color)
-	draw_rect(Rect2(lean + Vector2(-3, -3), Vector2(3, 6)), body_color.lightened(0.11))
-	draw_circle(lean + Vector2(4, 0), 3.0, skin_color)
-	draw_rect(Rect2(lean + Vector2(4, -2), Vector2(2, 4)), skin_color.lightened(0.12))
-	draw_rect(Rect2(lean + Vector2(5, -2), Vector2(1, 1)), Color("301b27"))
+	PIXELS.material_line(self, lean + Vector2(-1, 3), lean + Vector2(4 + roundf(arm_swing), 5), body_color.darkened(0.28), 2, 29)
+	_block(Rect2(lean + Vector2(-4, -4), Vector2(8, 8)), body_color, 31)
+	_block(Rect2(lean + Vector2(-3, -3), Vector2(3, 6)), body_color.lightened(0.11), 37)
+	PIXELS.material_circle(self, lean + Vector2(4, 0), 3, skin_color, skin_color.lightened(0.12), skin_color.darkened(0.18), 41)
+	_block(Rect2(lean + Vector2(4, -2), Vector2(2, 4)), skin_color.lightened(0.12), 43)
+	PIXELS.pixel(self, lean + Vector2(5, -2), Color("301b27"))
 	var front_hand := lean + Vector2(6, -3 - arm_swing)
 	if action == "reload": front_hand = lean + Vector2(1, 3)
 	elif action == "drag": front_hand = lean + Vector2(-5, 1)
 	elif action == "execute": front_hand = lean + Vector2(7, 0)
-	draw_line(lean + Vector2(0, -3), front_hand, body_color.lightened(0.08), 2.0)
-	draw_circle(front_hand, 1.2, skin_color)
+	PIXELS.material_line(self, lean + Vector2(0, -3), front_hand.round(), body_color.lightened(0.08), 2, 47)
+	PIXELS.material_circle(self, front_hand.round(), 1, skin_color, skin_color.lightened(0.12), skin_color.darkened(0.18), 53)
 	# One-pixel identity accents replace the old debug-like full circular outline.
-	draw_line(Vector2(-4, -5), Vector2(1, -5), accent_color, 1.0)
-	draw_rect(Rect2(-4, 4, 2, 1), accent_color.darkened(0.15))
+	PIXELS.line(self, Vector2(-4, -5), Vector2(1, -5), accent_color)
+	_block(Rect2(-4, 4, 2, 1), accent_color.darkened(0.15), 59)
 	if action == "alert":
-		draw_rect(Rect2(3, -4, 3, 1), Color("ff355f"))
+		_block(Rect2(3, -4, 3, 1), Color("ff355f"), 61)
 	elif action == "attack":
-		draw_rect(Rect2(4, -4, 3, 1), Color("ffe06b"))
+		_block(Rect2(4, -4, 3, 1), Color("ffe06b"), 67)
 
 func _draw_dog_upper() -> void:
 	var crouch := 2.0 * action_amount if action == "attack" else 0.0
-	draw_rect(Rect2(-5, -3 + crouch, 9, 6 - crouch), body_color)
-	draw_rect(Rect2(2, -4 + crouch, 5, 5), body_color.lightened(0.1))
-	draw_rect(Rect2(5, -5 + crouch, 2, 2), Color("261822"))
-	draw_rect(Rect2(6, -2 + crouch, 2, 1), skin_color)
-	draw_line(Vector2(-5, 0), Vector2(-8, -3), body_color.lightened(0.08), 1.0)
+	_block(Rect2(-5, -3 + roundf(crouch), 9, 6 - roundf(crouch)), body_color, 71)
+	_block(Rect2(2, -4 + roundf(crouch), 5, 5), body_color.lightened(0.1), 73)
+	_block(Rect2(5, -5 + roundf(crouch), 2, 2), Color("261822"), 79)
+	_block(Rect2(6, -2 + roundf(crouch), 2, 1), skin_color, 83)
+	PIXELS.line(self, Vector2(-5, 0), Vector2(-8, -3), body_color.lightened(0.08))
+
+func _block(area: Rect2, color: Color, seed: int) -> void:
+	PIXELS.material_rect(self, area, color, color.lightened(0.12), color.darkened(0.18), seed, &"fabric")

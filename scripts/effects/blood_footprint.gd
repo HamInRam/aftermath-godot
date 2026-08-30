@@ -1,6 +1,8 @@
 class_name BloodFootprint
 extends Node2D
 
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+
 var blood_amount := 1.0
 var left_foot := true
 var cleanup_steps_remaining := 2
@@ -42,9 +44,12 @@ func get_cleanup_progress() -> float:
 func _draw() -> void:
 	var blood := Color(0.47, 0.004, 0.025, 0.88 * blood_amount).darkened(surface_darken)
 	var dark_blood := Color(0.20, 0.002, 0.012, 0.92 * blood_amount).darkened(surface_darken)
-	var side := -1.0 if left_foot else 1.0
-	var stretch := 1.35 if smudged else 1.0
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(surface_spread * stretch, 1.0 / maxf(0.8, surface_spread)))
-	draw_rect(Rect2(-2.0, side - 0.75, 2.5, 1.5), dark_blood)
-	draw_rect(Rect2(0.25, side - 1.0, 1.75, 2.0), blood)
-	draw_rect(Rect2(1.75, side - 0.75, 0.75, 1.5), blood)
+	var side := -1 if left_foot else 1
+	PIXEL_PAINTER.pixel(self, Vector2(-2, side), dark_blood)
+	PIXEL_PAINTER.pixel(self, Vector2(-1, side), dark_blood)
+	PIXEL_PAINTER.pixel(self, Vector2(0, side), blood)
+	PIXEL_PAINTER.pixel(self, Vector2(1, side), blood)
+	if surface_spread > 1.08: PIXEL_PAINTER.pixel(self, Vector2(0, side + (1 if left_foot else -1)), Color(blood, blood.a * 0.7))
+	if smudged:
+		PIXEL_PAINTER.pixel(self, Vector2(2, side), Color(blood, blood.a * 0.66))
+		PIXEL_PAINTER.pixel(self, Vector2(3, side), Color(blood, blood.a * 0.36))

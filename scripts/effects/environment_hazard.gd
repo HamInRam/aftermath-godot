@@ -2,6 +2,7 @@ class_name EnvironmentHazard
 extends Area2D
 
 const LIQUID_SYSTEM_SCRIPT := preload("res://scripts/effects/pixel_liquid_system.gd")
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
 const LIQUID_KINDS := [&"water", &"oil", &"spill", &"cleaner"]
 
 var hazard_kind := "spill"
@@ -111,16 +112,17 @@ func _draw() -> void:
 		for index in range(11):
 			var angle := float(index) * 2.399
 			var point := Vector2(roundi(cos(angle) * radius * (0.35 + float(index % 3) * 0.16)), roundi(sin(angle) * radius * (0.35 + float(index % 3) * 0.16)))
-			draw_rect(Rect2(point, Vector2(2 if index % 2 == 0 else 1, 1)), Color("d9ffff"))
+			PIXELS.pixel(self, point, Color("d9ffff"))
+			if index % 2 == 0: PIXELS.pixel(self, point + Vector2.RIGHT, Color(0.65, 0.92, 1.0, 0.72))
 	elif hazard_kind == "smoke":
 		for index in range(10):
 			var angle := float(index) * 1.71 + floorf(pulse * 2.0) * 0.12
 			var point := Vector2(roundi(cos(angle) * radius * 0.7), roundi(sin(angle) * radius * 0.7))
-			draw_rect(Rect2(point - Vector2.ONE * 2.0, Vector2(4, 4)), Color(0.72, 0.72, 0.8, 0.10 + float(index % 3) * 0.04))
+			PIXELS.stipple_rect(self, Rect2(point - Vector2.ONE * 3.0, Vector2(6, 6)), Color(0.72, 0.72, 0.8, 0.10 + float(index % 3) * 0.04), index, 4)
 	elif hazard_kind == "electric" and source_active:
 		for index in range(4):
 			var angle := float(index) * TAU / 4.0 + floorf(pulse * 10.0) * 0.16
 			var reach := radius * (0.55 + float((index + int(pulse * 7.0)) % 3) * 0.2)
 			var end := Vector2(roundi(cos(angle) * reach), roundi(sin(angle) * reach))
 			var midpoint := Vector2(roundi(end.x * 0.5), roundi(end.y * 0.5 + (2.0 if index % 2 == 0 else -2.0)))
-			draw_polyline(PackedVector2Array([Vector2.ZERO, Vector2(midpoint.x, 0), midpoint, Vector2(end.x, midpoint.y), end]), Color("d9ffff"), 1.0)
+			PIXELS.polyline(self, PackedVector2Array([Vector2.ZERO, Vector2(midpoint.x, 0), midpoint, Vector2(end.x, midpoint.y), end]), Color("d9ffff"))

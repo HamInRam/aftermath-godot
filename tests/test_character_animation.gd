@@ -37,7 +37,7 @@ func _ready() -> void:
 	player.rotation = 0.0
 	_expect(not player.has_node("UpperBody/BodySprite/PixelBody"), "player must use one authoritative compact body")
 	_expect(player.get_node("UpperBody/BodySprite").texture.get_size() == Vector2(16, 16), "player must use a strict 16x16 top-down frame")
-	_expect(player.get_node("UpperBody/Gun").scale.x <= 0.81, "held weapon must remain subordinate to actor core")
+	_expect(player.get_node("UpperBody/Gun").scale == Vector2.ONE, "held weapon must remain on the native pixel grid without fractional scaling")
 	var enemy = ENEMY_SCENE.instantiate()
 	add_child(enemy)
 	_expect(enemy.has_node("LifecycleRig") and enemy.get_node("LifecycleRig").visible, "enemy must use a visible full-lifecycle physics skeleton")

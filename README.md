@@ -2,7 +2,7 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
-## v1.2.0 authored world overhaul
+## v1.2.1 native pixel unification
 
 - Every ground liquid now uses the same sparse hard-pixel simulation: plumbing water, oil, chemical spills and cleaner solution burst, spread, evaporate and clean at pixel density instead of appearing as smooth translucent discs.
 - Water crossing blood creates pale directional runoff, footsteps carry local liquid color, active plumbing must be repaired, and electricity follows only connected wet pixels across the floor.

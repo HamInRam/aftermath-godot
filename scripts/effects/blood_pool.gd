@@ -1,5 +1,7 @@
 extends Node2D
 
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+
 var growth := 0.08
 var target_scale := 1.0
 var growth_duration := 5.5
@@ -136,19 +138,21 @@ func get_cleanup_progress() -> float:
 func _draw() -> void:
 	if ultraviolet_residue:
 		if ultraviolet_visible:
-			draw_circle(Vector2.ZERO, 7.0, Color(0.20, 1.0, 0.46, 0.25))
-			draw_arc(Vector2.ZERO, 10.0, 0.0, TAU, 16, Color(0.45, 1.0, 0.72, 0.18), 1.0)
+			PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 7, Color(0.20, 1.0, 0.46, 0.16), Color(0.45, 1.0, 0.72, 0.25), Color(0.08, 0.38, 0.2, 0.18), 41)
+			PIXEL_PAINTER.circle(self, Vector2.ZERO, 10, Color(0.45, 1.0, 0.72, 0.18), true)
 		return
 	var age_step := floorf(clampf(stain_age / 24.0, 0.0, 0.99) * 4.0) / 3.0
 	var blood := Color(0.58, 0.006, 0.035, 0.88 * amount).lerp(Color(0.26, 0.002, 0.012, 0.92 * amount), age_step).darkened(surface_darken)
 	var dark := Color(0.19, 0.002, 0.01, 0.94 * amount).darkened(surface_darken)
 	for lobe in lobes:
-		draw_circle(lobe.position * growth, lobe.radius * growth, dark if lobe.dark else blood)
+		var center: Vector2 = ((lobe.position as Vector2) * growth).round()
+		var color: Color = dark if lobe.dark else blood
+		PIXEL_PAINTER.material_circle(self, center, maxi(1, roundi(float(lobe.radius) * growth)), color, color.lightened(0.1), color.darkened(0.2), roundi(center.x) * 17 + roundi(center.y) * 11)
 	for groove in groove_lines:
-		draw_line(groove.start * growth, groove.end * growth, dark, 0.65)
-	if surface_kind == "wood": draw_line(Vector2(-8, 3), Vector2(10, 3), dark, 0.7)
-	draw_circle(Vector2.ZERO, 5.2 * growth * target_scale, blood)
+		PIXEL_PAINTER.line(self, groove.start * growth, groove.end * growth, dark)
+	if surface_kind == "wood": PIXEL_PAINTER.line(self, Vector2(-8, 3), Vector2(10, 3), dark)
+	PIXEL_PAINTER.material_circle(self, Vector2.ZERO, maxi(1, roundi(5.2 * growth * target_scale)), blood, blood.lightened(0.1), dark, 47)
 	# The corpse masks this dark negative shape while present; once dragged away it
 	# remains as a readable record of where the body originally rested.
-	draw_rect(Rect2(-negative_space * 0.5, negative_space), Color(0.10, 0.002, 0.008, 0.38 * amount))
-	if growth > 0.65: draw_line(Vector2(-3, -2), Vector2(3, -2), Color(0.95, 0.16, 0.28, 0.22 * amount), 1.0)
+	PIXEL_PAINTER.stipple_rect(self, Rect2((-negative_space * 0.5).round(), negative_space.round()), Color(0.10, 0.002, 0.008, 0.38 * amount), 53, 2)
+	if growth > 0.65: PIXEL_PAINTER.line(self, Vector2(-3, -2), Vector2(3, -2), Color(0.95, 0.16, 0.28, 0.22 * amount))

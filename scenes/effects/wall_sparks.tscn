@@ -1,7 +1,6 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource path="res://scripts/effects/wall_sparks.gd" type="Script" id="1_sparks"]
-[ext_resource path="res://assets/casing/casing_2x1.png" type="Texture2D" id="2_pixel"]
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcess_sparks"]
 direction = Vector3(1, 0, 0)
@@ -11,8 +10,8 @@ initial_velocity_max = 145.0
 gravity = Vector3(0, 0, 0)
 damping_min = 80.0
 damping_max = 140.0
-scale_min = 0.9
-scale_max = 1.5
+scale_min = 1.0
+scale_max = 1.0
 color = Color(1, 0.82, 0.08, 1)
 
 [node name="WallSparks" type="GPUParticles2D" groups=["wall_sparks"]]
@@ -26,5 +25,4 @@ randomness = 0.35
 local_coords = false
 visibility_rect = Rect2(-64, -64, 128, 128)
 process_material = SubResource("ParticleProcess_sparks")
-texture = ExtResource("2_pixel")
 script = ExtResource("1_sparks")

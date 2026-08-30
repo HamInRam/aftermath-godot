@@ -4,6 +4,7 @@ extends StaticBody2D
 const MATERIAL_BURST := preload("res://scripts/effects/material_burst.gd")
 const PHYSICAL_DEBRIS := preload("res://scripts/props/physical_debris.gd")
 const ENVIRONMENT_HAZARD := preload("res://scripts/effects/environment_hazard.gd")
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 signal solidity_changed(solid: bool)
 
@@ -149,65 +150,70 @@ func _draw() -> void:
 	var half := size * 0.5
 	var outline := Color("17131b")
 	if state != PropState.DESTROYED:
-		draw_rect(Rect2(-half + Vector2(2, 2), size), Color(0.03, 0.02, 0.04, 0.46))
+		PIXELS.stipple_rect(self, Rect2(-half + Vector2(2, 2), size), Color(0.03, 0.02, 0.04, 0.46), 2, 3)
 	if state == PropState.DESTROYED:
 		_draw_debris(outline)
 		return
 	var base := accent.darkened(0.2 if state == PropState.INTACT else 0.42)
 	match prop_kind:
 		"sofa":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2(1, 1), size - Vector2(2, 2)), base)
-			draw_line(Vector2(0, -3), Vector2(0, 3), outline, 1)
+			_prop_panel(Rect2(-half, size), base, &"fabric", 1)
+			PIXELS.line(self, Vector2(0, -3), Vector2(0, 3), outline)
 		"bed":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2(1, 1), size - Vector2(2, 2)), Color("c98782"))
-			draw_rect(Rect2(-half + Vector2(1, 1), Vector2(4, 6)), Color("ead8c5"))
+			_prop_panel(Rect2(-half, size), Color("c98782"), &"fabric", 2)
+			PIXELS.material_rect(self, Rect2(-half + Vector2(1, 1), Vector2(4, 6)), Color("ead8c5"), Color("fff2db"), Color("b99b88"), 2, &"fabric")
 		"table":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2(1, 1), size - Vector2(2, 2)), base)
-			draw_line(Vector2(-4, -2), Vector2(4, -2), accent.lightened(0.2), 1)
+			_prop_panel(Rect2(-half, size), base, &"wood", 3)
+			PIXELS.line(self, Vector2(-4, -2), Vector2(4, -2), accent.lightened(0.2))
 		"tv":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2(1, 1), size - Vector2(2, 2)), Color("29313b"))
-			draw_rect(Rect2(-half + Vector2(2, 2), size - Vector2(4, 4)), Color("43cbd1") if state == PropState.INTACT else Color("312b35"))
+			_prop_panel(Rect2(-half, size), Color("29313b"), &"metal", 4)
+			PIXELS.material_rect(self, Rect2(-half + Vector2(2, 2), size - Vector2(4, 4)), Color("43cbd1") if state == PropState.INTACT else Color("312b35"), Color("b9ffff"), Color("226b78"), 4, &"glass")
 		"vending":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2(1, 1), size - Vector2(2, 2)), base)
-			draw_rect(Rect2(-2, -2, 4, 2), Color("ff3d99"))
+			_prop_panel(Rect2(-half, size), base, &"metal", 5)
+			for point in [Vector2(-2,-2), Vector2(0,-2), Vector2(1,-1)]: PIXELS.pixel(self, point, Color("ff3d99"))
 		"speaker":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2.ONE, size - Vector2(2,2)), Color("302a38"))
-			draw_circle(Vector2(0, 1), 2.5, accent); draw_circle(Vector2(0, -2), 1.0, Color("8ae8eb"))
+			_prop_panel(Rect2(-half, size), Color("302a38"), &"fabric", 6)
+			PIXELS.material_circle(self, Vector2(0, 1), 2, accent.darkened(0.15), accent.lightened(0.25), outline, 6)
+			PIXELS.pixel(self, Vector2(0, -2), Color("8ae8eb"))
 		"bar", "counter":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2.ONE, size - Vector2(2,2)), base)
-			draw_line(Vector2(-5,-2), Vector2(5,-2), accent.lightened(0.25), 2)
+			_prop_panel(Rect2(-half, size), base, &"wood", 7)
+			PIXELS.line(self, Vector2(-5,-2), Vector2(5,-2), accent.lightened(0.25))
 		"crate":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2.ONE, size - Vector2(2,2)), Color("8f572f"))
-			draw_line(Vector2(-3,-3), Vector2(3,3), Color("4a2b21"), 1); draw_line(Vector2(3,-3), Vector2(-3,3), Color("4a2b21"), 1)
+			_prop_panel(Rect2(-half, size), Color("8f572f"), &"wood", 8)
+			PIXELS.line(self, Vector2(-3,-3), Vector2(3,3), Color("4a2b21")); PIXELS.line(self, Vector2(3,-3), Vector2(-3,3), Color("4a2b21"))
 		"shelf", "evidence_cabinet", "freezer":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2.ONE, size - Vector2(2,2)), base)
-			draw_line(Vector2(-5,0), Vector2(5,0), outline, 1)
-			for x in [-4.0, 0.0, 4.0]: draw_rect(Rect2(x,-2,2,2), accent.lightened(0.2))
+			_prop_panel(Rect2(-half, size), base, &"metal", 9)
+			PIXELS.line(self, Vector2(-5,0), Vector2(5,0), outline)
+			for x in [-4.0, 0.0, 4.0]: PIXELS.pixel(self, Vector2(x,-2), accent.lightened(0.2))
 		"slot_machine":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2.ONE, size - Vector2(2,2)), Color("5d234e"))
-			draw_rect(Rect2(-2,-2,4,2), Color("ffd34e")); draw_circle(Vector2(2,2), 1, accent)
+			_prop_panel(Rect2(-half, size), Color("5d234e"), &"metal", 10)
+			for x in range(-2, 2): PIXELS.pixel(self, Vector2(x,-2 + posmod(x,2)), Color("ffd34e"))
+			PIXELS.pixel(self, Vector2(2,2), accent)
 		"conveyor", "console":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2.ONE, size - Vector2(2,2)), Color("4e5860"))
-			for x in range(-5, 6, 3): draw_rect(Rect2(x,-1,2,2), accent)
+			_prop_panel(Rect2(-half, size), Color("4e5860"), &"metal", 11)
+			for x in range(-5, 6, 3): PIXELS.pixel(self, Vector2(x,-1), accent)
 		"sink", "toilet":
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2(1, 1), size - Vector2(2, 2)), Color("d6e3dc"))
-			draw_rect(Rect2(-2, -2, 4, 3), Color("548b94"))
+			_prop_panel(Rect2(-half, size), Color("d6e3dc"), &"glass", 12)
+			PIXELS.material_rect(self, Rect2(-2, -2, 4, 3), Color("548b94"), Color("b9ffff"), Color("315c69"), 12, &"glass")
 		"plant":
-			draw_rect(Rect2(-3, 1, 6, 4), Color("553126")); draw_line(Vector2(0, 1), Vector2(0, -4), Color("39784d"), 2)
-			draw_rect(Rect2(-4, -4, 3, 3), Color("54a85f")); draw_rect(Rect2(1, -3, 3, 3), Color("39784d"))
+			_prop_panel(Rect2(-3, 1, 6, 4), Color("553126"), &"wood", 13)
+			PIXELS.line(self, Vector2(0, 1), Vector2(0, -4), Color("39784d"))
+			for point in [Vector2(-3,-4),Vector2(-2,-3),Vector2(-1,-4),Vector2(1,-3),Vector2(2,-2),Vector2(3,-3),Vector2(0,-5)]: PIXELS.pixel(self, point, Color("54a85f") if int(point.x + point.y) % 2 == 0 else Color("39784d"))
 		_:
-			draw_rect(Rect2(-half, size), outline); draw_rect(Rect2(-half + Vector2(1, 1), size - Vector2(2, 2)), base)
+			_prop_panel(Rect2(-half, size), base, &"grain", 14)
 	if state == PropState.DAMAGED:
 		var crack_color: Color = material_profile.get("secondary", Color("f1d4be"))
-		draw_line(Vector2(-3, -3), impact_point.clamp(Vector2(-3,-2), Vector2(3,2)), crack_color, 1)
-		draw_line(impact_point.clamp(Vector2(-3,-2), Vector2(3,2)), Vector2(3, 2), outline, 1)
+		PIXELS.damage_crack(self, impact_point, crack_color, outline)
+
+func _prop_panel(area: Rect2, color: Color, pattern: StringName, seed: int) -> void:
+	PIXELS.material_panel(self, area, Color("17131b"), color, color.lightened(0.18), color.darkened(0.22), seed, pattern)
 
 func _draw_debris(outline: Color) -> void:
 	var direction := last_impact_direction.normalized()
 	for index in range(5):
 		var side := -1.0 if index % 2 == 0 else 1.0
-		var offset := direction * float(index - 1) * 2.2 + direction.orthogonal() * side * float(1 + index % 3)
-		var chunk_size := Vector2(3, 2) if index < 2 else Vector2(2, 2)
-		draw_rect(Rect2(offset - chunk_size * 0.5, chunk_size), outline)
+		var offset := (direction * float(index - 1) * 2.2 + direction.orthogonal() * side * float(1 + index % 3)).round()
 		var debris_color: Color = material_profile.get("primary", accent)
-		draw_rect(Rect2(offset - chunk_size * 0.5 + Vector2.ONE, chunk_size - Vector2.ONE), debris_color.darkened(0.2))
+		PIXELS.pixel(self, offset, outline)
+		PIXELS.pixel(self, offset + direction.round(), debris_color.darkened(0.2))
+		if index < 2: PIXELS.pixel(self, offset + direction.orthogonal().round(), debris_color.lightened(0.12))

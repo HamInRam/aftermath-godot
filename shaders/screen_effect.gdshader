@@ -17,15 +17,18 @@ vec2 curve(vec2 uv) {
 }
 
 void fragment() {
-	vec2 uv = SCREEN_UV;
+	vec2 pixel_grid = vec2(320.0, 180.0);
+	vec2 uv = (floor(SCREEN_UV * pixel_grid) + vec2(0.5)) / pixel_grid;
 	if (!enable_effect) {
 		COLOR = textureLod(screen_texture, uv, 0.0);
 	} else {
-		uv = curve(uv);
+		// Effects are evaluated on the native render grid. Curvature used to move
+		// a world pixel between output cells and is intentionally presentation-only.
 		if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
 			COLOR = vec4(0.0, 0.0, 0.0, 1.0);
 		} else {
-			vec2 channel_offset = vec2(chromatic_aberration * (uv.x - 0.5), 0.0);
+			float pixel_shift = floor(chromatic_aberration * 320.0 + 0.5);
+			vec2 channel_offset = vec2(pixel_shift / 320.0 * sign(uv.x - 0.5), 0.0);
 			vec3 color;
 			color.r = textureLod(screen_texture, uv - channel_offset, 0.0).r;
 			color.g = textureLod(screen_texture, uv, 0.0).g;
@@ -33,7 +36,7 @@ void fragment() {
 			color = clamp((color - vec3(0.5)) * 1.12 + vec3(0.5), vec3(0.0), vec3(1.0));
 			float luminance = dot(color, vec3(0.299, 0.587, 0.114));
 			color = mix(vec3(luminance), color, 0.96);
-			float scanline = sin(uv.y * scanline_count * 6.2831853) * 0.5 + 0.5;
+			float scanline = mod(floor(uv.y * 180.0), 2.0);
 			color -= scanline * scanline_intensity;
 			float vignette = uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y);
 			vignette = clamp(pow(16.0 * vignette, vignette_intensity), 0.0, 1.0);

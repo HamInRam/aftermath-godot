@@ -1,6 +1,8 @@
 class_name NoiseLure
 extends Node2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 var spent := false
 var activation_radius := 180.0
 
@@ -23,6 +25,6 @@ func get_interaction_prompt() -> String:
 
 func _draw() -> void:
 	var body_color := Color("544d52") if spent else Color("ef385f")
-	draw_rect(Rect2(-3, -6, 6, 12), body_color)
-	draw_rect(Rect2(-2, -8, 4, 3), Color("e8d8bf"))
-	draw_line(Vector2(1, -7), Vector2(5, -5), Color("322a32"), 1.0)
+	PIXELS.material_panel(self, Rect2(-3, -6, 6, 12), Color("17131b"), body_color, body_color.lightened(0.2), body_color.darkened(0.25), 23, &"metal")
+	PIXELS.material_panel(self, Rect2(-2, -8, 4, 3), Color("17131b"), Color("e8d8bf"), Color("fff4de"), Color("a89483"), 24, &"grain")
+	PIXELS.line(self, Vector2(1, -7), Vector2(5, -5), Color("322a32"))

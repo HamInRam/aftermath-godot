@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.2.1] - Native Pixel Unification
+
+- Unified live characters, corpses, ragdolls, weapons, projectiles, casings, blood, water, debris, props and landmarks around one native 1x1 world-pixel material language.
+- Replaced runtime sprite dependencies with deterministic cell-painted silhouettes and 16x16 compatibility frames; all live rendering uses nearest filtering and integer placement without fractional actor or weapon scaling.
+- Converted blood, gore, footprints, puddles, sparks, glass and environmental bursts to one-pixel sources with directional motion while preserving continuous forensic cleanup strokes.
+- Quantized doors, furniture, cameras, corpses, dropped limbs, recoil and casing presentation into readable authored angle frames while retaining continuous simulation accumulators.
+- Pixel-locked the post-processing sample grid, chromatic separation, scanlines, lighting textures, reticle, ultraviolet feedback, context markers and UI animation.
+- Reconfigured the project font and shared controls for bitmap-safe rendering, square panels, procedural pixel sliders, toggles and briefing portraits.
+- Added regression compatibility for the unified procedural actor frames and fixed snapped door animation stalling at low opening speeds.
+- Restored visible death ragdolls by accumulating corpse angular momentum between pixel-angle frames, enforcing readable root travel and amplifying weapon-specific relative limb articulation before a longer constrained settle phase.
+
 ## v0.1.1 - Universal Physical Death Pass
 
 - Added one room-scale sparse pixel-liquid surface shared by water, oil, chemical spills and cleaner solution; every liquid now renders as nearest-filtered hard pixels instead of expanding vector circles.
@@ -787,3 +798,10 @@ All notable project changes are recorded here. Version branches remain unrelease
 - Reduced chromatic splitting, CRT distortion, scanline strength, and excess saturation so authored pixel forms remain legible.
 - Rebalanced global and local lighting toward grounded pools of red, green, amber, and violet rather than full-scene neon wash.
 - Unified UI text, focus, and interaction colors with the grounded crime-noir palette.
+
+### Enemy ragdoll readability
+
+- Added an enemy-only articulation and root-motion presentation boost so deaths remain readable while combat continues.
+- Extended enemy ragdoll settling without changing the player's existing game-over presentation.
+- Delayed cleanup-phase pose freezing briefly so the final enemy's death animation is no longer cut off by the phase transition.
+- Made enemy blood particles optional so a missing or hot-reloaded VFX node can no longer abort the death signal before the corpse ragdoll is created.

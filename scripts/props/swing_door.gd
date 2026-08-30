@@ -2,6 +2,7 @@ class_name SwingDoor
 extends RigidBody2D
 
 const SPLINTER_SCENE := preload("res://scenes/effects/door_splinters.tscn")
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 enum DoorState { CLOSED, SLAM_OPENING, OPEN }
 
@@ -14,6 +15,7 @@ enum DoorState { CLOSED, SLAM_OPENING, OPEN }
 
 var current_state := DoorState.CLOSED
 var target_rotation := 0.0
+var simulated_rotation := 0.0
 var hit_bodies := {}
 var current_open_speed := 8.0
 var door_pusher: Node2D
@@ -23,7 +25,18 @@ var dangerous_time_remaining := 0.0
 func _ready() -> void:
 	add_to_group("tactical_door")
 	freeze = true
+	simulated_rotation = rotation
 	$PanelCollision.disabled = false
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	queue_redraw()
+
+func _draw() -> void:
+	# The leaf and its shadow are built from individual snapped cells. The old
+	# Polygon2D presentation remains hidden in the scene only for compatibility.
+	PIXELS.stipple_rect(self, Rect2(0, 2, 4, 16), Color(0.035, 0.02, 0.05, 0.48), 29, 3)
+	PIXELS.material_panel(self, Rect2(-2, 0, 4, 16), Color("17131b"), Color("843f2b"), Color("c07340"), Color("4b251f"), 29, &"wood")
+	for y in range(2, 14, 4): PIXELS.pixel(self, Vector2(0, y), Color("c07340"))
+	PIXELS.pixel(self, Vector2(0, 13), Color("f2bf4c"))
 
 func get_tactical_door_id() -> String:
 	return "door:%d:%d" % [roundi(global_position.x / 8.0), roundi(global_position.y / 8.0)]
@@ -44,7 +57,11 @@ func _physics_process(delta: float) -> void:
 	var previous_rotation := rotation
 	var remaining_ratio := clampf(absf(angle_difference(rotation, target_rotation)) / max_open_angle, 0.0, 1.0)
 	var eased_speed := current_open_speed * lerpf(0.24, 1.0, smoothstep(0.0, 0.42, remaining_ratio))
-	rotation = move_toward(rotation, target_rotation, eased_speed * delta)
+	# Accumulate the physical angle continuously, then expose only authored
+	# 5.625-degree frames. Snapping the accumulator itself made gentle doors
+	# stall forever whenever one frame's delta was smaller than half a step.
+	simulated_rotation = move_toward(simulated_rotation, target_rotation, eased_speed * delta)
+	rotation = snappedf(simulated_rotation, PI / 32.0)
 	var actual_speed := absf(angle_difference(previous_rotation, rotation)) / maxf(delta, 0.0001)
 	if is_dangerous and actual_speed >= knockdown_speed:
 		for body in $HitArea.get_overlapping_bodies():
@@ -66,7 +83,7 @@ func _physics_process(delta: float) -> void:
 				Events.door_impact.emit(global_position, 1.35)
 				current_open_speed *= 0.48
 				is_dangerous = false
-	if absf(rotation - target_rotation) <= 0.01:
+	if absf(simulated_rotation - target_rotation) <= 0.01:
 		rotation = target_rotation
 		current_state = DoorState.OPEN
 		# Doors are one-way state machines and never close again. Re-enabling the
@@ -89,7 +106,8 @@ func _begin_open(pusher_node: Node2D, pusher_position: Vector2, pusher_velocity:
 	var side_normal := Vector2.RIGHT.rotated(global_rotation)
 	var side := signf((pusher_position - global_position).dot(side_normal))
 	if is_zero_approx(side): side = 1.0
-	target_rotation = side * max_open_angle
+	simulated_rotation = rotation
+	target_rotation = snappedf(side * max_open_angle, PI / 32.0)
 	is_dangerous = pusher_velocity.length() >= dangerous_speed_threshold
 	dangerous_time_remaining = dangerous_window if is_dangerous else 0.0
 	current_open_speed = slam_speed if is_dangerous else gentle_speed

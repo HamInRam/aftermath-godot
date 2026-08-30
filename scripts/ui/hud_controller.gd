@@ -435,8 +435,9 @@ func _set_card_accent(card: ColorRect, color: Color) -> void:
 
 func _pulse(item: CanvasItem, amount := 1.10) -> void:
 	if not is_instance_valid(item): return
-	item.scale = Vector2(amount, amount)
-	create_tween().tween_property(item, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	item.modulate = Color("73f7e4")
+	item.scale = Vector2.ONE
+	create_tween().tween_property(item, "modulate", Color.WHITE, 0.14)
 
 func _make_label(pos: Vector2, size: int, color: Color) -> Label:
 	var label := Label.new()

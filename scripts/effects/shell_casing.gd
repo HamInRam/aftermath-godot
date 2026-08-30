@@ -1,5 +1,7 @@
 extends Node2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 const CLINK_STREAMS := [
 	preload("res://assets/audio/sfx/casing_01.wav"),
 	preload("res://assets/audio/sfx/casing_02.wav"),
@@ -16,12 +18,24 @@ var played_bounce := false
 var allow_bounce := false
 var cleanup_amount := 1.0
 var bloodied := false
+var casing_tint := Color("ffe06b")
+var simulated_position := Vector2.ZERO
+var simulated_rotation := 0.0
 
 @onready var clink_audio: AudioStreamPlayer2D = $ClinkAudio
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
 	clink_audio.stream = CLINK_STREAMS.pick_random()
+	simulated_position = position
+	simulated_rotation = rotation
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	queue_redraw()
+
+func _draw() -> void:
+	PIXELS.pixel(self, Vector2(1, 1), Color(0.035, 0.02, 0.05, 0.42))
+	var casing_color := casing_tint
+	PIXELS.material_rect(self, Rect2(0, 0, 2, 1), casing_color, casing_color.lightened(0.22), casing_color.darkened(0.24), get_instance_id(), &"metal")
 
 func setup(shot_direction: Vector2, enemy_owned: bool) -> void:
 	var side := shot_direction.normalized().rotated(-PI * 0.5)
@@ -30,12 +44,15 @@ func setup(shot_direction: Vector2, enemy_owned: bool) -> void:
 	spin = randf_range(-18.0, 18.0)
 	launch_speed = velocity.length()
 	allow_bounce = randf() < 0.38
-	modulate = Color("c87558") if enemy_owned else Color("ffe06b")
+	casing_tint = Color("c87558") if enemy_owned else Color("ffe06b")
+	queue_redraw()
 
 func _process(delta: float) -> void:
 	if settled: return
-	position += velocity * delta
-	rotation += spin * delta
+	simulated_position += velocity * delta
+	simulated_rotation += spin * delta
+	position = simulated_position.round()
+	rotation = snappedf(simulated_rotation, PI / 8.0)
 	velocity *= exp(-8.5 * delta)
 	spin *= exp(-7.0 * delta)
 	if allow_bounce and not played_bounce and velocity.length() < 8.5:
@@ -45,6 +62,8 @@ func _process(delta: float) -> void:
 		settled = true
 		position = position.round()
 		rotation = snappedf(rotation, PI * 0.5)
+		simulated_position = position
+		simulated_rotation = rotation
 		var impact_volume := remap(clampf(launch_speed, 16.0, 34.0), 16.0, 34.0, -16.0, -8.0)
 		_check_blood_contact()
 		_play_clink(impact_volume - (4.0 if bloodied else 0.0), 0.82 if bloodied else 0.88, 1.02 if bloodied else 1.18)
@@ -53,7 +72,8 @@ func _check_blood_contact() -> void:
 	for source in get_tree().get_nodes_in_group("blood_source"):
 		if source is Node2D and global_position.distance_squared_to(source.global_position) <= 49.0:
 			bloodied = true
-			modulate = modulate.lerp(Color("7f1731"), 0.58)
+			casing_tint = casing_tint.lerp(Color("7f1731"), 0.58)
+			queue_redraw()
 			return
 
 func _play_clink(volume: float, pitch_low: float, pitch_high: float) -> void:

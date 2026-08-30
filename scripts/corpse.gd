@@ -3,8 +3,10 @@ extends CharacterBody2D
 static var weapon_pose_cursors: Dictionary = {}
 const PIXEL_RAGDOLL := preload("res://scripts/effects/pixel_ragdoll_2d.gd")
 const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 
 var spin := 0.0
+var simulated_rotation := 0.0
 var wound_variant := 0
 var wound_severity := 1.0
 var death_style := "firearm"
@@ -32,13 +34,15 @@ var rig_kind := "human"
 var victim_role := "enemy"
 var ragdoll_impact_profile: Dictionary = {}
 var cleanup_tracking := true
+var cleanup_freeze_delay := 0.0
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
 	queue_redraw()
 
 func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, blood_power := 1.0, style := "firearm", hit_zone := "torso", new_attack_id := "pistol", new_travel_distance := 0.0, new_rig_kind := "human", new_victim_role := "enemy", initial_pose := {}) -> void:
-	rotation = facing if initial_pose is Dictionary and not initial_pose.is_empty() else facing + randf_range(-0.35, 0.35)
+	rotation = snappedf(facing if initial_pose is Dictionary and not initial_pose.is_empty() else facing + randf_range(-0.35, 0.35), PI / 8.0)
+	simulated_rotation = rotation
 	wound_variant = randi_range(0, 2)
 	wound_severity = clampf(blood_power, 0.7, 1.8)
 	death_style = style
@@ -61,7 +65,23 @@ func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, bl
 	wound_kind = str(violence.get("wound", "puncture"))
 	_configure_dismemberment(hit_zone, clampi(int(violence.get("limbs", 0)), 0, 3))
 	ragdoll_impact_profile = RAGDOLL_IMPACT.resolve(attack_id, travel_distance, hit_zone, rig_kind)
-	var resolved_linear := maxf(knockback * 0.5, float(ragdoll_impact_profile.linear_force))
+	# Enemy deaths happen while play continues, unlike the player's game-over beat.
+	# Give them a longer, clearer articulation window so the shared ragdoll is
+	# actually readable amid camera movement, blood, and ongoing combat.
+	if victim_role == "enemy":
+		ragdoll_impact_profile["presentation_scale"] = 1.55
+		ragdoll_impact_profile["settle_bonus"] = 0.85
+	var authored_root_scale := 1.0
+	match attack_id:
+		"pistol": authored_root_scale = 1.36
+		"smg": authored_root_scale = 1.42
+		"lmg": authored_root_scale = 1.18
+		"shotgun": authored_root_scale = 1.05
+		"bat", "execution_bat", "door": authored_root_scale = 1.24
+		"fist", "knife", "hound_bite": authored_root_scale = 0.78
+	var minimum_readable_force := 18.0 if attack_id in ["fist", "knife", "hound_bite"] else 30.0
+	var resolved_linear := clampf(maxf(maxf(knockback * 0.65, float(ragdoll_impact_profile.linear_force) * authored_root_scale), minimum_readable_force), 12.0, 104.0)
+	if victim_role == "enemy": resolved_linear = minf(112.0, resolved_linear * 1.22)
 	velocity = impact_direction.normalized() * resolved_linear
 	spin = randf_range(-2.2, 2.2) * float(ragdoll_impact_profile.spin_force) * clampf(resolved_linear / 30.0, 0.45, 2.2)
 	if Settings.ragdoll_enabled:
@@ -126,12 +146,17 @@ func _configure_dismemberment(hit_zone: String, limb_count: int) -> void:
 		return
 
 func _physics_process(delta: float) -> void:
+	if cleanup_freeze_delay > 0.0:
+		cleanup_freeze_delay = maxf(0.0, cleanup_freeze_delay - delta)
+		if cleanup_freeze_delay <= 0.0 and is_instance_valid(ragdoll):
+			ragdoll.freeze_pose()
 	if overkill_window > 0.0:
 		overkill_window = maxf(0.0, overkill_window - delta)
 		if overkill_window <= 0.0: collision_layer = 0
 	if death_twitch > 0.0:
 		death_twitch -= delta
-		rotation += sin(death_twitch * 90.0) * 0.012
+		simulated_rotation += sin(death_twitch * 90.0) * 0.012
+		rotation = snappedf(simulated_rotation, PI / 8.0)
 		queue_redraw()
 	_update_bleeding(delta)
 	if is_instance_valid(dragging_actor):
@@ -148,11 +173,12 @@ func _physics_process(delta: float) -> void:
 				system.spawn_drag_smear(global_position + wound_offset.rotated(rotation), drag_vector.normalized(), 0.65 * wound_severity)
 			drag_stain_distance = 0.0
 		last_drag_position = global_position
-		rotation = lerp_angle(rotation, drag_direction.angle(), 1.0 - exp(-5.0 * delta))
+		simulated_rotation = lerp_angle(simulated_rotation, drag_direction.angle(), 1.0 - exp(-5.0 * delta))
+		rotation = snappedf(simulated_rotation, PI / 8.0)
 		return
 	if velocity.length_squared() < 0.1:
 		velocity = Vector2.ZERO
-		if bleed_time <= 0.0: set_physics_process(false)
+		if bleed_time <= 0.0 and cleanup_freeze_delay <= 0.0: set_physics_process(false)
 		return
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
@@ -169,7 +195,11 @@ func _physics_process(delta: float) -> void:
 		velocity = velocity.slide(collision.get_normal()) * 0.3
 		spin *= 0.35
 	velocity = velocity.move_toward(Vector2.ZERO, 95.0 * delta)
-	rotation += spin * delta
+	# Accumulate continuous angular momentum separately from the authored visual
+	# frames. Quantizing `rotation + spin * delta` directly discarded virtually
+	# every pistol/SMG impulse before it could cross a 22.5-degree frame.
+	simulated_rotation += spin * delta
+	rotation = snappedf(simulated_rotation, PI / 8.0)
 	spin = move_toward(spin, 0.0, 7.0 * delta)
 
 func _update_bleeding(delta: float) -> void:
@@ -263,7 +293,15 @@ func set_cleanup_tracking(enabled: bool) -> void:
 func enter_cleanup_stable_state() -> void:
 	overkill_window = 0.0
 	collision_layer = 0
-	if is_instance_valid(ragdoll): ragdoll.freeze_pose()
+	if not is_instance_valid(ragdoll): return
+	# The final enemy used to become rigid the instant cleanup started, cutting
+	# off the most visible portion of its death animation. Keep a short safe
+	# presentation tail, then freeze the settled pose for cleanup interactions.
+	if ragdoll.active_time > 0.35 and not ragdoll.frozen:
+		cleanup_freeze_delay = minf(0.85, ragdoll.active_time - 0.25)
+		set_physics_process(true)
+	else:
+		ragdoll.freeze_pose()
 
 func extract_bag() -> bool:
 	if not bagged: return false
@@ -303,50 +341,52 @@ func _draw_compact_pixel_corpse() -> void:
 	var skin := Color("e1a07f")
 	var blood := NeonPalette.BLOOD_DARK
 	var tissue := NeonPalette.TISSUE
-	var pose_y: float = float([-1.0, -2.0, 1.0, 2.0][corpse_pose_variant])
+	var pose_y := int([-1, -2, 1, 2][corpse_pose_variant])
+	var paint := func(area: Rect2, color: Color, seed: int, pattern: StringName = &"fabric") -> void:
+		PIXEL_PAINTER.material_rect(self, area, color, color.lightened(0.13), color.darkened(0.18), seed, pattern)
 	# Legs remain separate pixels so the silhouette reads as a fallen person.
 	if not missing_modules.has("leg_back"):
-		draw_rect(Rect2(-8, pose_y - 3, 5, 2), ink)
-	draw_rect(Rect2(-8, pose_y + 2, 5, 2), ink)
+		paint.call(Rect2(-8, pose_y - 3, 5, 2), ink, 3, &"fabric")
+	paint.call(Rect2(-8, pose_y + 2, 5, 2), ink, 5, &"fabric")
 	# Compact torso, capped at nine pixels instead of the later 32–48 px art.
 	if dismemberment_state in ["bisected", "torso_split"]:
-		draw_rect(Rect2(-3, pose_y - 3, 3, 6), cloth)
-		draw_rect(Rect2(2, pose_y - 3, 3, 6), cloth)
-		draw_rect(Rect2(0, pose_y - 2, 2, 4), tissue)
+		paint.call(Rect2(-3, pose_y - 3, 3, 6), cloth, 7)
+		paint.call(Rect2(2, pose_y - 3, 3, 6), cloth, 11)
+		paint.call(Rect2(0, pose_y - 2, 2, 4), tissue, 13, &"grain")
 	elif dismemberment_state in ["upper_destroyed", "torso_torn", "torso_cavity", "side_torn"]:
-		draw_rect(Rect2(-3, pose_y - 3, 5, 6), cloth_shadow)
-		draw_rect(Rect2(2, pose_y - 2, 3, 4), blood)
-		draw_rect(Rect2(2, pose_y - 1, 2, 2), tissue)
+		paint.call(Rect2(-3, pose_y - 3, 5, 6), cloth_shadow, 17)
+		paint.call(Rect2(2, pose_y - 2, 3, 4), blood, 19, &"grain")
+		paint.call(Rect2(2, pose_y - 1, 2, 2), tissue, 23, &"grain")
 	else:
-		draw_rect(Rect2(-3, pose_y - 3, 8, 6), ink)
-		draw_rect(Rect2(-2, pose_y - 2, 6, 4), cloth)
-		draw_rect(Rect2(-1, pose_y - 1, 4, 2), cloth_shadow)
+		paint.call(Rect2(-3, pose_y - 3, 8, 6), ink, 29, &"grain")
+		paint.call(Rect2(-2, pose_y - 2, 6, 4), cloth, 31)
+		paint.call(Rect2(-1, pose_y - 1, 4, 2), cloth_shadow, 37)
 	if not missing_modules.has("arm_front"):
-		draw_rect(Rect2(-1, pose_y - 5, 6, 2), ink)
+		paint.call(Rect2(-1, pose_y - 5, 6, 2), ink, 41, &"fabric")
 	if not missing_modules.has("arm_back"):
-		draw_rect(Rect2(-1, pose_y + 3, 6, 2), ink)
+		paint.call(Rect2(-1, pose_y + 3, 6, 2), ink, 43, &"fabric")
 	if not missing_modules.has("head"):
-		draw_rect(Rect2(5, pose_y - 2, 4, 4), ink)
-		draw_rect(Rect2(6, pose_y - 1, 2, 2), skin)
+		paint.call(Rect2(5, pose_y - 2, 4, 4), ink, 47, &"grain")
+		paint.call(Rect2(6, pose_y - 1, 2, 2), skin, 53, &"grain")
 	else:
-		draw_rect(Rect2(5, pose_y - 2, 3, 4), blood)
-		draw_rect(Rect2(6, pose_y - 1, 1, 2), tissue)
+		paint.call(Rect2(5, pose_y - 2, 3, 4), blood, 59, &"grain")
+		paint.call(Rect2(6, pose_y - 1, 1, 2), tissue, 61, &"grain")
 		# Detached head remains beside the body instead of disappearing into blood.
-		draw_rect(Rect2(11, pose_y - 6, 4, 4), ink)
-		draw_rect(Rect2(12, pose_y - 5, 2, 2), skin)
-		draw_rect(Rect2(11, pose_y - 4, 2, 2), blood)
+		paint.call(Rect2(11, pose_y - 6, 4, 4), ink, 67, &"grain")
+		paint.call(Rect2(12, pose_y - 5, 2, 2), skin, 71, &"grain")
+		paint.call(Rect2(11, pose_y - 4, 2, 2), blood, 73, &"grain")
 	if missing_modules.has("arm_front"):
-		draw_rect(Rect2(1, pose_y - 10, 7, 2), ink)
-		draw_rect(Rect2(6, pose_y - 10, 2, 2), tissue)
+		paint.call(Rect2(1, pose_y - 10, 7, 2), ink, 79)
+		paint.call(Rect2(6, pose_y - 10, 2, 2), tissue, 83, &"grain")
 	if missing_modules.has("arm_back"):
-		draw_rect(Rect2(0, pose_y + 8, 7, 2), ink)
-		draw_rect(Rect2(5, pose_y + 8, 2, 2), tissue)
+		paint.call(Rect2(0, pose_y + 8, 7, 2), ink, 89)
+		paint.call(Rect2(5, pose_y + 8, 2, 2), tissue, 97, &"grain")
 	if missing_modules.has("leg_back"):
-		draw_rect(Rect2(-12, pose_y + 7, 8, 3), ink)
-		draw_rect(Rect2(-5, pose_y + 7, 2, 3), tissue)
+		paint.call(Rect2(-12, pose_y + 7, 8, 3), ink, 101)
+		paint.call(Rect2(-5, pose_y + 7, 2, 3), tissue, 103, &"grain")
 	# One small wound mark keeps firearm identity without burying the silhouette.
 	if dismemberment_state != "intact":
-		draw_rect(Rect2(wound_offset * 0.45 + Vector2(-1, -1), Vector2(2, 2)), blood)
+		PIXEL_PAINTER.material_circle(self, (wound_offset * 0.45).round(), 1, blood, blood.lightened(0.16), blood.darkened(0.24), 107)
 
 func _draw() -> void:
 	# Corpse art shares the living actor's compact 16–20 px body core while
@@ -354,24 +394,22 @@ func _draw() -> void:
 	# The previous 0.45 scale reduced severed edges to sub-pixel noise. This is
 	# still compact beside a living actor but leaves 2–4 physical pixels for each
 	# missing module, cavity, and detached piece at the final viewport scale.
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(0.72, 0.72))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if is_instance_valid(ragdoll):
 		if bagged:
-			draw_rect(Rect2(-12, -7, 24, 14), NeonPalette.INK)
-			draw_rect(Rect2(-10, -5, 20, 10), Color("242a31"))
-			draw_line(Vector2(-9, 0), Vector2(8, 0), Color("71808c"), 2.0)
-			draw_circle(Vector2(9, 0), 2.0, NeonPalette.PAPER)
+			PIXEL_PAINTER.material_panel(self, Rect2(-12, -7, 24, 14), NeonPalette.INK, Color("242a31"), Color("39424b"), Color("14171c"), 109, &"fabric")
+			PIXEL_PAINTER.line(self, Vector2(-9, 0), Vector2(8, 0), Color("71808c"))
+			PIXEL_PAINTER.material_circle(self, Vector2(9, 0), 2, NeonPalette.PAPER, Color.WHITE, Color("a9a3a4"), 113)
 		elif bag_progress > 0.0:
-			draw_arc(Vector2.ZERO, 15.0, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, 24, NeonPalette.CYAN, 2.0)
+			PIXEL_PAINTER.arc(self, Vector2.ZERO, 15, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, NeonPalette.CYAN, 24)
 		return
 	if bagged:
-		draw_rect(Rect2(-12, -7, 24, 14), NeonPalette.INK)
-		draw_rect(Rect2(-10, -5, 20, 10), Color("242a31"))
-		draw_line(Vector2(-9, 0), Vector2(8, 0), Color("71808c"), 2.0)
-		draw_circle(Vector2(9, 0), 2.0, NeonPalette.PAPER)
+		PIXEL_PAINTER.material_panel(self, Rect2(-12, -7, 24, 14), NeonPalette.INK, Color("242a31"), Color("39424b"), Color("14171c"), 127, &"fabric")
+		PIXEL_PAINTER.line(self, Vector2(-9, 0), Vector2(8, 0), Color("71808c"))
+		PIXEL_PAINTER.material_circle(self, Vector2(9, 0), 2, NeonPalette.PAPER, Color.WHITE, Color("a9a3a4"), 131)
 		return
 	if bag_progress > 0.0:
-		draw_arc(Vector2.ZERO, 15.0, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, 24, NeonPalette.CYAN, 2.0)
+		PIXEL_PAINTER.arc(self, Vector2.ZERO, 15, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, NeonPalette.CYAN, 24)
 	_draw_compact_pixel_corpse()
 	return
 	# Authored corpse sprites now carry the human silhouette and major trauma.

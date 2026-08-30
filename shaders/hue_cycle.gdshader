@@ -12,7 +12,9 @@ vec3 hsv2rgb(vec3 c) {
 }
 
 void fragment() {
-	vec4 tex = texture(TEXTURE, UV);
+	vec2 texture_size = vec2(textureSize(TEXTURE, 0));
+	vec2 pixel_uv = (floor(UV * texture_size) + vec2(0.5)) / max(texture_size, vec2(1.0));
+	vec4 tex = texture(TEXTURE, pixel_uv);
 	vec3 tint = enable_cycle ? hsv2rgb(vec3(fract(TIME * cycle_speed), base_saturation, base_value)) : vec3(0.24, 0.16, 0.3);
 	COLOR = vec4(tex.rgb * tint * 2.0, tex.a) * COLOR;
 }

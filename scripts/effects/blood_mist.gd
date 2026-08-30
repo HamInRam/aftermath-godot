@@ -65,5 +65,4 @@ func _draw() -> void:
 		for step in range(1, trail_length + 1):
 			var trail_pixel := Vector2(roundi(pixel_position.x + trail_direction.x * step), roundi(pixel_position.y + trail_direction.y * step))
 			draw_rect(Rect2(trail_pixel, Vector2.ONE), Color(color, color.a * (1.0 - float(step) / float(trail_length + 1))))
-		var pixel_size := 2 if float(particle.size) >= 0.92 else 1
-		draw_rect(Rect2(pixel_position - Vector2(floori(pixel_size / 2.0), floori(pixel_size / 2.0)), Vector2(pixel_size, pixel_size)), color)
+		draw_rect(Rect2(pixel_position, Vector2.ONE), color)

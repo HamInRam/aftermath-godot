@@ -1,6 +1,6 @@
 extends "res://scripts/actor.gd"
 
-signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
+signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String, shooter: CollisionObject2D)
 signal clean_requested(world_position: Vector2, stroke_direction: Vector2, stroke_strength: float, stroke_start: Vector2)
 signal cleaner_requested(world_position: Vector2)
 signal died(source_position: Vector2)
@@ -12,6 +12,8 @@ signal world_interaction_requested
 
 const MELEE_TRAIL_SCENE := preload("res://scenes/effects/melee_trail.tscn")
 const AIM_CONTROLLER := preload("res://scripts/controllers/aim_controller.gd")
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+const PIXEL_ACTOR_FRAMES := preload("res://utility/pixel_actor_texture_factory.gd")
 const PLAYER_GUNS := [
 	preload("res://resources/weapons/pistol.tres"),
 	preload("res://resources/weapons/smg.tres"),
@@ -99,6 +101,8 @@ func _ready() -> void:
 	aim_target_world = global_position + Vector2.RIGHT.rotated(rotation) * 90.0
 	# The authored sprite remains as an invisible animation carrier for weapon
 	# anchors. The visible body is the constrained lifecycle skeleton.
+	body_sprite.texture = PIXEL_ACTOR_FRAMES.get_frame("player")
+	$FakeShadow.texture = body_sprite.texture
 	legs_visual.visible = false
 	body_sprite.self_modulate = Color(1, 1, 1, 0)
 	$FakeShadow.visible = false
@@ -615,7 +619,7 @@ func _spawn_melee_trail(data: Dictionary, connected_hit := false) -> void:
 	var trail = MELEE_TRAIL_SCENE.instantiate()
 	if not RuntimeBudget.try_add("transient_fx", trail, get_tree().current_scene): return
 	trail.global_position = melee_tip.global_position
-	trail.global_rotation = melee_tip.global_rotation
+	trail.global_rotation = snappedf(melee_tip.global_rotation, PI / 8.0)
 	var tip_distance := global_position.distance_to(melee_tip.global_position)
 	var remaining_visual_reach := maxf(2.0, float(data.range) - tip_distance)
 	trail.setup(current_melee_type, remaining_visual_reach, deg_to_rad(float(data.angle)), float(data.duration), data.color, connected_hit)
@@ -740,7 +744,7 @@ func set_cleanup_mode(enabled: bool) -> void:
 
 func _on_gun_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
 	if is_instance_valid(lifecycle_rig): lifecycle_rig.trigger_weapon_recoil(1.0)
-	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id)
+	projectile_requested.emit(origin, direction, enemy_owned, damage, weapon_id, self)
 
 func _on_actor_died(source_position: Vector2) -> void:
 	melee_animation_generation += 1
@@ -772,40 +776,39 @@ func _draw() -> void:
 	_draw_aim_laser()
 	if not is_dead:
 		var identity := Color(0.39, 1.0, 0.88, 0.78)
-		draw_line(Vector2(-7, -6), Vector2(-4, -6), identity, 1.0)
-		draw_line(Vector2(-7, -6), Vector2(-7, -3), identity, 1.0)
-		draw_line(Vector2(-7, 6), Vector2(-4, 6), identity, 1.0)
+		PIXEL_PAINTER.line(self, Vector2(-7, -6), Vector2(-4, -6), identity)
+		PIXEL_PAINTER.line(self, Vector2(-7, -6), Vector2(-7, -3), identity)
+		PIXEL_PAINTER.line(self, Vector2(-7, 6), Vector2(-4, 6), identity)
 	if is_dead:
-		draw_rect(Rect2(-5, -6, 10, 12), Color(0.2, 0.18, 0.22, 0.75))
+		PIXEL_PAINTER.material_rect(self, Rect2(-5, -6, 10, 12), Color(0.2, 0.18, 0.22, 0.75), Color(0.26, 0.23, 0.28, 0.75), Color(0.1, 0.08, 0.12, 0.75), 17, &"fabric")
 	if cleanup_mode:
-		draw_line(Vector2(3, 0), Vector2(11, 0), Color("d7e8ef"), 1.0)
+		PIXEL_PAINTER.line(self, Vector2(3, 0), Vector2(11, 0), Color("d7e8ef"))
 		var mop_dirty := clampf(visual_mop_saturation, 0.0, 1.0)
 		var eased_dirt := smoothstep(0.0, 1.0, mop_dirty)
 		var mop_color := Color("81d4de").lerp(Color("c24a52"), minf(eased_dirt * 1.35, 1.0))
 		if mop_dirty > 0.62:
 			mop_color = mop_color.lerp(Color("730019"), smoothstep(0.62, 1.0, mop_dirty))
 		if current_cleanup_tool == "pressure_washer":
-			draw_rect(Rect2(8, -2, 4, 4), Color("5bc8e8"))
-			draw_line(Vector2(12, 0), Vector2(20, 0), Color(0.55, 0.9, 1.0, 0.65), 1.0)
-		else: draw_rect(Rect2(8, -3, 2, 6), mop_color)
+			PIXEL_PAINTER.material_block(self, Vector2(10, 0), Vector2(4, 4), Color("5bc8e8"), 19, &"metal")
+			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(20, 0), Color(0.55, 0.9, 1.0, 0.65))
+		else: PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, 6), mop_color, 23, &"fabric")
 		if mop_dirty >= 0.75:
-			draw_circle(Vector2(9, 4), 1.0 + mop_dirty, Color(0.65, 0.0, 0.08, 0.85))
+			PIXEL_PAINTER.material_circle(self, Vector2(9, 4), 1, Color(0.65, 0.0, 0.08, 0.85), Color(0.85, 0.04, 0.12, 0.85), Color(0.3, 0.0, 0.04, 0.85), 29)
 		if ultraviolet_lamp_active:
 			var cone_color := Color(0.58, 0.2, 1.0, 0.12)
-			var points := PackedVector2Array([Vector2(7, 0), Vector2(66, -29), Vector2(66, 29)])
-			draw_colored_polygon(points, cone_color)
-			draw_line(Vector2(7, 0), Vector2(66, -29), Color(0.75, 0.45, 1.0, 0.3), 1.0)
-			draw_line(Vector2(7, 0), Vector2(66, 29), Color(0.75, 0.45, 1.0, 0.3), 1.0)
+			PIXEL_PAINTER.line(self, Vector2(7, 0), Vector2(66, -29), Color(0.75, 0.45, 1.0, 0.3))
+			PIXEL_PAINTER.line(self, Vector2(7, 0), Vector2(66, 29), Color(0.75, 0.45, 1.0, 0.3))
+			for distance in range(14, 66, 6):
+				PIXEL_PAINTER.pixel(self, Vector2(distance, roundi(sin(float(distance)) * 0.3 * distance)), cone_color)
 		if ultraviolet_scan_time > 0.0:
 			var scan_progress := 1.0 - ultraviolet_scan_time / ULTRAVIOLET_SCAN_DURATION
 			var scan_alpha := sin(scan_progress * PI) * (0.48 + 0.18 * absf(sin(scan_progress * PI * 4.0)))
-			draw_circle(Vector2.ZERO, 82.0, Color(0.48, 0.16, 0.82, scan_alpha * 0.07))
-			draw_arc(Vector2.ZERO, 82.0, 0.0, TAU, 64, Color(0.76, 0.42, 1.0, scan_alpha), 1.25)
+			PIXEL_PAINTER.arc(self, Vector2.ZERO, 82, 0.0, TAU, Color(0.76, 0.42, 1.0, scan_alpha), 64)
 	if is_executing:
-		draw_arc(Vector2(6, -3), 3.0, -1.2, 1.2, 6, Color("ffd6c2"), 2.0)
-		draw_arc(Vector2(6, 3), 3.0, -1.2, 1.2, 6, Color("ffd6c2"), 2.0)
+		PIXEL_PAINTER.arc(self, Vector2(6, -3), 3, -1.2, 1.2, Color("ffd6c2"), 6)
+		PIXEL_PAINTER.arc(self, Vector2(6, 3), 3, -1.2, 1.2, Color("ffd6c2"), 6)
 	if execution_pulse > 0.0:
-		draw_circle(Vector2(9, 0), 3.5, Color(1.0, 0.18, 0.25, execution_pulse / 0.11))
+		PIXEL_PAINTER.circle(self, Vector2(9, 0), 3, Color(1.0, 0.18, 0.25, execution_pulse / 0.11), true)
 
 func _draw_aim_laser() -> void:
 	if not Settings.aim_laser_enabled or cleanup_mode or is_dead or equipped_mode != "gun" or not is_instance_valid(gun) or gun.gun_data == null: return
@@ -819,9 +822,9 @@ func _draw_aim_laser() -> void:
 	for segment in range(4):
 		var from_t := float(segment) / 4.0
 		var to_t := minf(1.0, from_t + 0.16)
-		draw_line(start_local.lerp(end_local, from_t), start_local.lerp(end_local, to_t), laser_color, 1.0)
+		PIXEL_PAINTER.line(self, start_local.lerp(end_local, from_t), start_local.lerp(end_local, to_t), laser_color)
 	if gun.pellet_count > 1:
 		var cone := deg_to_rad(gun.get_total_spread_degrees())
 		for side in [-1.0, 1.0]:
 			var fan_end: Vector2 = start_world + Vector2.RIGHT.rotated(actual_aim_angle + cone * side) * 24.0
-			draw_line(start_local, to_local(fan_end), Color(laser_color, 0.32), 1.0)
+			PIXEL_PAINTER.line(self, start_local, to_local(fan_end), Color(laser_color, 0.32))

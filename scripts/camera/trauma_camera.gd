@@ -99,9 +99,13 @@ func _physics_process(delta: float) -> void:
 	var shake := trauma * trauma
 	if shake <= 0.0001:
 		smooth_shake_offset = smooth_shake_offset.lerp(Vector2.ZERO, 1.0 - exp(-18.0 * delta))
-		offset = smooth_shake_offset.round()
-		rotation = smooth_tilt + (sin(drift_time * drift_speed) * max_drift_angle if ambient_drift_enabled else 0.0)
+		var tilt_pixel := roundi(rad_to_deg(smooth_tilt) * 1.8)
+		var drift_pixel := roundi(sin(drift_time * drift_speed)) if ambient_drift_enabled else 0
+		offset = smooth_shake_offset.round() + Vector2(drift_pixel, tilt_pixel)
+		rotation = 0.0
 		return
 	smooth_shake_offset = Vector2(noise.get_noise_1d(noise_time), noise.get_noise_1d(noise_time + 71.7)) * max_offset * shake * shake_strength
-	offset = smooth_shake_offset.round()
-	rotation = smooth_tilt + (sin(drift_time * drift_speed) * max_drift_angle if ambient_drift_enabled else 0.0)
+	var tilt_pixel := roundi(rad_to_deg(smooth_tilt) * 1.8)
+	var drift_pixel := roundi(sin(drift_time * drift_speed)) if ambient_drift_enabled else 0
+	offset = smooth_shake_offset.round() + Vector2(drift_pixel, tilt_pixel)
+	rotation = 0.0

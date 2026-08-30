@@ -4,7 +4,7 @@ extends Node2D
 signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String)
 
 const DRY_FIRE_STREAM := preload("res://assets/audio/sfx/dry_fire.wav")
-const PISTOL_TEXTURE := preload("res://assets/weapons/pistol_10x4.png")
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 
 @export var gun_data: Resource
 @export var enemy_owned := false
@@ -73,6 +73,8 @@ var active_reload_duration := 1.05
 
 func _ready() -> void:
 	set_gun_data(gun_data, true)
+	weapon_sprite.visible = false
+	weapon_shadow.visible = false
 	reload_timer.timeout.connect(_on_reload_timer_timeout)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
@@ -154,15 +156,22 @@ func set_gun_data(data: Resource, refill := true) -> void:
 		dry_fire_audio.stream = gun_data.dry_fire_stream if gun_data.dry_fire_stream != null else DRY_FIRE_STREAM
 		mechanical_audio.stream = dry_fire_audio.stream
 		punch_audio.stream = shot_audio.stream
-		weapon_sprite.texture = gun_data.weapon_texture if gun_data.weapon_texture != null else PISTOL_TEXTURE
-		weapon_shadow.texture = weapon_sprite.texture
-		var weapon_half_width := weapon_sprite.texture.get_width() * 0.5
-		weapon_sprite.position.x = weapon_half_width
-		weapon_shadow.position.x = weapon_half_width
-		muzzle.position.x = weapon_sprite.texture.get_width() + 1.0
+		var weapon_length := _weapon_visual_length()
+		weapon_sprite.position.x = weapon_length * 0.5
+		weapon_shadow.position.x = weapon_length * 0.5
+		muzzle.position.x = weapon_length + 1.0
+		weapon_sprite.visible = false
+		weapon_shadow.visible = false
 		if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 		if not enemy_owned: Events.publish_ammo_reserve(reserve_ammo)
 	queue_redraw()
+
+func _weapon_visual_length() -> float:
+	match weapon_id:
+		"smg": return 12.0
+		"shotgun": return 15.0
+		"lmg": return 14.0
+		_: return 9.0
 
 func set_weapon_ammo(target_weapon_id: String, rounds: int) -> void:
 	ammo_by_weapon[target_weapon_id] = maxi(0, rounds)
@@ -198,13 +207,36 @@ func _process(delta: float) -> void:
 	if is_reloading and reload_duration > 0.0:
 		var reload_progress := 1.0 - reload_timer.time_left / maxf(0.001, active_reload_duration)
 		var reload_arc := sin(clampf(reload_progress, 0.0, 1.0) * PI)
-		weapon_pivot.rotation = lerpf(weapon_pivot.rotation, -0.62 * reload_arc, 1.0 - exp(-24.0 * delta))
-		weapon_pivot.scale = weapon_pivot.scale.lerp(Vector2(1.0 - reload_arc * 0.08, 1.0), 1.0 - exp(-20.0 * delta))
+		weapon_pivot.rotation = snappedf(lerpf(weapon_pivot.rotation, -0.62 * reload_arc, 1.0 - exp(-24.0 * delta)), PI / 16.0)
+		weapon_pivot.scale = Vector2.ONE
 	else:
 		var recoil_angle := -0.035 * recoil * recoil_strength
-		weapon_pivot.rotation = lerpf(weapon_pivot.rotation, recoil_angle, 1.0 - exp(-28.0 * delta))
-		weapon_pivot.scale = weapon_pivot.scale.lerp(Vector2.ONE, 1.0 - exp(-22.0 * delta))
+		weapon_pivot.rotation = snappedf(lerpf(weapon_pivot.rotation, recoil_angle, 1.0 - exp(-28.0 * delta)), PI / 32.0)
+		weapon_pivot.scale = Vector2.ONE
 	queue_redraw()
+
+func _draw() -> void:
+	if weapon_id.is_empty(): return
+	# Render the weapon from native one-world-pixel cells. Texture resources stay
+	# available as metadata/preview art but never enter the live world renderer.
+	var local_angle := snappedf(global_rotation + weapon_pivot.rotation, PI / 8.0) - global_rotation
+	var direction := Vector2.RIGHT.rotated(local_angle)
+	var side := direction.orthogonal()
+	var length := 9
+	var body_color := Color("d8e2df")
+	var accent := Color("27c9ca")
+	match weapon_id:
+		"smg": length = 12; body_color = Color("6f7f86"); accent = Color("ff3d84")
+		"shotgun": length = 15; body_color = Color("9b5b36"); accent = Color("ffe06b")
+		"lmg": length = 14; body_color = Color("59666b"); accent = Color("ff6a3d")
+		_: length = 9
+	var start := direction * 3.0
+	var finish := direction * float(length)
+	PIXEL_PAINTER.material_line(self, start, finish, Color("17141b"), 3 if weapon_id in ["shotgun", "lmg"] else 2, weapon_id.hash(), &"metal")
+	PIXEL_PAINTER.line(self, start + side, finish + side, body_color)
+	PIXEL_PAINTER.pixel(self, finish.round(), accent)
+	var grip := (start + direction * 2.0 - side * 2.0).round()
+	PIXEL_PAINTER.line(self, grip, grip - direction + side * 2.0, Color("38222a"))
 
 func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 	if is_reloading or direction.length_squared() < 0.001: return false

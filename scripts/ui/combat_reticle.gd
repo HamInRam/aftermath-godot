@@ -1,6 +1,8 @@
 class_name CombatReticle
 extends Control
 
+const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+
 var spread_ratio := 0.0
 var combat_visible := true
 var aim_state: Dictionary = {}
@@ -28,12 +30,12 @@ func set_aim_feedback(state: Dictionary, enabled: bool) -> void:
 
 func _draw() -> void:
 	if not combat_visible: return
-	var center := size * 0.5
+	var center := (size * 0.5).round()
 	var actual_offset: Vector2 = aim_state.get("actual_offset", Vector2.ZERO)
 	actual_offset = actual_offset.limit_length(8.0)
-	var actual_center := center + actual_offset
+	var actual_center := (center + actual_offset).round()
 	var spread_pixels := clampf(float(aim_state.get("spread_pixels", spread_ratio * 6.0)), 0.0, 9.0)
-	var gap := 2.0 + spread_pixels
+	var gap := float(roundi(2.0 + spread_pixels))
 	var blocked := bool(aim_state.get("blocked", false))
 	var empty := int(aim_state.get("ammo", 1)) <= 0
 	var reloading := bool(aim_state.get("reloading", false))
@@ -46,24 +48,24 @@ func _draw() -> void:
 	if blocked: color = Color("ff536e")
 	# The tiny center point is player intent. The four ticks are the weapon's
 	# actual ballistic solution and visibly catch up after a fast flick.
-	draw_rect(Rect2(center - Vector2(0.5, 0.5), Vector2.ONE), Color("e8ffff"))
-	if actual_offset.length() > 1.25: draw_line(center, actual_center, Color(color, 0.34), 1.0)
+	PIXEL_PAINTER.pixel(self, center, Color("e8ffff"))
+	if actual_offset.length() > 1.25: PIXEL_PAINTER.line(self, center, actual_center, Color(color, 0.34))
 	if blocked:
-		draw_line(actual_center + Vector2(-3, -3), actual_center + Vector2(3, 3), color, 1.0)
-		draw_line(actual_center + Vector2(-3, 3), actual_center + Vector2(3, -3), color, 1.0)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(-3, -3), actual_center + Vector2(3, 3), color)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(-3, 3), actual_center + Vector2(3, -3), color)
 	else:
-		draw_line(actual_center + Vector2(-gap - 2.0, 0), actual_center + Vector2(-gap, 0), color, 1.0)
-		draw_line(actual_center + Vector2(gap, 0), actual_center + Vector2(gap + 2.0, 0), color, 1.0)
-		draw_line(actual_center + Vector2(0, -gap - 2.0), actual_center + Vector2(0, -gap), color, 1.0)
-		draw_line(actual_center + Vector2(0, gap), actual_center + Vector2(0, gap + 2.0), color, 1.0)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(-gap - 2.0, 0), actual_center + Vector2(-gap, 0), color)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(gap, 0), actual_center + Vector2(gap + 2.0, 0), color)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(0, -gap - 2.0), actual_center + Vector2(0, -gap), color)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(0, gap), actual_center + Vector2(0, gap + 2.0), color)
 	if reloading:
 		var progress := clampf(float(aim_state.get("reload_progress", 0.0)), 0.0, 1.0)
-		draw_arc(actual_center, 8.5, -PI * 0.5, -PI * 0.5 + TAU * progress, 12, Color("82d8ff"), 1.0)
+		PIXEL_PAINTER.arc(self, actual_center, 8, -PI * 0.5, -PI * 0.5 + TAU * progress, Color("82d8ff"), 12)
 	if Settings.reticle_hud_enabled:
 		var ammo := clampi(int(aim_state.get("ammo", 0)), 0, 3)
 		for index in range(3):
 			var pip_color := Color("ffe5a8") if index < ammo else Color(0.24, 0.2, 0.25, 0.75)
-			draw_rect(Rect2(center + Vector2(-4 + index * 3, 11), Vector2(2, 1)), pip_color)
+			PIXEL_PAINTER.line(self, center + Vector2(-4 + index * 3, 11), center + Vector2(-3 + index * 3, 11), pip_color)
 	if primed:
-		draw_line(actual_center + Vector2(-2, -10), actual_center + Vector2(0, -12), color, 1.0)
-		draw_line(actual_center + Vector2(0, -12), actual_center + Vector2(2, -10), color, 1.0)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(-2, -10), actual_center + Vector2(0, -12), color)
+		PIXEL_PAINTER.line(self, actual_center + Vector2(0, -12), actual_center + Vector2(2, -10), color)

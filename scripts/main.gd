@@ -23,6 +23,7 @@ const SWING_DOOR_SCENE := preload("res://scenes/props/swing_door.tscn")
 const WORLD_CONTEXT_MARKER := preload("res://scripts/ui/world_context_marker.gd")
 const GAMEPLAY_RULES := preload("res://utility/gameplay_design_rules.gd")
 const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
+const PIXEL_LIGHTS := preload("res://utility/pixel_light_texture_factory.gd")
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 100)
@@ -144,6 +145,7 @@ func _ready() -> void:
 	trauma_camera.impact_flash_requested.connect(_on_impact_flash_requested)
 	_configure_level_lighting()
 	_apply_visual_theme()
+	_apply_pixel_light_textures()
 	_start_run()
 	call_deferred("_sync_ammo_ui")
 
@@ -183,6 +185,16 @@ func _configure_level_lighting() -> void:
 			if light.get_script() != null:
 				light.set("base_energy", light.energy)
 				light.set("wave_amplitude", 0.035)
+
+func _apply_pixel_light_textures() -> void:
+	var lighting := get_node_or_null("Lighting")
+	if not is_instance_valid(lighting): return
+	for node in lighting.get_children():
+		if node is not PointLight2D: continue
+		var light := node as PointLight2D
+		light.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		light.texture = PIXEL_LIGHTS.create_texture()
+		light.texture_scale = 1.0
 
 func _apply_visual_theme() -> void:
 	var world := get_node_or_null("TileMap")
@@ -722,7 +734,7 @@ func _toggle_hue_cycle() -> void:
 	material.set_shader_parameter("enable_cycle", hue_cycle_enabled)
 	detail_label.text = "HUE CYCLE: %s" % ("ON" if hue_cycle_enabled else "OFF")
 
-func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String) -> void:
+func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String, shooter: CollisionObject2D = null) -> void:
 	if phase != "combat" or run_over: return
 	var data := AttackCatalog.get_gun_data(weapon_id)
 	var bullet = BULLET_SCENE.instantiate()
@@ -731,7 +743,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	if not enemy_owned and is_instance_valid(player) and is_instance_valid(player.gun):
 		bullet.shot_id = player.gun.current_shot_id
 		bullet.shot_resolved.connect(_on_player_shot_resolved)
-	bullet.setup(direction, enemy_owned, damage, weapon_id, origin, data.bullet_speed)
+	bullet.setup(direction, enemy_owned, damage, weapon_id, origin, data.bullet_speed, shooter)
 	if not RuntimeBudget.try_add("bullet", bullet, self): return
 
 func _on_player_shot_resolved(shot_id: int, outcome: String, lethal: bool, _weapon_id: String) -> void:

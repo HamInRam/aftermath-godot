@@ -1,6 +1,8 @@
 class_name PhysicalDebris
 extends RigidBody2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 var debris_material := "wood"
 var primary := Color("8f572f")
 var secondary := Color("d99a55")
@@ -75,6 +77,19 @@ func _on_body_entered(body: Node) -> void:
 	Events.publish_combat_noise(global_position, 54.0 + energy * 22.0, "%s_debris" % debris_material)
 	linear_velocity *= 0.35
 
+func receive_projectile_glance(impact_velocity: Vector2, hit_position: Vector2, _weapon_id: String, damage: int) -> void:
+	if impact_velocity.length_squared() < 0.01: return
+	var direction := impact_velocity.normalized()
+	var impulse_strength := clampf(impact_velocity.length() * 0.018 * maxi(1, damage), 7.0, 28.0)
+	var torque := (hit_position - global_position).cross(direction) * 0.8
+	if absf(torque) < 0.25: torque = -direction.x * 1.5 + direction.y * 1.5
+	freeze = false
+	set_physics_process(true)
+	settle_time = maxf(settle_time, 0.55)
+	linear_velocity = (linear_velocity + direction * impulse_strength).limit_length(115.0)
+	angular_velocity = clampf(angular_velocity + torque, -14.0, 14.0)
+	Events.publish_combat_noise(global_position, 26.0, "%s_debris_ping" % debris_material)
+
 func get_cleanup_type() -> String: return "debris"
 func get_cleanup_cost() -> int: return 1
 func get_cleanup_progress() -> float: return 1.0 - float(cleanup_steps)
@@ -85,7 +100,8 @@ func clean_step() -> void:
 	queue_free()
 
 func _draw() -> void:
-	var size := Vector2(5, 3)
-	draw_rect(Rect2(-size * 0.5, size), Color("17131b"))
-	draw_rect(Rect2(-size * 0.5 + Vector2.ONE, size - Vector2(2, 2)), primary)
-	draw_rect(Rect2(-1, -1, 2, 1), secondary)
+	var points := [Vector2(-2,-1), Vector2(-1,-1), Vector2(0,0), Vector2(1,0), Vector2(2,1)]
+	for index in points.size():
+		PIXELS.pixel(self, points[index], Color("17131b") if index in [0,4] else primary)
+	PIXELS.pixel(self, Vector2(-1,0), secondary)
+	PIXELS.pixel(self, Vector2(1,-1), primary.lightened(0.18))

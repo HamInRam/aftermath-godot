@@ -1,6 +1,8 @@
 class_name WeaponPickup
 extends Area2D
 
+const PIXELS := preload("res://utility/pixel_art_painter.gd")
+
 var weapon_id := "pistol"
 var rounds := 1
 var cleanup_amount := 1.0
@@ -54,5 +56,7 @@ func _apply_visual() -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, 7.0, Color(0.15, 0.95, 0.88, 0.12))
-	draw_arc(Vector2.ZERO, 7.0, 0.0, TAU, 16, Color(0.35, 1.0, 0.9, 0.62), 1.0)
+	for y in range(-6, 7):
+		for x in range(-6, 7):
+			if x * x + y * y <= 36 and ((x + y) & 3) == 0: PIXELS.pixel(self, Vector2(x, y), Color(0.15, 0.95, 0.88, 0.18))
+	PIXELS.circle(self, Vector2.ZERO, 7, Color(0.35, 1.0, 0.9, 0.62), true)
