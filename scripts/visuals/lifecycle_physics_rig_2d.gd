@@ -9,6 +9,9 @@ const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 enum Mode { ACTIVE, HIT_REACT, KNOCKED_DOWN, RECOVERING }
 
 const FIXED_STEP := 1.0 / 60.0
+const ACTIVE_FIXED_STEP := 1.0 / 30.0
+const ACTIVE_REDRAW_STEP := 1.0 / 30.0
+const IDLE_REDRAW_STEP := 1.0 / 12.0
 
 @export_enum("player", "enemy", "hound") var rig_kind := "enemy"
 @export var body_color := Color("7c235b")
@@ -38,6 +41,9 @@ var idle_time := 0.0
 var knockdown_transition_time := 0.0
 var weapon_stance := "gun"
 var weapon_recoil_pulse := 0.0
+var redraw_accumulator := 0.0
+var simulation_steps_total := 0
+var redraw_requests_total := 0
 
 const DIRECTION_STEP := PI / 4.0
 const DIRECTION_HYSTERESIS := deg_to_rad(6.0)
@@ -93,12 +99,23 @@ func update_lifecycle(delta: float, velocity_in_local_space: Vector2, reference_
 	elif mode == Mode.RECOVERING:
 		recovery_progress = minf(1.0, recovery_progress + delta / 0.42)
 		if recovery_progress >= 1.0: mode = Mode.ACTIVE
-	_update_targets()
 	accumulator += minf(delta, 0.05)
-	while accumulator >= FIXED_STEP:
-		_simulate_step(FIXED_STEP)
-		accumulator -= FIXED_STEP
-	queue_redraw()
+	# Standing/moving silhouettes are deliberately pixel-stepped, so solving and
+	# rebuilding their draw list at display refresh rate only burns CPU/GPU command
+	# bandwidth. Impacts and knockdowns retain the full 60 Hz response cadence.
+	var reactive := mode != Mode.ACTIVE or flash_amount > 0.0 or weapon_recoil_pulse > 0.0 or action != "idle"
+	var simulation_step := FIXED_STEP if reactive else ACTIVE_FIXED_STEP
+	while accumulator >= simulation_step:
+		_update_targets()
+		_simulate_step(simulation_step)
+		accumulator -= simulation_step
+		simulation_steps_total += 1
+	redraw_accumulator += delta
+	var redraw_step := FIXED_STEP if reactive else (ACTIVE_REDRAW_STEP if movement_ratio > 0.05 else IDLE_REDRAW_STEP)
+	if redraw_accumulator >= redraw_step:
+		redraw_accumulator = 0.0
+		redraw_requests_total += 1
+		queue_redraw()
 
 func apply_hit(world_direction: Vector2, power: float, hit_zone := "torso") -> void:
 	if points.is_empty(): _build_rig()
@@ -119,6 +136,7 @@ func apply_hit(world_direction: Vector2, power: float, hit_zone := "torso") -> v
 	mode = Mode.HIT_REACT
 	hit_react_time = 0.14
 	flash_amount = 1.0
+	queue_redraw()
 
 func enter_knockdown(world_direction: Vector2, power := 42.0) -> void:
 	apply_hit(world_direction, power, "torso")
@@ -151,6 +169,12 @@ func force_active() -> void:
 		point.previous = point.target
 		points[name] = point
 	queue_redraw()
+
+func get_performance_counters() -> Dictionary:
+	return {
+		"simulation_steps": simulation_steps_total,
+		"redraw_requests": redraw_requests_total,
+	}
 
 func _update_facing_sector() -> void:
 	var angle := wrapf(global_rotation, -PI, PI)
@@ -242,7 +266,8 @@ func _simulate_step(_delta: float) -> void:
 		point.previous = position
 		point.position = position + motion + ((point.target as Vector2) - position) * target_strength
 		points[name] = point
-	for iteration in range(4):
+	var solver_passes := 4 if mode == Mode.KNOCKED_DOWN else (3 if mode in [Mode.HIT_REACT, Mode.RECOVERING] else 2)
+	for iteration in range(solver_passes):
 		for link in constraints: _solve_constraint(link, 0.92 if mode == Mode.KNOCKED_DOWN else 0.72)
 
 func _solve_constraint(link: Dictionary, stiffness: float) -> void:

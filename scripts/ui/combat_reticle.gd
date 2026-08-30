@@ -6,6 +6,7 @@ const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 var spread_ratio := 0.0
 var combat_visible := true
 var aim_state: Dictionary = {}
+var _draw_signature: Array = []
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -23,9 +24,29 @@ func set_feedback(ratio: float, enabled: bool) -> void:
 	queue_redraw()
 
 func set_aim_feedback(state: Dictionary, enabled: bool) -> void:
-	aim_state = state.duplicate()
+	var actual_offset: Vector2 = state.get("actual_offset", Vector2.ZERO)
+	actual_offset = actual_offset.limit_length(8.0).round()
+	var spread_pixels := clampf(float(state.get("spread_pixels", spread_ratio * 6.0)), 0.0, 9.0)
+	# Only values that alter painted pixels belong in the signature. Cursor motion
+	# moves this Control directly and no longer forces the reticle to repaint.
+	var signature: Array = [
+		enabled,
+		actual_offset,
+		roundi(2.0 + spread_pixels),
+		bool(state.get("blocked", false)),
+		clampi(int(state.get("ammo", 1)), 0, 3),
+		bool(state.get("reloading", false)),
+		roundi(clampf(float(state.get("reload_progress", 0.0)), 0.0, 1.0) * 12.0),
+		bool(state.get("targeted", false)),
+		bool(state.get("precision_primed", false)),
+		Settings.reticle_hud_enabled,
+	]
 	combat_visible = enabled
 	visible = enabled
+	if signature == _draw_signature: return
+	_draw_signature = signature
+	aim_state = state.duplicate()
+	aim_state["actual_offset"] = actual_offset
 	queue_redraw()
 
 func _draw() -> void:

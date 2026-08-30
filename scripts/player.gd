@@ -289,8 +289,11 @@ func _add_joy_button(action: String, button: int) -> void:
 func _update_procedural_motion(delta: float) -> void:
 	var movement_ratio := clampf(velocity.length() / maxf(1.0, move_speed), 0.0, 1.2)
 	var local_motion := velocity.rotated(-rotation)
-	legs_visual.rotation = local_motion.angle() if local_motion.length_squared() > 0.5 else legs_visual.rotation
-	legs_visual.update_pose(delta, local_motion, move_speed)
+	# LifecycleRig owns the visible legs. Avoid animating the hidden compatibility
+	# sprite every frame; it otherwise rebuilds a draw list nobody can see.
+	if legs_visual.visible:
+		legs_visual.rotation = local_motion.angle() if local_motion.length_squared() > 0.5 else legs_visual.rotation
+		legs_visual.update_pose(delta, local_motion, move_speed)
 	if previous_move_velocity.length() > move_speed * 0.55 and velocity.length() < move_speed * 0.12:
 		stop_pose_time = 0.11
 	stop_pose_time = maxf(0.0, stop_pose_time - delta)

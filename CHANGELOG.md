@@ -1,5 +1,20 @@
 # Changelog
 
+## [v1.2.2] - Controlled Corpse Physics
+
+- Added adaptive actor simulation: calm living rigs solve at 30 Hz, idle silhouettes redraw at 12 Hz, moving silhouettes at 30 Hz, while impacts and knockdowns retain responsive 60 Hz physics.
+- Reduced ordinary living-rig constraint passes by half, stopped updating hidden legacy leg renderers, and removed redundant enemy-root redraws.
+- Rebalanced enemy sensing and occluded-path refresh cadence around the existing reaction-time model, cutting raycast and A* pressure without slowing visible combat response.
+- Made the reticle repaint only when its rendered pixel state changes and reduced the default full-screen treatment from three identical texture samples to one.
+- Quantized the gradual mop icon to 16 cacheable pixel-color steps, stopped repeated alarm/response Tween creation, throttled unchanged objective HUD writes, and avoided redundant fake-shadow transform assignments.
+- Added runtime-cadence regression coverage so future character or VFX work cannot silently restore per-frame pixel draw-list churn.
+- Separated ragdoll limb articulation from corpse-root launch speed so impacts remain readable without throwing whole bodies across rooms.
+- Added weapon-specific root-speed floors and caps: shotguns and heavy weapons still move mass more than pistols, automatics, blades, fists, and hound attacks.
+- Prevented follow-up overkill impulses from stacking beyond the safe cap and made wall contact discard almost all remaining tangential energy.
+- Deferred debris rigid-body activation outside collision-query flushing, preventing chain-reaction impacts from mutating physics state during callbacks.
+- Replaced runtime PointLight2D texture swapping with a scene-authored constant-step nearest gradient, removing invalid renderer texture-handle errors during level startup and switching.
+- Added live-level regression limits for minimum/maximum pistol corpse travel and cumulative overkill velocity.
+
 ## [v1.2.1] - Native Pixel Unification
 
 - Unified live characters, corpses, ragdolls, weapons, projectiles, casings, blood, water, debris, props and landmarks around one native 1x1 world-pixel material language.

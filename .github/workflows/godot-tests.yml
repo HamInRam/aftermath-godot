@@ -42,6 +42,7 @@ jobs:
             tests/test_destructible_environment.tscn \
             tests/test_destruction_pipeline.tscn \
             tests/test_death_ragdoll_pipeline.tscn \
+            tests/test_corpse_wall_safety.tscn \
             tests/test_projectile_collision.tscn \
             tests/test_door_passage.tscn \
             tests/test_visual_readability.tscn \
@@ -49,6 +50,7 @@ jobs:
             tests/test_mission_result_flow.tscn \
             tests/test_progression_store.tscn \
             tests/test_runtime_budget.tscn \
+            tests/test_runtime_cadence.tscn \
             tests/test_performance_stress.tscn \
             tests/test_release_metadata.tscn \
             tests/test_security_camera.tscn \

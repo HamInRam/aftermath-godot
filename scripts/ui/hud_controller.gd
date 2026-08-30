@@ -52,6 +52,9 @@ var _cleanup_room := ""
 var _room_name_time := 0.0
 var _status_message_time := 0.0
 var _detail_message_time := 0.0
+var _last_alarm_count := -1
+var _last_cleanup_urgent := false
+var _last_cleanup_tool_signature: Array = []
 
 func _init() -> void:
 	layer = 30
@@ -224,7 +227,8 @@ func _process(delta: float) -> void:
 		_last_ammo_text = ammo_label.text
 
 func set_combo(combo: int) -> void:
-	combo_label.text = ("x%d" % combo) if combo > 1 else ""
+	var next_text := ("x%d" % combo) if combo > 1 else ""
+	if combo_label.text != next_text: combo_label.text = next_text
 
 func set_interaction(text: String) -> void:
 	interaction_label.text = text
@@ -291,12 +295,18 @@ func set_phase(value: String) -> void:
 	_tutorial_time = 5.0
 
 func set_combat_counts(enemies_left: int, cameras_left: int, alarms: int) -> void:
-	enemy_count_label.text = "x%d" % maxi(0, enemies_left)
-	camera_count_label.text = "x%d" % maxi(0, cameras_left)
-	alarm_count_label.text = "x%d" % maxi(0, alarms)
+	var enemy_text := "x%d" % maxi(0, enemies_left)
+	var camera_text := "x%d" % maxi(0, cameras_left)
+	var alarm_text := "x%d" % maxi(0, alarms)
+	if enemy_count_label.text != enemy_text: enemy_count_label.text = enemy_text
+	if camera_count_label.text != camera_text: camera_count_label.text = camera_text
+	if alarm_count_label.text != alarm_text: alarm_count_label.text = alarm_text
 	if alarms > 0:
 		alarm_count_label.modulate = Color("ff536e")
-		_pulse(alarm_count_icon, 1.2)
+		if alarms != _last_alarm_count: _pulse(alarm_count_icon, 1.2)
+	else:
+		alarm_count_label.modulate = Color("fff1f7")
+	_last_alarm_count = alarms
 
 func set_cleanup_summary(cleanliness: float, risk: int, police_seconds := -1.0) -> void:
 	cleanup_meter.value = clampf(cleanliness * 100.0, 0.0, 100.0)
@@ -311,14 +321,23 @@ func set_cleanup_summary(cleanliness: float, risk: int, police_seconds := -1.0) 
 		cleanup_police_label.text = "%02d:%02d" % [floori(police_seconds / 60.0), floori(fmod(police_seconds, 60.0))]
 		var urgent := police_seconds < 30.0
 		cleanup_police_label.modulate = Color("ff536e") if urgent else Color("fff1f7")
-		if urgent: _pulse(cleanup_police_icon, 1.08)
+		if urgent and not _last_cleanup_urgent: _pulse(cleanup_police_icon, 1.08)
+		_last_cleanup_urgent = urgent
+	else:
+		_last_cleanup_urgent = false
 	objective_label.text = ""
 	objective_icon.visible = false
 
 func set_cleanup_tool(tool_name: String, saturation: float) -> void:
 	var clean_name := tool_name.to_upper().replace("PRESSURE_WASHER", "WASH").replace("EVIDENCE_BAG", "EVIDENCE").replace("BODY_BAG", "BODY")
 	var icon_kind := "washer" if tool_name == "pressure_washer" else ("bag" if tool_name in ["evidence_bag", "body_bag"] else "mop")
-	var ratio := clampf(saturation, 0.0, 1.0) if tool_name == "mop" else 0.0
+	# A continuously changing color generated a unique runtime icon almost every
+	# frame. Sixteen authored-looking pixel steps keep the gradual red transition
+	# while letting the icon cache and HUD draw list remain stable.
+	var ratio := snappedf(clampf(saturation, 0.0, 1.0), 1.0 / 16.0) if tool_name == "mop" else 0.0
+	var signature: Array = [tool_name, roundi(ratio * 16.0)]
+	if signature == _last_cleanup_tool_signature: return
+	_last_cleanup_tool_signature = signature
 	var tool_color := Color("73f7e4").lerp(Color("b51232"), ratio)
 	cleanup_tool_icon.texture = PIXEL_ICONS.make(icon_kind, tool_color)
 	cleanup_tool_label.text = clean_name.left(9)

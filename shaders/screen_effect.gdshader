@@ -29,10 +29,13 @@ void fragment() {
 		} else {
 			float pixel_shift = floor(chromatic_aberration * 320.0 + 0.5);
 			vec2 channel_offset = vec2(pixel_shift / 320.0 * sign(uv.x - 0.5), 0.0);
-			vec3 color;
-			color.r = textureLod(screen_texture, uv - channel_offset, 0.0).r;
-			color.g = textureLod(screen_texture, uv, 0.0).g;
-			color.b = textureLod(screen_texture, uv + channel_offset, 0.0).b;
+			vec3 color = textureLod(screen_texture, uv, 0.0).rgb;
+			// The default sub-pixel aberration rounds to zero on the 320px grid.
+			// Avoid three identical full-screen samples unless a visible shift exists.
+			if (pixel_shift > 0.5) {
+				color.r = textureLod(screen_texture, uv - channel_offset, 0.0).r;
+				color.b = textureLod(screen_texture, uv + channel_offset, 0.0).b;
+			}
 			color = clamp((color - vec3(0.5)) * 1.12 + vec3(0.5), vec3(0.0), vec3(1.0));
 			float luminance = dot(color, vec3(0.299, 0.587, 0.114));
 			color = mix(vec3(luminance), color, 0.96);
