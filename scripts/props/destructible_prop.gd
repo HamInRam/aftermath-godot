@@ -27,7 +27,11 @@ var home_global_position := Vector2.ZERO
 var home_rotation := 0.0
 var simulated_rotation := 0.0
 var spin_velocity := 0.0
+# `displaced` is intentionally reserved for destructive/weapon launch. Ordinary
+# actor contact is tracked separately because it must not create restoration work.
 var displaced := false
+var contact_shifted := false
+var home_navigation_released := false
 var displacement_reported := false
 var cleanup_ready := false
 var dragging_actor: Node2D
@@ -179,10 +183,20 @@ func _mark_displaced() -> void:
 	CleanupRegistry.register_target(self)
 	if is_instance_valid(restoration_anchor): restoration_anchor.mark_needed()
 	else: call_deferred("_mark_anchor_needed")
-	solidity_changed.emit(false)
+	_release_home_navigation()
 	if not displacement_reported:
 		displacement_reported = true
 		Events.prop_destroyed.emit(global_position, prop_kind)
+
+func _mark_contact_shifted() -> void:
+	if contact_shifted or displaced: return
+	contact_shifted = true
+	_release_home_navigation()
+
+func _release_home_navigation() -> void:
+	if home_navigation_released: return
+	home_navigation_released = true
+	solidity_changed.emit(false)
 
 func _mark_anchor_needed() -> void:
 	if is_instance_valid(restoration_anchor): restoration_anchor.mark_needed()
@@ -219,12 +233,12 @@ func _physics_process(delta: float) -> void:
 	simulated_rotation += spin_velocity * delta
 	rotation = snappedf(simulated_rotation, PI / 8.0)
 	spin_velocity = move_toward(spin_velocity, 0.0, 5.5 * delta)
-	if global_position.distance_to(home_global_position) > 4.0: _mark_displaced()
+	if not displaced and global_position.distance_to(home_global_position) > 1.0: _mark_contact_shifted()
 	if velocity.length() <= 1.5 and absf(spin_velocity) <= 0.25:
 		velocity = Vector2.ZERO
 		spin_velocity = 0.0
 		physics_active = false
-		if not displaced:
+		if not displaced and not contact_shifted:
 			global_position = home_global_position
 			rotation = home_rotation
 			simulated_rotation = home_rotation
@@ -235,12 +249,14 @@ func enter_cleanup_restore_state() -> void:
 	velocity = Vector2.ZERO
 	spin_velocity = 0.0
 	physics_active = false
-	# Tiny combat contact below the displacement threshold must not leave an
-	# apparently untouched prop a fraction of a pixel away from its authored slot.
+	# Untouched props lock to their exact authored transform. Contact-shifted props
+	# freeze exactly where combat left them and never become restoration tasks.
 	if not displaced:
-		global_position = home_global_position
-		rotation = home_rotation
-		simulated_rotation = home_rotation
+		restoration_locked = true
+		if not contact_shifted:
+			global_position = home_global_position
+			rotation = home_rotation
+			simulated_rotation = home_rotation
 	if is_instance_valid(restoration_anchor): restoration_anchor.set_cleanup_active(true)
 	set_physics_process(is_instance_valid(dragging_actor))
 
@@ -278,6 +294,7 @@ func _snap_home() -> void:
 	physics_active = false
 	restoration_locked = true
 	displaced = false
+	contact_shifted = false
 	state = PropState.RESTORED
 	hp = 2
 	structural_stage = 0
@@ -288,6 +305,7 @@ func _snap_home() -> void:
 	CleanupRegistry.unregister_target(self)
 	if is_instance_valid(restoration_anchor): restoration_anchor.mark_restored()
 	solidity_changed.emit(true)
+	home_navigation_released = false
 	if is_instance_valid(active_hazard): active_hazard.set_source_active(false)
 	if is_instance_valid(actor) and actor.has_method("clear_dragged_restoration_prop"):
 		actor.clear_dragged_restoration_prop(self)

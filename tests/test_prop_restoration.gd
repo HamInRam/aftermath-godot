@@ -54,6 +54,23 @@ func _run() -> void:
 	untouched.receive_actor_push(Vector2.LEFT * 180.0, untouched.global_position)
 	untouched._physics_process(0.25)
 	_expect(untouched.global_position.is_equal_approx(untouched_home) and untouched.velocity.is_zero_approx(), "an untouched prop should be completely fixed throughout cleanup")
+	var contact_prop := DestructibleProp.new()
+	contact_prop.setup("crate", Color("8f572f"))
+	contact_prop.global_position = Vector2(120, 88)
+	add_child(contact_prop)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var furniture_before_push := int(CleanupRegistry.get_type_counts().get("furniture", 0))
+	contact_prop.receive_actor_push(Vector2.RIGHT * 180.0, contact_prop.global_position)
+	contact_prop._physics_process(0.2)
+	var contact_position := contact_prop.global_position
+	_expect(not contact_prop.is_displaced() and contact_position.distance_to(Vector2(120, 88)) > 1.0, "body contact should move a prop without classifying it as a destructive launch")
+	_expect(int(CleanupRegistry.get_type_counts().get("furniture", 0)) == furniture_before_push, "body-pushed props should not create restoration cleanup work")
+	contact_prop.enter_cleanup_restore_state()
+	contact_prop.receive_actor_push(Vector2.LEFT * 180.0, contact_prop.global_position)
+	contact_prop._physics_process(0.25)
+	_expect(contact_prop.global_position.is_equal_approx(contact_position) and contact_prop.velocity.is_zero_approx(), "a body-pushed prop should freeze at its current displaced position when cleanup begins")
+	_expect(not contact_prop.get_restoration_anchor().visible, "a body-pushed prop should not reveal an original-position ghost")
 	var fixture := DestructibleProp.new()
 	fixture.setup("sink", Color("71d4d8"))
 	fixture.global_position = Vector2(130, 60)
