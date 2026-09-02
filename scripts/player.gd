@@ -1,7 +1,7 @@
 extends "res://scripts/actor.gd"
 
 signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String, shooter: CollisionObject2D)
-signal clean_requested(world_position: Vector2, stroke_direction: Vector2, stroke_strength: float, stroke_start: Vector2)
+signal clean_requested(world_position: Vector2, stroke_direction: Vector2, stroke_strength: float, stroke_start: Vector2, brush_radius: float, power_multiplier: float, stroke_quality: float)
 signal cleaner_requested(world_position: Vector2)
 signal died(source_position: Vector2)
 signal execution_impact(world_position: Vector2, direction: Vector2, lethal: bool, execution_type: String)
@@ -63,6 +63,12 @@ var ultraviolet_scan_cooldown := 0.0
 var scan_button_was_down := false
 var cleanup_stroke_cooldown := 0.0
 var last_cleanup_cursor := Vector2.INF
+var cleanup_flow := 0.0
+var cleanup_flow_grace := 0.0
+var cleanup_last_stroke_direction := Vector2.ZERO
+var cleanup_stroke_quality := 0.0
+var pressure_washer_distance := 24.0
+var cleanup_sweep_sign := 1.0
 var cleaner_charges := 6
 var stride_time := 0.0
 var cleanup_action_pulse := 0.0
@@ -87,6 +93,8 @@ const ULTRAVIOLET_SCAN_DURATION := 0.8
 const ULTRAVIOLET_SCAN_COOLDOWN := 1.65
 const INPUT_BUFFER_DURATION := 0.14
 const MOP_MAX_SATURATION := 18.0
+const CLEANUP_REACH := 37.0
+const CLEANUP_FLOW_GRACE := 0.42
 
 func _ready() -> void:
 	super._ready()
@@ -131,6 +139,11 @@ func _physics_process(delta: float) -> void:
 	ultraviolet_scan_time = maxf(0.0, ultraviolet_scan_time - delta)
 	ultraviolet_scan_cooldown = maxf(0.0, ultraviolet_scan_cooldown - delta)
 	cleanup_stroke_cooldown = maxf(0.0, cleanup_stroke_cooldown - delta)
+	cleanup_flow_grace = maxf(0.0, cleanup_flow_grace - delta)
+	if cleanup_mode and current_cleanup_tool == "mop" and cleanup_flow_grace <= 0.0:
+		cleanup_flow = move_toward(cleanup_flow, 0.0, delta * 0.72)
+	elif not cleanup_mode or current_cleanup_tool != "mop":
+		cleanup_flow = move_toward(cleanup_flow, 0.0, delta * 1.8)
 	cleanup_action_pulse = maxf(0.0, cleanup_action_pulse - delta)
 	var mop_visual_target := get_mop_saturation_ratio()
 	var previous_mop_visual := visual_mop_saturation
@@ -319,7 +332,7 @@ func _update_procedural_motion(delta: float) -> void:
 			pose_position = Vector2(-1.2, 0.8)
 		elif cleanup_mode and cleanup_action_pulse > 0.0:
 			var stroke_phase := 1.0 - cleanup_action_pulse / 0.13
-			pose_rotation = sin(stroke_phase * PI) * (0.24 if current_cleanup_tool == "mop" else 0.12)
+			pose_rotation = sin(stroke_phase * PI) * (0.24 if current_cleanup_tool == "mop" else 0.12) * cleanup_sweep_sign
 			pose_position = Vector2(2.0 * sin(stroke_phase * PI), 0.0)
 		body_sprite.rotation = lerp_angle(body_sprite.rotation, pose_rotation, 1.0 - exp(-22.0 * delta))
 		body_sprite.position = body_sprite.position.lerp(pose_position, 1.0 - exp(-22.0 * delta))
@@ -445,21 +458,88 @@ func _handle_cleanup_tool_selection() -> void:
 	elif Input.is_action_just_pressed("equip_fist"): select_cleanup_tool("pressure_washer")
 
 func _handle_cleanup_stroke() -> void:
-	var cursor := get_global_mouse_position()
+	var raw_cursor := get_global_mouse_position()
+	var to_cursor := raw_cursor - global_position
+	var cursor_distance := to_cursor.length()
+	var cursor := raw_cursor
+	if cursor_distance > CLEANUP_REACH:
+		cursor = global_position + to_cursor.normalized() * CLEANUP_REACH
+		cursor_distance = CLEANUP_REACH
+	pressure_washer_distance = cursor_distance
 	if last_cleanup_cursor == Vector2.INF: last_cleanup_cursor = cursor
 	if not Input.is_action_pressed("shoot"):
 		last_cleanup_cursor = cursor
 		return
 	var stroke := cursor - last_cleanup_cursor
-	if stroke.length() < 1.25 or cleanup_stroke_cooldown > 0.0: return
-	cleanup_stroke_cooldown = 0.065
+	var stroke_length := stroke.length()
+	var washer := current_cleanup_tool == "pressure_washer"
+	if (not washer and stroke_length < 1.25) or cleanup_stroke_cooldown > 0.0: return
+	cleanup_stroke_cooldown = 0.052 if washer else 0.065
+	var stroke_direction := stroke.normalized() if stroke_length >= 0.35 else (to_cursor.normalized() if cursor_distance > 0.01 else Vector2.RIGHT.rotated(rotation))
+	var continuity := 1.0
+	if cleanup_last_stroke_direction.length_squared() > 0.01:
+		continuity = clampf((cleanup_last_stroke_direction.dot(stroke_direction) + 1.0) * 0.5, 0.0, 1.0)
+	if washer:
+		cleanup_stroke_quality = 1.0
+	else:
+		# A deliberate 4-9 px sample is the one-pass sweet spot. Faster or slower
+		# movement still cleans, but it will leave more visible density behind.
+		var speed_quality := 1.0 - clampf(absf(stroke_length - 6.5) / 7.5, 0.0, 1.0)
+		cleanup_stroke_quality = clampf(speed_quality * lerpf(0.82, 1.0, continuity), 0.42, 1.0)
+	cleanup_sweep_sign = -1.0 if Vector2.RIGHT.rotated(rotation).cross(stroke_direction) < 0.0 else 1.0
 	cleanup_action_pulse = 0.13
 	queue_redraw()
-	clean_requested.emit(cursor, stroke.normalized(), clampf(stroke.length() / 9.0, 0.45, 1.25), last_cleanup_cursor)
+	var profile := get_cleanup_stroke_profile(cursor_distance, cleanup_stroke_quality)
+	clean_requested.emit(cursor, stroke_direction, float(profile.strength), last_cleanup_cursor, float(profile.radius), float(profile.power), cleanup_stroke_quality)
+	cleanup_last_stroke_direction = stroke_direction
 	last_cleanup_cursor = cursor
+
+func get_cleanup_stroke_profile(cursor_distance: float, quality := 1.0) -> Dictionary:
+	if current_cleanup_tool == "pressure_washer":
+		var distance_ratio := clampf((cursor_distance - 10.0) / 27.0, 0.0, 1.0)
+		return {
+			"radius": lerpf(3.2, 8.0, distance_ratio),
+			"power": lerpf(1.42, 0.68, distance_ratio),
+			"strength": lerpf(1.22, 0.78, distance_ratio),
+			"mode": "NARROW" if distance_ratio < 0.48 else "WIDE",
+			"focus": 1.0 - distance_ratio,
+		}
+	var flow_bonus := cleanup_flow * 0.18
+	return {
+		"radius": (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0) + floorf(cleanup_flow * 3.0) * 0.5,
+		"power": lerpf(0.66, 1.12, clampf(quality, 0.0, 1.0)) + flow_bonus,
+		"strength": lerpf(0.58, 1.12, clampf(quality, 0.0, 1.0)),
+		"mode": "FLOW",
+		"focus": cleanup_flow,
+	}
+
+func report_cleanup_stroke_result(cleaned: bool, quality: float, stroke_direction: Vector2) -> void:
+	if current_cleanup_tool != "mop": return
+	if not cleaned:
+		cleanup_flow = move_toward(cleanup_flow, 0.0, 0.055)
+		return
+	var continuity := 1.0
+	if cleanup_last_stroke_direction.length_squared() > 0.01 and stroke_direction.length_squared() > 0.01:
+		continuity = clampf((cleanup_last_stroke_direction.dot(stroke_direction.normalized()) + 1.0) * 0.5, 0.0, 1.0)
+	cleanup_flow = clampf(cleanup_flow + lerpf(0.045, 0.105, clampf(quality, 0.0, 1.0)) * lerpf(0.72, 1.0, continuity), 0.0, 1.0)
+	cleanup_flow_grace = CLEANUP_FLOW_GRACE
+	queue_redraw()
+
+func get_cleanup_flow_ratio() -> float:
+	return clampf(cleanup_flow, 0.0, 1.0)
+
+func get_pressure_washer_mode() -> String:
+	return str(get_cleanup_stroke_profile(pressure_washer_distance).mode)
+
+func get_pressure_washer_focus() -> float:
+	return float(get_cleanup_stroke_profile(pressure_washer_distance).focus)
 
 func select_cleanup_tool(tool_name: String) -> bool:
 	if tool_name not in CLEANUP_TOOLS: return false
+	if current_cleanup_tool != tool_name:
+		cleanup_flow = 0.0
+		cleanup_flow_grace = 0.0
+		cleanup_last_stroke_direction = Vector2.ZERO
 	current_cleanup_tool = tool_name
 	queue_redraw()
 	return true
@@ -763,6 +843,10 @@ func set_cleanup_mode(enabled: bool) -> void:
 	ultraviolet_scan_cooldown = 0.0
 	scan_button_was_down = false
 	last_cleanup_cursor = get_global_mouse_position() if enabled else Vector2.INF
+	cleanup_flow = 0.0
+	cleanup_flow_grace = 0.0
+	cleanup_last_stroke_direction = Vector2.ZERO
+	cleanup_stroke_quality = 0.0
 	if has_node("BloodFootprintEmitter"):
 		$BloodFootprintEmitter.set_generation_enabled(not enabled)
 	if not enabled and is_instance_valid(dragged_corpse):
@@ -827,7 +911,16 @@ func _draw() -> void:
 			mop_color = mop_color.lerp(Color("730019"), smoothstep(0.62, 1.0, mop_dirty))
 		if current_cleanup_tool == "pressure_washer":
 			PIXEL_PAINTER.material_block(self, Vector2(10, 0), Vector2(4, 4), Color("5bc8e8"), 19, &"metal")
-			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(20, 0), Color(0.55, 0.9, 1.0, 0.65))
+			var washer_profile := get_cleanup_stroke_profile(pressure_washer_distance)
+			var spray_reach := clampi(roundi(pressure_washer_distance), 10, roundi(CLEANUP_REACH))
+			var spray_half_width := maxi(1, roundi(float(washer_profile.radius) * 0.45))
+			var spray_color := Color(0.55, 0.9, 1.0, lerpf(0.48, 0.82, float(washer_profile.focus)))
+			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(spray_reach, 0), spray_color)
+			PIXEL_PAINTER.line(self, Vector2(14, -1), Vector2(spray_reach, -spray_half_width), Color(spray_color, spray_color.a * 0.58))
+			PIXEL_PAINTER.line(self, Vector2(14, 1), Vector2(spray_reach, spray_half_width), Color(spray_color, spray_color.a * 0.58))
+			for distance in range(16, spray_reach + 1, 4):
+				var scatter := roundi(lerpf(0.0, float(spray_half_width), float(distance - 14) / maxf(1.0, float(spray_reach - 14))))
+				PIXEL_PAINTER.pixel(self, Vector2(distance, scatter if distance % 8 == 0 else -scatter), Color(0.68, 0.95, 1.0, 0.42))
 		else: PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, 6), mop_color, 23, &"fabric")
 		if mop_dirty >= 0.75:
 			PIXEL_PAINTER.material_circle(self, Vector2(9, 4), 1, Color(0.65, 0.0, 0.08, 0.85), Color(0.85, 0.04, 0.12, 0.85), Color(0.3, 0.0, 0.04, 0.85), 29)

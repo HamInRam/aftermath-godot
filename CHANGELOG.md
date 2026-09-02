@@ -1,6 +1,12 @@
 # Changelog
 
-## [v1.2.3] - Physical Set Dressing
+## [v1.2.3] - Physical Set Dressing & Cleaning Flow
+
+- Rebuilt mopping around direction and stroke speed: deliberate 4-9px samples clean best, erratic or stalled strokes remain useful but weaker, and successful continuous sweeps build a short-lived three-tier FLOW bonus to coverage and cleaning power.
+- Added a distance-shaped pressure washer: aiming near the player creates a narrow, forceful jet for residue and stubborn pixels, while extending the cursor produces a broad, weaker finishing fan with a matching pixel-cone preview and compact HUD state.
+- Split pixel blood into readable THICK, DILUTED and UV RESIDUE cleaning layers. Density and wetness now change the stain itself instead of deleting whole patches, while transitions and completed 32px regions produce restrained contextual feedback.
+- Routed mop/washer radius, force and stroke quality through blood, environmental liquids and legacy evidence without restoring dirty-mop blood generation or cleanup-phase footprints.
+- Added regression coverage for stroke-quality response, FLOW buildup/reset, washer near/far behavior, the complete blood-layer ladder and one-shot local completion events.
 
 - Reverted the postponed incident-ecology experiment so fire, smoke, responder and generalized liquid-chain features are not part of this version.
 - Converted destructible dressing to controlled CharacterBody2D objects while retaining sleeping physics for untouched and settled props.

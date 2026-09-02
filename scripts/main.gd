@@ -120,6 +120,7 @@ var combat_phase_elapsed := 0.0
 var cleanup_phase_elapsed := 0.0
 var playtest_telemetry: Node
 var verified_cleanup_rooms: Dictionary = {}
+var cleanup_layer_feedback_cooldown := 0.0
 var world_context_marker: WorldContextMarker
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
@@ -142,6 +143,8 @@ func _ready() -> void:
 	($RetroTreatment/Scanlines.material as ShaderMaterial).set_shader_parameter("enable_effect", screen_effects_enabled)
 	($RetroTreatment/Scanlines.material as ShaderMaterial).set_shader_parameter("chromatic_aberration", 0.00025 * Settings.chromatic_aberration_strength)
 	_connect_events()
+	if blood_system.has_signal("cleaning_layer_changed"): blood_system.cleaning_layer_changed.connect(_on_blood_cleaning_layer_changed)
+	if blood_system.has_signal("cleaning_region_completed"): blood_system.cleaning_region_completed.connect(_on_blood_cleaning_region_completed)
 	trauma_camera.impact_flash_requested.connect(_on_impact_flash_requested)
 	_configure_level_lighting()
 	_apply_visual_theme()
@@ -238,6 +241,7 @@ func _process(delta: float) -> void:
 			elif phase == "cleanup": cleanup_route_distance += route_step
 		route_anchor = player.global_position
 	combo_timer -= delta
+	cleanup_layer_feedback_cooldown = maxf(0.0, cleanup_layer_feedback_cooldown - delta)
 	if combo_timer <= 0.0: combo = 0
 	hud.set_combo(combo)
 	if is_instance_valid(player) and is_instance_valid(player.gun):
@@ -267,7 +271,7 @@ func _process(delta: float) -> void:
 				cleanup_pressure_active = false
 				_finish_run(true)
 				return
-		hud.set_cleanup_tool(player.current_cleanup_tool, player.get_mop_saturation_ratio())
+		hud.set_cleanup_tool(player.current_cleanup_tool, player.get_mop_saturation_ratio(), player.get_cleanup_flow_ratio(), player.get_pressure_washer_mode(), player.get_pressure_washer_focus())
 		cleanup_scan_timer -= delta
 		if cleanup_scan_timer <= 0.0:
 			cleanup_scan_timer = 0.1
@@ -1396,7 +1400,7 @@ func _begin_cleanup_transition() -> void:
 	Events.combat_ended.emit()
 	_enter_cleanup_phase()
 
-func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RIGHT, stroke_strength := 1.0, stroke_start := Vector2.INF) -> void:
+func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RIGHT, stroke_strength := 1.0, stroke_start := Vector2.INF, brush_radius_override := -1.0, power_multiplier := 1.0, stroke_quality := 1.0) -> void:
 	if phase != "cleanup" or run_over: return
 	if player.global_position.distance_to(world_position) > 38.0: return
 	if stroke_start == Vector2.INF: stroke_start = world_position - stroke_direction.normalized() * maxf(2.0, stroke_strength * 9.0)
@@ -1405,8 +1409,8 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 	var pixel_cleaned := false
 	var pixel_power := 0
 	if player.current_cleanup_tool in ["mop", "pressure_washer"] and blood_system.has_method("clean_pixel_stroke"):
-		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength, 0.45, 1.25)))
-		var brush_radius := 7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0)
+		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
+		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else (7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0))
 		pixel_cleaned = blood_system.clean_pixel_stroke(stroke_start, world_position, brush_radius, pixel_power, player.current_cleanup_tool)
 	var compatible_types := CleanupWorkflow.get_compatible_types(player.current_cleanup_tool)
 	var target := CleanupRegistry.get_nearest_compatible_target(world_position, 26.0, compatible_types)
@@ -1436,36 +1440,43 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 			break
 	if active_liquid_source_near:
 		detail_label.text = "SOURCE STILL ACTIVE // RESTORE DAMAGED EQUIPMENT FIRST"
+		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
 		return
 	if player.current_cleanup_tool in ["mop", "pressure_washer"]:
 		var liquid_system := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
 		if is_instance_valid(liquid_system):
-			if pixel_power <= 0: pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("spill")) * clampf(stroke_strength, 0.45, 1.25)))
-			var liquid_brush := 7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0)
+			if pixel_power <= 0: pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("spill")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
+			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else (7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0))
 			pixel_cleaned = liquid_system.clean_stroke(stroke_start, world_position, liquid_brush, pixel_power, player.current_cleanup_tool) or pixel_cleaned
 	if not is_instance_valid(target):
 		if pixel_cleaned:
 			if player.current_cleanup_tool == "mop": player.record_mop_use(0.34 + 0.08 * pixel_power)
 			ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
+		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
 		return
 	var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else "unknown"
 	if target.has_method("is_cleanup_blocked") and target.is_cleanup_blocked():
 		detail_label.text = "SOURCE STILL ACTIVE // RESTORE DAMAGED EQUIPMENT FIRST"
+		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
 		return
 	if target.has_method("apply_cleanup_tool"):
-		if target.apply_cleanup_tool(player.current_cleanup_tool): return
+		if target.apply_cleanup_tool(player.current_cleanup_tool):
+			player.report_cleanup_stroke_result(true, stroke_quality, stroke_direction)
+			return
 		if player.current_cleanup_tool != _required_cleanup_tool(cleanup_type):
 			detail_label.text = "NEED %s" % _required_cleanup_tool(cleanup_type).to_upper().replace("_", " ")
+			player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
 			return
 	var steps: int = int(player.get_cleanup_efficiency(cleanup_type))
 	if steps <= 0:
 		detail_label.text = "NEED %s" % _required_cleanup_tool(cleanup_type).to_upper().replace("_", " ")
+		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
 		return
 	var used_cleaner := bool(target.get_meta("cleaner_primed", false))
 	if used_cleaner:
 		steps += 2
 		target.set_meta("cleaner_primed", false)
-	steps = maxi(1, roundi(float(steps) * clampf(stroke_strength, 0.45, 1.25)))
+	steps = maxi(1, roundi(float(steps) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
 	# Closing Time's grease/liquid identity gives the washer a real situational
 	# advantage without letting it replace the mop for solid gore.
 	if mission_tracker.profile != null and mission_tracker.profile.mission_id == "sandwich_shop" and player.current_cleanup_tool == "pressure_washer" and cleanup_type == "spill":
@@ -1490,7 +1501,23 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 		liquid_surface = preload("res://scripts/effects/pixel_liquid_system.gd").get_or_create(get_tree()) as Node2D
 	if is_instance_valid(liquid_surface): liquid_surface.stamp_cleaning_stroke(stroke_start, world_position, player.current_cleanup_tool)
 	if player.current_cleanup_tool == "mop": player.record_mop_use(0.38 + 0.16 * steps)
+	player.report_cleanup_stroke_result(true, stroke_quality, stroke_direction)
 	ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
+
+func _on_blood_cleaning_layer_changed(_world_position: Vector2, layer_name: String, _progress: float) -> void:
+	if phase != "cleanup" or run_over or cleanup_layer_feedback_cooldown > 0.0: return
+	cleanup_layer_feedback_cooldown = 0.22
+	match layer_name:
+		"DILUTED": detail_label.text = "THICK LAYER LIFTED // KEEP THE STROKE MOVING"
+		"UV_RESIDUE": detail_label.text = "VISIBLE BLOOD CLEARED // UV TRACE REMAINS"
+		"CLEAN": detail_label.text = "REGION CLEAN"
+
+func _on_blood_cleaning_region_completed(_world_position: Vector2) -> void:
+	if phase != "cleanup" or run_over: return
+	detail_label.text = "REGION CLEAN // FLOW MAINTAINED"
+	combat_feedback.show_flash(Color(0.20, 0.95, 0.78, 0.08), 0.07)
+	if cleanup_layer_feedback_cooldown <= 0.12: _play_area_clean_feedback()
+	cleanup_layer_feedback_cooldown = 0.34
 
 func _on_cleaner_requested(world_position: Vector2) -> void:
 	if phase != "cleanup" or run_over: return
