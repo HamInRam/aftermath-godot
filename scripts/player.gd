@@ -95,6 +95,7 @@ const INPUT_BUFFER_DURATION := 0.14
 const MOP_MAX_SATURATION := 18.0
 const CLEANUP_REACH := 37.0
 const CLEANUP_FLOW_GRACE := 0.42
+const MOP_HEAD_REACH := 10.0
 
 func _ready() -> void:
 	super._ready()
@@ -461,10 +462,9 @@ func _handle_cleanup_stroke() -> void:
 	var raw_cursor := get_global_mouse_position()
 	var to_cursor := raw_cursor - global_position
 	var cursor_distance := to_cursor.length()
-	var cursor := raw_cursor
-	if cursor_distance > CLEANUP_REACH:
-		cursor = global_position + to_cursor.normalized() * CLEANUP_REACH
-		cursor_distance = CLEANUP_REACH
+	var washer := current_cleanup_tool == "pressure_washer"
+	var cursor := get_cleanup_contact_position(raw_cursor)
+	if washer: cursor_distance = minf(cursor_distance, CLEANUP_REACH)
 	pressure_washer_distance = cursor_distance
 	if last_cleanup_cursor == Vector2.INF: last_cleanup_cursor = cursor
 	if not Input.is_action_pressed("shoot"):
@@ -472,7 +472,6 @@ func _handle_cleanup_stroke() -> void:
 		return
 	var stroke := cursor - last_cleanup_cursor
 	var stroke_length := stroke.length()
-	var washer := current_cleanup_tool == "pressure_washer"
 	if (not washer and stroke_length < 1.25) or cleanup_stroke_cooldown > 0.0: return
 	cleanup_stroke_cooldown = 0.052 if washer else 0.065
 	var stroke_direction := stroke.normalized() if stroke_length >= 0.35 else (to_cursor.normalized() if cursor_distance > 0.01 else Vector2.RIGHT.rotated(rotation))
@@ -494,6 +493,16 @@ func _handle_cleanup_stroke() -> void:
 	cleanup_last_stroke_direction = stroke_direction
 	last_cleanup_cursor = cursor
 
+func get_cleanup_contact_position(raw_cursor: Vector2) -> Vector2:
+	var to_cursor := raw_cursor - global_position
+	var aim_direction := to_cursor.normalized() if to_cursor.length_squared() > 0.01 else Vector2.RIGHT.rotated(rotation)
+	if current_cleanup_tool == "mop":
+		# Cursor controls the handle angle only. Cleaning happens under the visible
+		# mop head at a fixed physical reach from the player's hands.
+		return global_position + Vector2.RIGHT.rotated(rotation) * MOP_HEAD_REACH
+	if to_cursor.length() > CLEANUP_REACH: return global_position + aim_direction * CLEANUP_REACH
+	return raw_cursor
+
 func get_cleanup_stroke_profile(cursor_distance: float, quality := 1.0) -> Dictionary:
 	if current_cleanup_tool == "pressure_washer":
 		var distance_ratio := clampf((cursor_distance - 10.0) / 27.0, 0.0, 1.0)
@@ -505,8 +514,9 @@ func get_cleanup_stroke_profile(cursor_distance: float, quality := 1.0) -> Dicti
 			"focus": 1.0 - distance_ratio,
 		}
 	var flow_bonus := cleanup_flow * 0.18
+	var mop_level := clampi(Progression.get_upgrade_level("mop"), 0, 3)
 	return {
-		"radius": (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0) + floorf(cleanup_flow * 3.0) * 0.5,
+		"radius": 4.0 + float(mop_level) * 0.35 + (0.45 if Progression.has_upgrade_perk("wide_finish") else 0.0) + floorf(cleanup_flow * 3.0) * 0.5,
 		"power": lerpf(0.66, 1.12, clampf(quality, 0.0, 1.0)) + flow_bonus,
 		"strength": lerpf(0.58, 1.12, clampf(quality, 0.0, 1.0)),
 		"mode": "FLOW",
@@ -540,6 +550,7 @@ func select_cleanup_tool(tool_name: String) -> bool:
 		cleanup_flow = 0.0
 		cleanup_flow_grace = 0.0
 		cleanup_last_stroke_direction = Vector2.ZERO
+		last_cleanup_cursor = Vector2.INF
 	current_cleanup_tool = tool_name
 	queue_redraw()
 	return true
@@ -842,7 +853,7 @@ func set_cleanup_mode(enabled: bool) -> void:
 	ultraviolet_scan_time = 0.0
 	ultraviolet_scan_cooldown = 0.0
 	scan_button_was_down = false
-	last_cleanup_cursor = get_global_mouse_position() if enabled else Vector2.INF
+	last_cleanup_cursor = Vector2.INF
 	cleanup_flow = 0.0
 	cleanup_flow_grace = 0.0
 	cleanup_last_stroke_direction = Vector2.ZERO
@@ -915,7 +926,9 @@ func _draw() -> void:
 			# an instant eraser. Keep a tiny nozzle glint; PixelLiquidSystem now renders
 			# every water pixel actually travelling through the room.
 			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(14, 0), Color(0.76, 0.96, 1.0, 0.88))
-		else: PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, 6), mop_color, 23, &"fabric")
+		else:
+			var mop_visual_width := 6 + clampi(Progression.get_upgrade_level("mop"), 0, 3)
+			PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, mop_visual_width), mop_color, 23, &"fabric")
 		if mop_dirty >= 0.75:
 			PIXEL_PAINTER.material_circle(self, Vector2(9, 4), 1, Color(0.65, 0.0, 0.08, 0.85), Color(0.85, 0.04, 0.12, 0.85), Color(0.3, 0.0, 0.04, 0.85), 29)
 		if ultraviolet_lamp_active:

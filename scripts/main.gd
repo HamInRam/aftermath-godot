@@ -1420,15 +1420,16 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 			liquid_system.emit_pressure_stream(nozzle_origin, world_position, spray_radius, pixel_power)
 	elif player.current_cleanup_tool == "mop" and blood_system.has_method("clean_pixel_stroke"):
 		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0)
+		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius)
 		pixel_cleaned = blood_system.clean_pixel_stroke(stroke_start, world_position, brush_radius, pixel_power, player.current_cleanup_tool)
 	var compatible_types := CleanupWorkflow.get_compatible_types(player.current_cleanup_tool)
-	var target := CleanupRegistry.get_nearest_compatible_target(world_position, 26.0, compatible_types)
+	var target_query_radius := float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius) + 2.0 if player.current_cleanup_tool == "mop" else 26.0
+	var target := CleanupRegistry.get_nearest_compatible_target(world_position, target_query_radius, compatible_types)
 	# The owning canvas already handled every crossed chunk above; choose another
 	# nearby legacy/solid evidence target instead of cleaning the endpoint twice.
 	if is_instance_valid(target) and target.is_in_group("pixel_blood_chunk"):
 		target = null
-		for candidate in CleanupRegistry.get_targets_in_radius(world_position, 26.0, 24, compatible_types):
+		for candidate in CleanupRegistry.get_targets_in_radius(world_position, target_query_radius, 24, compatible_types):
 			if candidate.is_in_group("pixel_blood_chunk"): continue
 			target = candidate
 			break
@@ -1436,7 +1437,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 	# indexed so the pressure washer can remove it when the player chooses to.
 	if player.current_cleanup_tool == "mop" and is_instance_valid(target) and target.has_method("is_ultraviolet_residue") and target.is_ultraviolet_residue():
 		target = null
-		for candidate in CleanupRegistry.get_targets_in_radius(world_position, 26.0, 24, compatible_types):
+		for candidate in CleanupRegistry.get_targets_in_radius(world_position, target_query_radius, 24, compatible_types):
 			if candidate.has_method("is_ultraviolet_residue") and candidate.is_ultraviolet_residue(): continue
 			target = candidate
 			break
@@ -1455,7 +1456,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 	if player.current_cleanup_tool == "mop":
 		if is_instance_valid(liquid_system):
 			if pixel_power <= 0: pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("spill")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0)
+			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius)
 			pixel_cleaned = liquid_system.clean_stroke(stroke_start, world_position, liquid_brush, pixel_power, player.current_cleanup_tool) or pixel_cleaned
 	if not is_instance_valid(target):
 		if pixel_cleaned:
@@ -1492,7 +1493,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 		steps += 3
 	var targets: Array[Node2D] = [target]
 	if player.current_cleanup_tool in ["mop", "pressure_washer"]:
-		var clean_radius := 30.0 if player.current_cleanup_tool == "pressure_washer" else (27.0 if Progression.has_upgrade_perk("wide_finish") else 22.0)
+		var clean_radius := 30.0 if player.current_cleanup_tool == "pressure_washer" else target_query_radius
 		var clean_count := 10 if player.current_cleanup_tool == "pressure_washer" else 6
 		targets = CleanupRegistry.get_targets_in_radius(world_position, clean_radius, clean_count, compatible_types)
 	for cleanup_target in targets:

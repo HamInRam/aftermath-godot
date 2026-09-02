@@ -26,6 +26,21 @@ func _run() -> void:
 	add_child(corpse)
 	corpse.global_position = Vector2(10, 0)
 	_expect(player.select_cleanup_tool("mop") and player.get_cleanup_efficiency("blood_pool") >= 4, "mop should clear ordinary blood in a few deliberate passes")
+	player.rotation = 0.0
+	var near_mop_contact: Vector2 = player.get_cleanup_contact_position(Vector2(18, 0))
+	var far_mop_contact: Vector2 = player.get_cleanup_contact_position(Vector2(180, 0))
+	_expect(near_mop_contact.is_equal_approx(far_mop_contact) and is_equal_approx(far_mop_contact.distance_to(player.global_position), player.MOP_HEAD_REACH), "mouse distance must not move the mop's physical cleaning center away from its visible head")
+	player.rotation = PI * 0.5
+	var turned_mop_contact: Vector2 = player.get_cleanup_contact_position(Vector2(0, 180))
+	_expect(turned_mop_contact.is_equal_approx(Vector2(0, player.MOP_HEAD_REACH)), "mop contact should rotate around the player with the held tool")
+	player.rotation = 0.0
+	var previous_mop_upgrade := Progression.get_upgrade_level("mop")
+	Progression.data.upgrades["mop"] = 0
+	var base_mop_radius := float(player.get_cleanup_stroke_profile(18.0, 1.0).radius)
+	var base_mop_strength: int = int(player.get_cleanup_efficiency("blood_pool"))
+	Progression.data.upgrades["mop"] = 3
+	_expect(float(player.get_cleanup_stroke_profile(18.0, 1.0).radius) > base_mop_radius and player.get_cleanup_efficiency("blood_pool") > base_mop_strength, "mop upgrades should widen the head footprint and strengthen its pass without extending reach")
+	Progression.data.upgrades["mop"] = previous_mop_upgrade
 	var slow_mop_profile: Dictionary = player.get_cleanup_stroke_profile(18.0, 0.42)
 	var deliberate_mop_profile: Dictionary = player.get_cleanup_stroke_profile(18.0, 1.0)
 	_expect(float(deliberate_mop_profile.power) > float(slow_mop_profile.power), "deliberate mop speed should clean more efficiently than a rushed or stalled stroke")

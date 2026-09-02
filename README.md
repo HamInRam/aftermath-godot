@@ -4,6 +4,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 ## v1.2.4 physical pixel pressure washing
 
+- Mopping is physically anchored to the visible head in front of the character: the cursor aims the handle, while player movement and rotation determine the only floor path that can be cleaned. Upgrades widen that local head footprint and strengthen contact without creating remote reach.
 - The pressure washer now emits visible 1x1 water packets from its nozzle. They fly across the room, stop at walls, break into small impact splashes and settle into the same sparse pixel-liquid surface used by damaged plumbing.
 - Cleaning occurs only after water reaches the target: sustained spray progressively thins blood into a pale wet layer, produces short diluted-red runoff and removes the remaining ultraviolet trace.
 - Close aim remains narrow and forceful while extended aim becomes a wider, weaker fan; these modes now alter actual packet spread, impact radius and cleaning force.

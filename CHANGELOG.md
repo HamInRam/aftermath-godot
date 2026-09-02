@@ -2,6 +2,9 @@
 
 ## [v1.2.4] - Physical Pixel Pressure Washing
 
+- Re-anchored mop cleaning to the visible head ten pixels in front of the player. Mouse position now controls handle direction only; moving or turning the actual head paints the continuous cleaning path, and dragging the cursor farther away cannot clean remotely.
+- Reduced legacy biological target queries to the real mop-head footprint instead of the former 22-27px invisible batch radius.
+- Mop upgrades now visibly widen the rendered head and its centered brush footprint while existing efficiency levels strengthen each pass; neither upgrade nor FLOW extends the tool away from the character.
 - Replaced the pressure washer's full-length preview cone and instant endpoint eraser with actual one-pixel water packets emitted from the held nozzle.
 - Water now traverses the room at a fixed 60Hz simulation cadence, forms a coherent broken hose stream, stops against solid wall geometry and splashes into persistent hard-pixel floor water only when it arrives.
 - Pressure impacts gradually lift blood density, visibly shift it into the diluted wet palette, strip UV residue over sustained exposure and carry a small conserved fraction into short pale-red runoff trails.
