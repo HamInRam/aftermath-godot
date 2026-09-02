@@ -39,7 +39,7 @@ func _ready() -> void:
 	compact_hud.set_cleanup_tool("mop", 0.55)
 	compact_hud.set_cleanup_context("kitchen", 0.96, false, true, {"blood": 3, "corpse": 1, "shell": 2})
 	_expect(is_equal_approx(compact_hud.cleanup_meter.value, 84.0) and compact_hud.cleanup_percent_label.text == "84%" and compact_hud.cleanup_police_label.text == "01:15", "cleanup HUD should prioritize total cleanliness and response time without a text wall")
-	_expect(compact_hud.cleanup_tool_label.text == "MOP" and is_equal_approx(compact_hud.cleanup_tool_meter.value, 0.55), "cleanup tool state should be visual and glanceable")
+	_expect(compact_hud.cleanup_tool_label.text == "MOP" and is_equal_approx(compact_hud.cleanup_tool_meter.value, 9.0 / 16.0), "cleanup tool state should use the same cacheable sixteen-step visual value as the gradual mop icon")
 	_expect(compact_hud.cleanup_tool_meter.size.x <= 26.0 and compact_hud.cleanup_tool_meter.size.y <= 1.0, "cleanup tool condition should never inherit stock ProgressBar minimum sizing")
 	_expect(compact_hud.cleanup_scan_label.visible and "B3" in compact_hud.cleanup_scan_label.text and compact_hud.detail_label.text.is_empty(), "forensic counts and current workflow should only appear in active scan mode while room verification stays transient")
 	_expect(compact_hud.cleanup_meter.size.x <= 26.0 and compact_hud.cleanup_meter.size.y <= 1.0 and compact_hud.cleanup_meter.position.x <= 16.0, "cleanup progress should remain a genuinely tiny peripheral upper-left guide after integer viewport scaling")

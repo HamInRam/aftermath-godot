@@ -1,6 +1,9 @@
 class_name PixelBloodCanvas
 extends Node2D
 
+signal cleaning_layer_changed(world_position: Vector2, layer: String, progress: float)
+signal cleaning_region_completed(world_position: Vector2)
+
 ## Sparse room-scale blood simulation. Every occupied world pixel stores blood,
 ## water, age and forensic residue. Visuals are uploaded in 32x32 nearest-filtered
 ## chunks, so combat can paint thousands of hard pixels without thousands of nodes.
@@ -138,7 +141,10 @@ class PixelBloodChunk extends Node2D:
 		if amount > 0.0:
 			var coagulation := floorf(clampf(float(age[index]) / 255.0, 0.0, 0.999) * 4.0) / 3.0
 			var color := FRESH.lerp(DARK, coagulation)
-			color = color.lerp(DILUTED, wetness * 0.58)
+			# Density is also a visible cleaning layer: a deliberate first pass peels
+			# dark mass into a brighter diluted film before UV-only residue remains.
+			var thinning := clampf((0.58 - amount) / 0.58, 0.0, 1.0)
+			color = color.lerp(DILUTED, clampf(thinning * 0.72 + wetness * 0.58, 0.0, 0.88))
 			color.a = clampf(0.24 + amount * 0.76, 0.0, 1.0)
 			return color
 		if wetness > 0.0:
@@ -172,6 +178,16 @@ class PixelBloodChunk extends Node2D:
 		if initial_load <= 0.0: return 1.0
 		var forensic_load := float(residue_load) * 0.25
 		return clampf(1.0 - (float(blood_load) + forensic_load) / initial_load, 0.0, 1.0)
+
+	func get_cleaning_band() -> int:
+		if blood_load > 0:
+			var visible_ratio := clampf(float(blood_load) / maxf(1.0, initial_load), 0.0, 1.0)
+			return 3 if visible_ratio > 0.58 else 2
+		if residue_load > 0: return 1
+		return 0
+
+	func get_feedback_position() -> Vector2:
+		return Vector2(chunk_coordinate * PixelBloodCanvas.CHUNK_SIZE) + Vector2.ONE * (PixelBloodCanvas.CHUNK_SIZE * 0.5)
 
 	func has_visible_or_residual_blood() -> bool:
 		return blood_load > 0 or residue_load > 0
@@ -309,6 +325,7 @@ func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float,
 	var segment := world_end - world_start
 	var steps := maxi(1, ceili(segment.length()))
 	var touched: Dictionary = {}
+	var touched_chunks: Dictionary = {}
 	var cleaned := false
 	var removal := maxi(12, power * (22 if tool_name == "pressure_washer" else 18))
 	for step in range(steps + 1):
@@ -324,8 +341,22 @@ func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float,
 				touched[cell] = true
 				var chunk := _find_chunk_for_cell(cell)
 				if not is_instance_valid(chunk): continue
+				var chunk_id := chunk.get_instance_id()
+				if not touched_chunks.has(chunk_id): touched_chunks[chunk_id] = {"chunk": chunk, "before": chunk.get_cleaning_band()}
 				var local_cell := _local_cell(cell)
 				if chunk.clean_local_pixel(local_cell, removal, tool_name) > 0: cleaned = true
+	for record in touched_chunks.values():
+		var touched_chunk: PixelBloodChunk = record.chunk
+		if not is_instance_valid(touched_chunk): continue
+		var before_band := int(record.before)
+		var after_band := touched_chunk.get_cleaning_band()
+		if after_band >= before_band: continue
+		var layer_name := "THICK"
+		if after_band == 2: layer_name = "DILUTED"
+		elif after_band == 1: layer_name = "UV_RESIDUE"
+		elif after_band == 0: layer_name = "CLEAN"
+		cleaning_layer_changed.emit(touched_chunk.get_feedback_position(), layer_name, touched_chunk.get_cleanup_progress())
+		if after_band == 0: cleaning_region_completed.emit(touched_chunk.get_feedback_position())
 	for chunk in chunks.values():
 		if is_instance_valid(chunk): (chunk as PixelBloodChunk).dispose_if_empty()
 	return cleaned
@@ -488,6 +519,16 @@ func get_residue_amount(world_position: Vector2) -> int:
 	if not is_instance_valid(chunk): return 0
 	var local := _local_cell(cell)
 	return int(chunk.residue[local.y * CHUNK_SIZE + local.x])
+
+func get_cleaning_layer(world_position: Vector2) -> String:
+	var cell := Vector2i(floori(world_position.x), floori(world_position.y))
+	var chunk := _find_chunk_for_cell(cell)
+	if not is_instance_valid(chunk): return "CLEAN"
+	match chunk.get_cleaning_band():
+		3: return "THICK"
+		2: return "DILUTED"
+		1: return "UV_RESIDUE"
+	return "CLEAN"
 
 func get_wetness(world_position: Vector2) -> int:
 	var cell := Vector2i(floori(world_position.x), floori(world_position.y))

@@ -14,6 +14,7 @@ signal combat_ended
 signal door_impact(world_position: Vector2, intensity: float)
 signal glass_shattered(world_position: Vector2)
 signal prop_destroyed(world_position: Vector2, prop_kind: String)
+signal prop_restored(world_position: Vector2, prop_kind: String)
 signal prop_impacted(world_position: Vector2, material: String, energy: float, structural_stage: int)
 signal hazard_spawned(world_position: Vector2, hazard_kind: String)
 signal setpiece_triggered(world_position: Vector2, setpiece_kind: String, hazard_kind: String)

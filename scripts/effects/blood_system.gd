@@ -1,6 +1,9 @@
 class_name BloodSystem
 extends Node2D
 
+signal cleaning_layer_changed(world_position: Vector2, layer: String, progress: float)
+signal cleaning_region_completed(world_position: Vector2)
+
 const BLOOD_MIST_SCENE := preload("res://scenes/effects/blood_mist.tscn")
 const GORE_CHUNK_SCENE := preload("res://scenes/effects/gore_chunk.tscn")
 const DETACHED_LIMB := preload("res://scripts/effects/detached_limb.gd")
@@ -14,10 +17,20 @@ func _ready() -> void:
 	ground_canvas.name = "GroundPixelBlood"
 	ground_canvas.configure("ground", -2)
 	add_child(ground_canvas)
+	ground_canvas.cleaning_layer_changed.connect(_on_cleaning_layer_changed)
+	ground_canvas.cleaning_region_completed.connect(_on_cleaning_region_completed)
 	wall_canvas = PIXEL_BLOOD_CANVAS.new() as Node2D
 	wall_canvas.name = "WallPixelBlood"
 	wall_canvas.configure("wall", 2)
 	add_child(wall_canvas)
+	wall_canvas.cleaning_layer_changed.connect(_on_cleaning_layer_changed)
+	wall_canvas.cleaning_region_completed.connect(_on_cleaning_region_completed)
+
+func _on_cleaning_layer_changed(world_position: Vector2, layer: String, progress: float) -> void:
+	cleaning_layer_changed.emit(world_position, layer, progress)
+
+func _on_cleaning_region_completed(world_position: Vector2) -> void:
+	cleaning_region_completed.emit(world_position)
 
 func emit_hit(hit_position: Vector2, projectile_direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool) -> void:
 	emit_context(DamageContext.create(hit_position, projectile_direction, damage, weapon_id, travel_distance, lethal, "torso"))

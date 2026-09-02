@@ -33,6 +33,22 @@ func _ready() -> void:
 	_expect(int(canvas.get_residue_amount(Vector2(36, 40))) > 0, "mopping should preserve UV forensic residue")
 	for pass_index in range(6): canvas.clean_stroke(Vector2(20, 40), Vector2(52, 40), 3.0, 8, "pressure_washer")
 	_expect(int(canvas.get_residue_amount(Vector2(36, 40))) == 0, "pressure washing should remove UV residue")
+	# A fresh isolated chunk must expose the complete authored cleaning ladder and
+	# produce one completion event when its final forensic residue is removed.
+	var layer_events: Array[String] = []
+	var completed_regions: Array[Vector2] = []
+	canvas.cleaning_layer_changed.connect(func(_position: Vector2, layer: String, _progress: float) -> void: layer_events.append(layer))
+	canvas.cleaning_region_completed.connect(func(position: Vector2) -> void: completed_regions.append(position))
+	var layer_sample := Vector2(208, 208)
+	canvas.add_blood_pixel(layer_sample, 240)
+	_expect(canvas.get_cleaning_layer(layer_sample) == "THICK", "fresh dense blood should begin in the thick cleaning layer")
+	canvas.clean_stroke(layer_sample, layer_sample, 0.4, 3, "mop")
+	canvas.clean_stroke(layer_sample, layer_sample, 0.4, 3, "mop")
+	_expect(canvas.get_cleaning_layer(layer_sample) == "DILUTED" and "DILUTED" in layer_events, "mopping should visibly lift a thick stain into a diluted layer")
+	for pass_index in range(4): canvas.clean_stroke(layer_sample, layer_sample, 0.4, 5, "mop")
+	_expect(canvas.get_cleaning_layer(layer_sample) == "UV_RESIDUE" and "UV_RESIDUE" in layer_events, "visible blood should resolve into a UV-only forensic layer")
+	for pass_index in range(5): canvas.clean_stroke(layer_sample, layer_sample, 0.4, 8, "pressure_washer")
+	_expect(canvas.get_cleaning_layer(layer_sample) == "CLEAN" and completed_regions.size() == 1, "washing the final residue should complete the local region exactly once")
 	# Pools spread progressively rather than appearing at full size on one frame.
 	var pool_center := Vector2(90, 60)
 	canvas.start_pool(pool_center, 1.8, Vector2.RIGHT, {"spread": 1.0}, {"pool_bias": 1.0})

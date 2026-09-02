@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.2.3] - Physical Set Dressing & Cleaning Flow
+
+- Rebuilt mopping around direction and stroke speed: deliberate 4-9px samples clean best, erratic or stalled strokes remain useful but weaker, and successful continuous sweeps build a short-lived three-tier FLOW bonus to coverage and cleaning power.
+- Added a distance-shaped pressure washer: aiming near the player creates a narrow, forceful jet for residue and stubborn pixels, while extending the cursor produces a broad, weaker finishing fan with a matching pixel-cone preview and compact HUD state.
+- Split pixel blood into readable THICK, DILUTED and UV RESIDUE cleaning layers. Density and wetness now change the stain itself instead of deleting whole patches, while transitions and completed 32px regions produce restrained contextual feedback.
+- Routed mop/washer radius, force and stroke quality through blood, environmental liquids and legacy evidence without restoring dirty-mop blood generation or cleanup-phase footprints.
+- Added regression coverage for stroke-quality response, FLOW buildup/reset, washer near/far behavior, the complete blood-layer ladder and one-shot local completion events.
+
+- Reverted the postponed incident-ecology experiment so fire, smoke, responder and generalized liquid-chain features are not part of this version.
+- Converted destructible dressing to controlled CharacterBody2D objects while retaining sleeping physics for untouched and settled props.
+- Added material-, attack- and mass-aware launch response for light furniture and appliances; heavy fixtures keep progressive cracks, partial fragments and full structural collapse.
+- Added safe wall collision, damped spin, prop-to-prop impacts and speed-gated enemy knockdown without permitting high-energy objects to tunnel through level geometry.
+- Added persistent original-position anchors for every movable object. Cyan hard-pixel ghosts remain hidden during combat and become visible only when a displaced object must be restored.
+- Added cleanup-phase object hauling through the existing `E` interaction. Props follow behind the player, can be deliberately dropped, and auto-snap to their exact authored transform when guided into the correct slot.
+- Fixed cleanup-phase physics locking: untouched props are reset and frozen at the phase boundary, while snapped or manually restored objects permanently reject actor push impulses.
+- Split physical displacement provenance: weapon/door/melee/thrown launches create a ghost-guided restoration task, while objects moved only by player or enemy body contact freeze at their current position when cleanup begins.
+- Integrated displaced furniture into CleanupRegistry risk, workflow guidance, scoring, navigation solidity, context markers and extraction certification.
+- Added dedicated regression coverage for launch, partial damage, ghost visibility, hauling, exact snap restoration, cleanup resolution and restoration events.
+
 ## [v1.2.2] - Controlled Corpse Physics
 
 - Added adaptive actor simulation: calm living rigs solve at 30 Hz, idle silhouettes redraw at 12 Hz, moving silhouettes at 30 Hz, while impacts and knockdowns retain responsive 60 Hz physics.
