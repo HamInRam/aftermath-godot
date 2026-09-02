@@ -1408,9 +1408,19 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 	# gesture. They keep separate evidence channels but never disappear in blocks.
 	var pixel_cleaned := false
 	var pixel_power := 0
-	if player.current_cleanup_tool in ["mop", "pressure_washer"] and blood_system.has_method("clean_pixel_stroke"):
+	var liquid_system := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
+	if not is_instance_valid(liquid_system):
+		liquid_system = preload("res://scripts/effects/pixel_liquid_system.gd").get_or_create(get_tree()) as Node2D
+	if player.current_cleanup_tool == "pressure_washer":
 		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else (7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0))
+		var spray_radius := brush_radius_override if brush_radius_override > 0.0 else 7.0
+		var spray_direction := player.global_position.direction_to(world_position)
+		var nozzle_origin := player.global_position + spray_direction * 12.0
+		if is_instance_valid(liquid_system) and liquid_system.has_method("emit_pressure_stream"):
+			liquid_system.emit_pressure_stream(nozzle_origin, world_position, spray_radius, pixel_power)
+	elif player.current_cleanup_tool == "mop" and blood_system.has_method("clean_pixel_stroke"):
+		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
+		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0)
 		pixel_cleaned = blood_system.clean_pixel_stroke(stroke_start, world_position, brush_radius, pixel_power, player.current_cleanup_tool)
 	var compatible_types := CleanupWorkflow.get_compatible_types(player.current_cleanup_tool)
 	var target := CleanupRegistry.get_nearest_compatible_target(world_position, 26.0, compatible_types)
@@ -1442,11 +1452,10 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 		detail_label.text = "SOURCE STILL ACTIVE // RESTORE DAMAGED EQUIPMENT FIRST"
 		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
 		return
-	if player.current_cleanup_tool in ["mop", "pressure_washer"]:
-		var liquid_system := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
+	if player.current_cleanup_tool == "mop":
 		if is_instance_valid(liquid_system):
 			if pixel_power <= 0: pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("spill")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else (7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0))
+			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0)
 			pixel_cleaned = liquid_system.clean_stroke(stroke_start, world_position, liquid_brush, pixel_power, player.current_cleanup_tool) or pixel_cleaned
 	if not is_instance_valid(target):
 		if pixel_cleaned:
@@ -1496,10 +1505,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 				if not is_instance_valid(cleanup_target) or cleanup_target.is_queued_for_deletion(): break
 				cleanup_target.clean_step()
 	if used_cleaner and is_instance_valid(target): target.modulate = Color.WHITE
-	var liquid_surface := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
-	if not is_instance_valid(liquid_surface):
-		liquid_surface = preload("res://scripts/effects/pixel_liquid_system.gd").get_or_create(get_tree()) as Node2D
-	if is_instance_valid(liquid_surface): liquid_surface.stamp_cleaning_stroke(stroke_start, world_position, player.current_cleanup_tool)
+	if is_instance_valid(liquid_system) and player.current_cleanup_tool == "mop": liquid_system.stamp_cleaning_stroke(stroke_start, world_position, player.current_cleanup_tool)
 	if player.current_cleanup_tool == "mop": player.record_mop_use(0.38 + 0.16 * steps)
 	player.report_cleanup_stroke_result(true, stroke_quality, stroke_direction)
 	ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")

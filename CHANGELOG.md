@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.4] - Physical Pixel Pressure Washing
+
+- Replaced the pressure washer's full-length preview cone and instant endpoint eraser with actual one-pixel water packets emitted from the held nozzle.
+- Water now traverses the room at a fixed 60Hz simulation cadence, forms a coherent broken hose stream, stops against solid wall geometry and splashes into persistent hard-pixel floor water only when it arrives.
+- Pressure impacts gradually lift blood density, visibly shift it into the diluted wet palette, strip UV residue over sustained exposure and carry a small conserved fraction into short pale-red runoff trails.
+- Near/focused and far/wide washer modes now shape both the real stream and its impact footprint instead of changing only an abstract cleanup radius.
+- Other liquids are displaced at the physical impact point before fresh water settles, while the mop retains its existing continuous cleaner stroke without behavioral changes.
+- Airborne water uses one bounded draw list rather than scene nodes, with a strict 112-packet cap and automatic settling to preserve frame rate during continuous spraying.
+- Added integration and regression coverage for delayed-on-arrival cleaning, persistent wet footprints, gradual blood reduction, transient cleanup and the water-packet runtime budget.
+
 ## [v1.2.3] - Physical Set Dressing & Cleaning Flow
 
 - Rebuilt mopping around direction and stroke speed: deliberate 4-9px samples clean best, erratic or stalled strokes remain useful but weaker, and successful continuous sweeps build a short-lived three-tier FLOW bonus to coverage and cleaning power.

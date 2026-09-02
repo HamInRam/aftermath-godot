@@ -7,6 +7,8 @@ extends Node2D
 
 const CHUNK_SIZE := 32
 const PIXELS_PER_CHUNK := CHUNK_SIZE * CHUNK_SIZE
+const MAX_JET_PARTICLES := 112
+const JET_FIXED_STEP := 1.0 / 60.0
 const LIQUID_KINDS := [&"water", &"oil", &"spill", &"cleaner"]
 const PROFILE := {
 	&"water": {"evaporation": 5, "spread": 1.0, "conductive": true, "flammable": false},
@@ -134,6 +136,9 @@ var texture_accumulator := 0.0
 var surface_accumulator := 0.0
 var contact_accumulator := 0.0
 var actor_tracks: Dictionary = {}
+var jet_accumulator := 0.0
+var jet_particles: Array[Dictionary] = []
+var jet_sequence := 0
 
 func _ready() -> void:
 	add_to_group("pixel_liquid_system")
@@ -154,6 +159,10 @@ func _process(delta: float) -> void:
 	texture_accumulator += delta
 	surface_accumulator += delta
 	contact_accumulator += delta
+	jet_accumulator += minf(delta, 0.1)
+	while jet_accumulator >= JET_FIXED_STEP:
+		jet_accumulator -= JET_FIXED_STEP
+		_update_pressure_jets(JET_FIXED_STEP)
 	if texture_accumulator >= 1.0 / 24.0:
 		texture_accumulator = 0.0
 		for chunk in chunks.values():
@@ -165,6 +174,99 @@ func _process(delta: float) -> void:
 	if contact_accumulator >= 0.12:
 		contact_accumulator = 0.0
 		_update_actor_contacts()
+
+func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float, power: int) -> void:
+	var segment := target - origin
+	if segment.length_squared() <= 4.0: return
+	var forward := segment.normalized()
+	var distance := minf(segment.length(), 40.0)
+	var width_ratio := clampf((brush_radius - 3.2) / 4.8, 0.0, 1.0)
+	var particle_count := clampi(roundi(lerpf(3.0, 6.0, width_ratio)), 3, 6)
+	for index in particle_count:
+		if jet_particles.size() >= MAX_JET_PARTICLES: jet_particles.pop_front()
+		jet_sequence += 1
+		var lateral := randf_range(-brush_radius * 0.64, brush_radius * 0.64) * width_ratio
+		var endpoint := target + forward.orthogonal() * lateral + forward * randf_range(-1.5, 1.5)
+		var ray := origin.direction_to(endpoint)
+		var speed := randf_range(154.0, 205.0)
+		jet_particles.append({
+			"position": origin + ray * float(index % 3),
+			"previous": origin,
+			"direction": ray,
+			"speed": speed,
+			"remaining": minf(origin.distance_to(endpoint), distance + 3.0),
+			"power": maxi(1, power),
+			"radius": maxf(1.2, brush_radius * lerpf(0.28, 0.42, width_ratio)),
+			"amount": clampi(roundi(44.0 + float(power) * 2.4), 42, 76),
+			"sequence": jet_sequence,
+		})
+	queue_redraw()
+
+func _update_pressure_jets(delta: float) -> void:
+	if jet_particles.is_empty(): return
+	var active: Array[Dictionary] = []
+	for particle in jet_particles:
+		var previous: Vector2 = particle.position
+		var travel := minf(float(particle.speed) * delta, float(particle.remaining))
+		var next := previous + (particle.direction as Vector2) * travel
+		var hit := _raycast_solid(previous, next)
+		particle.previous = previous
+		particle.remaining = float(particle.remaining) - travel
+		if not hit.is_empty():
+			particle.position = (hit.position as Vector2) - (particle.direction as Vector2) * 0.6
+			_pressure_impact(particle, hit.normal as Vector2)
+		elif float(particle.remaining) <= 0.01:
+			particle.position = next
+			_pressure_impact(particle, -(particle.direction as Vector2))
+		else:
+			particle.position = next
+			active.append(particle)
+	jet_particles = active
+	queue_redraw()
+
+func _pressure_impact(particle: Dictionary, surface_normal: Vector2) -> void:
+	var position: Vector2 = particle.position
+	var direction: Vector2 = particle.direction
+	var radius := float(particle.radius)
+	var amount := int(particle.amount)
+	# The moving jet resolves other surface liquids only when it physically arrives;
+	# fresh water is deposited afterwards so the floor remains visibly wet.
+	clean_stroke(position, position, radius, int(particle.power), "pressure_washer")
+	_add_liquid_pixel_raw(position, &"water", amount)
+	var side := (surface_normal.normalized() if surface_normal.length_squared() > 0.01 else direction.orthogonal()).orthogonal()
+	var splash_count := clampi(roundi(radius * 1.45), 2, 6)
+	for index in splash_count:
+		var sign_value := -1.0 if index % 2 == 0 else 1.0
+		var offset := side * sign_value * float(1 + index / 2)
+		if index >= 3: offset += -direction * float(index % 3)
+		_add_liquid_pixel_raw(position + offset, &"water", maxi(12, amount - index * 7))
+	var blood_system := get_tree().get_first_node_in_group("blood_system")
+	if is_instance_valid(blood_system) and blood_system.has_method("pressure_wash_pixel_water"):
+		blood_system.pressure_wash_pixel_water(position, radius, int(particle.power), direction)
+
+func _draw() -> void:
+	# Every airborne droplet is rendered as an integer-aligned 1x1 source pixel.
+	# Sampling the short previous-to-current segment creates a coherent hose stream
+	# without antialiased lines, textures or one scene node per droplet.
+	for particle in jet_particles:
+		var previous := to_local(particle.previous as Vector2)
+		var current := to_local(particle.position as Vector2)
+		var length := previous.distance_to(current)
+		var steps := clampi(ceili(length), 1, 4)
+		for step in range(steps + 1):
+			var point := previous.lerp(current, float(step) / float(steps)).floor()
+			var bright := posmod(int(particle.sequence) + step, 4) == 0
+			var color := Color(0.86, 0.98, 1.0, 0.92) if bright else Color(0.25, 0.78, 0.92, 0.78)
+			draw_rect(Rect2(point, Vector2.ONE), color, true)
+
+func _raycast_solid(start: Vector2, finish: Vector2) -> Dictionary:
+	if start.distance_squared_to(finish) <= 0.01: return {}
+	var query := PhysicsRayQueryParameters2D.create(start, finish, 4)
+	query.collide_with_areas = false
+	return get_world_2d().direct_space_state.intersect_ray(query)
+
+func get_debug_jet_count() -> int:
+	return jet_particles.size()
 
 func emit_burst(origin: Vector2, kind: StringName, direction := Vector2.RIGHT, strength := 1.0) -> void:
 	if kind not in LIQUID_KINDS: return
@@ -194,10 +296,14 @@ func deposit_source(origin: Vector2, kind: StringName, radius: float, strength: 
 
 func add_liquid_pixel(world_position: Vector2, kind: StringName, amount: int, flow_direction := Vector2.ZERO) -> void:
 	if kind not in LIQUID_KINDS: return
+	_add_liquid_pixel_raw(world_position, kind, amount)
+	if kind in [&"water", &"cleaner"]: _mix_with_blood(world_position, amount, flow_direction)
+
+func _add_liquid_pixel_raw(world_position: Vector2, kind: StringName, amount: int) -> void:
+	if kind not in LIQUID_KINDS: return
 	var cell := Vector2i(floori(world_position.x), floori(world_position.y))
 	var chunk := _get_or_create_chunk(_chunk_coordinate(cell))
 	chunk.add_local(_local_cell(cell), kind, amount)
-	if kind in [&"water", &"cleaner"]: _mix_with_blood(world_position, amount, flow_direction)
 
 func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float, power: int, tool_name: String) -> bool:
 	var segment := world_end - world_start

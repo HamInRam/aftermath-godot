@@ -911,16 +911,10 @@ func _draw() -> void:
 			mop_color = mop_color.lerp(Color("730019"), smoothstep(0.62, 1.0, mop_dirty))
 		if current_cleanup_tool == "pressure_washer":
 			PIXEL_PAINTER.material_block(self, Vector2(10, 0), Vector2(4, 4), Color("5bc8e8"), 19, &"metal")
-			var washer_profile := get_cleanup_stroke_profile(pressure_washer_distance)
-			var spray_reach := clampi(roundi(pressure_washer_distance), 10, roundi(CLEANUP_REACH))
-			var spray_half_width := maxi(1, roundi(float(washer_profile.radius) * 0.45))
-			var spray_color := Color(0.55, 0.9, 1.0, lerpf(0.48, 0.82, float(washer_profile.focus)))
-			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(spray_reach, 0), spray_color)
-			PIXEL_PAINTER.line(self, Vector2(14, -1), Vector2(spray_reach, -spray_half_width), Color(spray_color, spray_color.a * 0.58))
-			PIXEL_PAINTER.line(self, Vector2(14, 1), Vector2(spray_reach, spray_half_width), Color(spray_color, spray_color.a * 0.58))
-			for distance in range(16, spray_reach + 1, 4):
-				var scatter := roundi(lerpf(0.0, float(spray_half_width), float(distance - 14) / maxf(1.0, float(spray_reach - 14))))
-				PIXEL_PAINTER.pixel(self, Vector2(distance, scatter if distance % 8 == 0 else -scatter), Color(0.68, 0.95, 1.0, 0.42))
+			# The old full-length cone was only a preview and made the washer look like
+			# an instant eraser. Keep a tiny nozzle glint; PixelLiquidSystem now renders
+			# every water pixel actually travelling through the room.
+			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(14, 0), Color(0.76, 0.96, 1.0, 0.88))
 		else: PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, 6), mop_color, 23, &"fabric")
 		if mop_dirty >= 0.75:
 			PIXEL_PAINTER.material_circle(self, Vector2(9, 4), 1, Color(0.65, 0.0, 0.08, 0.85), Color(0.85, 0.04, 0.12, 0.85), Color(0.3, 0.0, 0.04, 0.85), 29)

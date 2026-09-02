@@ -345,6 +345,46 @@ func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float,
 				if not touched_chunks.has(chunk_id): touched_chunks[chunk_id] = {"chunk": chunk, "before": chunk.get_cleaning_band()}
 				var local_cell := _local_cell(cell)
 				if chunk.clean_local_pixel(local_cell, removal, tool_name) > 0: cleaned = true
+	_emit_cleaning_transitions(touched_chunks)
+	for chunk in chunks.values():
+		if is_instance_valid(chunk): (chunk as PixelBloodChunk).dispose_if_empty()
+	return cleaned
+
+func pressure_wash_at(world_position: Vector2, brush_radius: float, power: int, flow_direction := Vector2.RIGHT) -> bool:
+	var touched_chunks: Dictionary = {}
+	var cleaned := false
+	var lifted_total := 0
+	var direction := flow_direction.normalized() if flow_direction.length_squared() > 0.01 else Vector2.RIGHT
+	for y in range(floori(world_position.y - brush_radius), ceili(world_position.y + brush_radius) + 1):
+		for x in range(floori(world_position.x - brush_radius), ceili(world_position.x + brush_radius) + 1):
+			var cell := Vector2i(x, y)
+			var distance := Vector2(cell).distance_to(world_position)
+			if distance > brush_radius: continue
+			var chunk := _find_chunk_for_cell(cell)
+			if not is_instance_valid(chunk): continue
+			var chunk_id := chunk.get_instance_id()
+			if not touched_chunks.has(chunk_id): touched_chunks[chunk_id] = {"chunk": chunk, "before": chunk.get_cleaning_band()}
+			var local := _local_cell(cell)
+			var falloff := 1.0 - clampf(distance / maxf(1.0, brush_radius), 0.0, 1.0) * 0.58
+			var lifted := chunk.apply_external_water(local, clampi(roundi(34.0 * falloff), 12, 34))
+			var washed := chunk.clean_local_pixel(local, maxi(1, roundi(float(power) * 0.78 * falloff)), "pressure_washer")
+			lifted_total += lifted
+			cleaned = cleaned or lifted > 0 or washed > 0
+	if evidence_layer == "ground" and lifted_total > 0:
+		# Washed blood does not vanish: a small fraction becomes a pale, broken
+		# downstream trail before subsequent droplets dilute it away.
+		for step in range(1, 5):
+			var destination := world_position + direction * float(step * 2) + direction.orthogonal() * float((step % 2) * 2 - 1)
+			if _blocked_by_solid(world_position, destination): break
+			var cell := Vector2i(floori(destination.x), floori(destination.y))
+			var runoff_chunk := _get_or_create_chunk(_chunk_coordinate(cell))
+			runoff_chunk.add_local_pixel(_local_cell(cell), clampi(lifted_total / (step * 5 + 4), 1, 22), 255, 0)
+	_emit_cleaning_transitions(touched_chunks)
+	for chunk in chunks.values():
+		if is_instance_valid(chunk): (chunk as PixelBloodChunk).dispose_if_empty()
+	return cleaned
+
+func _emit_cleaning_transitions(touched_chunks: Dictionary) -> void:
 	for record in touched_chunks.values():
 		var touched_chunk: PixelBloodChunk = record.chunk
 		if not is_instance_valid(touched_chunk): continue
@@ -357,9 +397,6 @@ func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float,
 		elif after_band == 0: layer_name = "CLEAN"
 		cleaning_layer_changed.emit(touched_chunk.get_feedback_position(), layer_name, touched_chunk.get_cleanup_progress())
 		if after_band == 0: cleaning_region_completed.emit(touched_chunk.get_feedback_position())
-	for chunk in chunks.values():
-		if is_instance_valid(chunk): (chunk as PixelBloodChunk).dispose_if_empty()
-	return cleaned
 
 func has_blood_near(world_position: Vector2, radius: float) -> bool:
 	var min_x := floori(world_position.x - radius)

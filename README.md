@@ -2,6 +2,13 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.4 physical pixel pressure washing
+
+- The pressure washer now emits visible 1x1 water packets from its nozzle. They fly across the room, stop at walls, break into small impact splashes and settle into the same sparse pixel-liquid surface used by damaged plumbing.
+- Cleaning occurs only after water reaches the target: sustained spray progressively thins blood into a pale wet layer, produces short diluted-red runoff and removes the remaining ultraviolet trace.
+- Close aim remains narrow and forceful while extended aim becomes a wider, weaker fan; these modes now alter actual packet spread, impact radius and cleaning force.
+- The stream is a bounded batched draw list rather than dozens of physics nodes, keeping continuous spraying compatible with the existing low-pixel performance budget.
+
 ## v1.2.3 physical set dressing and cleaning flow
 
 - Mop input is now a real gesture rather than a held-button eraser: direction continuity and a deliberate stroke-speed window determine efficiency, while successful sweeps build three compact FLOW tiers for slightly wider, stronger follow-through.

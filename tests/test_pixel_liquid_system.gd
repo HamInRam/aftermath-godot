@@ -33,6 +33,21 @@ func _ready() -> void:
 	_expect(liquids.clean_stroke(Vector2(14, 24), Vector2(34, 24), 4.0, 6, "mop"), "mop must remove a continuous pixel-liquid stroke")
 	_expect(liquids.amount_near(Vector2(24, 24), 16.0, &"water") < water_before, "liquid cleanup must reduce local density instead of hiding a whole circle")
 
+	var wash_target := Vector2(132, 28)
+	for y in range(26, 31):
+		for x in range(130, 135): blood.ground_canvas.add_blood_pixel(Vector2(x, y), 220)
+	var sprayed_blood_before := int(blood.ground_canvas.get_blood_amount(wash_target))
+	for burst in range(5): liquids.emit_pressure_stream(Vector2(104, 28), wash_target, 3.2, 9)
+	_expect(liquids.get_debug_jet_count() > 0, "pressure washer must create visible in-flight pixel water instead of immediately erasing its target")
+	_expect(int(blood.ground_canvas.get_blood_amount(wash_target)) == sprayed_blood_before, "blood must remain unchanged until airborne water reaches it")
+	for tick in range(28): liquids._update_pressure_jets(1.0 / 60.0)
+	_expect(liquids.get_debug_jet_count() == 0, "pressure water pixels should settle rather than becoming permanent particle nodes")
+	_expect(liquids.amount_near(wash_target, 5.0, &"water") > 0, "settled pressure spray must leave a readable hard-pixel wet footprint")
+	_expect(int(blood.ground_canvas.get_blood_amount(wash_target)) < sprayed_blood_before, "arriving pressure spray must gradually dilute and remove blood density")
+	for burst in range(30): liquids.emit_pressure_stream(Vector2(104, 28), Vector2(140, 28), 8.0, 4)
+	_expect(liquids.get_debug_jet_count() <= int(LIQUID_SYSTEM.MAX_JET_PARTICLES), "pressure spray must keep a strict transient-pixel runtime budget")
+	liquids.jet_particles.clear()
+
 	var actor := Node2D.new()
 	actor.add_to_group("player")
 	actor.position = Vector2(58, 40)
