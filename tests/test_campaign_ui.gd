@@ -25,6 +25,8 @@ func _ready() -> void:
 	_expect(compact_hud.tutorial_label.text.length() < 40, "onboarding should use a short progressive hint instead of a permanent control paragraph")
 	_expect(compact_hud.ammo_meter != null, "combat HUD should express ammunition visually as well as numerically")
 	_expect(compact_hud.ammo_meter.size.x <= 26.0 and compact_hud.ammo_meter.size.y <= 1.0, "combat ammunition should use the same true-pixel micro-gauge language as cleanup")
+	compact_hud.set_combat_focus(0.5, true)
+	_expect(compact_hud.focus_meter.visible and compact_hud.focus_meter.size.y <= 1.0, "combat focus should use a contextual one-pixel gauge rather than another permanent text panel")
 	compact_hud.set_interaction("[ E ] SECURE NEARBY EVIDENCE x4 // OPTIONAL")
 	await get_tree().process_frame
 	_expect(compact_hud.interaction_label.text.length() <= 24 and compact_hud.context_backplate.visible, "context prompts should appear as compact icon-backed actions")

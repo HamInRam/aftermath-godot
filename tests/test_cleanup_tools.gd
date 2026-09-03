@@ -26,6 +26,21 @@ func _run() -> void:
 	add_child(corpse)
 	corpse.global_position = Vector2(10, 0)
 	_expect(player.select_cleanup_tool("mop") and player.get_cleanup_efficiency("blood_pool") >= 4, "mop should clear ordinary blood in a few deliberate passes")
+	player.rotation = 0.0
+	var near_mop_contact: Vector2 = player.get_cleanup_contact_position(Vector2(18, 0))
+	var far_mop_contact: Vector2 = player.get_cleanup_contact_position(Vector2(180, 0))
+	_expect(near_mop_contact.is_equal_approx(far_mop_contact) and is_equal_approx(far_mop_contact.distance_to(player.global_position), player.MOP_HEAD_REACH), "mouse distance must not move the mop's physical cleaning center away from its visible head")
+	player.rotation = PI * 0.5
+	var turned_mop_contact: Vector2 = player.get_cleanup_contact_position(Vector2(0, 180))
+	_expect(turned_mop_contact.is_equal_approx(Vector2(0, player.MOP_HEAD_REACH)), "mop contact should rotate around the player with the held tool")
+	player.rotation = 0.0
+	var previous_mop_upgrade := Progression.get_upgrade_level("mop")
+	Progression.data.upgrades["mop"] = 0
+	var base_mop_radius := float(player.get_cleanup_stroke_profile(18.0, 1.0).radius)
+	var base_mop_strength: int = int(player.get_cleanup_efficiency("blood_pool"))
+	Progression.data.upgrades["mop"] = 3
+	_expect(float(player.get_cleanup_stroke_profile(18.0, 1.0).radius) > base_mop_radius and player.get_cleanup_efficiency("blood_pool") > base_mop_strength, "mop upgrades should widen the head footprint and strengthen its pass without extending reach")
+	Progression.data.upgrades["mop"] = previous_mop_upgrade
 	var slow_mop_profile: Dictionary = player.get_cleanup_stroke_profile(18.0, 0.42)
 	var deliberate_mop_profile: Dictionary = player.get_cleanup_stroke_profile(18.0, 1.0)
 	_expect(float(deliberate_mop_profile.power) > float(slow_mop_profile.power), "deliberate mop speed should clean more efficiently than a rushed or stalled stroke")
@@ -33,11 +48,23 @@ func _run() -> void:
 	var flowing_mop_profile: Dictionary = player.get_cleanup_stroke_profile(18.0, 1.0)
 	_expect(player.get_cleanup_flow_ratio() > 0.45, "successful continuous mop strokes should build FLOW")
 	_expect(float(flowing_mop_profile.power) > float(deliberate_mop_profile.power) and float(flowing_mop_profile.radius) > float(deliberate_mop_profile.radius), "FLOW should reward rhythm with a modest power and coverage bonus")
+	var previous_washer_upgrade := Progression.get_upgrade_level("pressure_washer")
+	Progression.data.upgrades["pressure_washer"] = 0
 	player.select_cleanup_tool("pressure_washer")
 	var focused_washer_profile: Dictionary = player.get_cleanup_stroke_profile(11.0)
 	var wide_washer_profile: Dictionary = player.get_cleanup_stroke_profile(36.0)
+	var base_washer_efficiency: int = int(player.get_cleanup_efficiency("blood_pool"))
 	_expect(str(focused_washer_profile.mode) == "NARROW" and str(wide_washer_profile.mode) == "WIDE", "washer aim distance should switch between readable narrow and wide modes")
 	_expect(float(focused_washer_profile.radius) < float(wide_washer_profile.radius) and float(focused_washer_profile.power) > float(wide_washer_profile.power), "near washer spray should be narrow and strong while far spray is broad and weaker")
+	_expect(base_washer_efficiency >= 12, "the stock pressure washer must feel decisive before any upgrade")
+	_expect(player.get_cleanup_efficiency("gore") == 0, "pressure water must not replace the mop for solid biological matter")
+	Progression.data.upgrades["pressure_washer"] = 1
+	_expect(player.get_cleanup_efficiency("blood_pool") == base_washer_efficiency + 3, "washer level one should add meaningful pump pressure")
+	Progression.data.upgrades["pressure_washer"] = 2
+	_expect(float(player.get_cleanup_stroke_profile(36.0).radius) >= float(wide_washer_profile.radius) * 1.19, "washer level two should widen the broad nozzle by twenty percent")
+	Progression.data.upgrades["pressure_washer"] = 3
+	_expect(player.get_cleanup_efficiency("blood_pool") == base_washer_efficiency + 9, "washer level three should reach its intended power twenty-one baseline")
+	Progression.data.upgrades["pressure_washer"] = previous_washer_upgrade
 	_expect(is_zero_approx(player.get_cleanup_flow_ratio()), "switching away from the mop should reset its FLOW chain")
 	_expect(player.select_cleanup_tool("evidence_bag") and player.get_cleanup_efficiency("shell") == 3, "evidence bag should collect small evidence efficiently")
 	_expect(player.get_cleanup_efficiency("debris") == 3, "one evidence-bag tool should also collect sorted physical debris without adding tool bloat")
@@ -57,6 +84,11 @@ func _run() -> void:
 	_expect(player.ultraviolet_active, "cleanup player should expose ultraviolet inspection state")
 	_expect(player.ULTRAVIOLET_SCAN_COOLDOWN > player.ULTRAVIOLET_SCAN_DURATION, "ultraviolet inspection should use a bounded pulse and recharge")
 	_expect(player.ultraviolet_lamp_active, "right-mouse ultraviolet lamp state should remain independent from the active scan pulse")
+	player.ultraviolet_flashlight.visible = true
+	player.ultraviolet_flashlight.rebuild_geometry()
+	var uv_polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon()
+	_expect(uv_polygon.size() == player.ultraviolet_flashlight.RAY_COUNT + 1, "the UV lamp should build a continuous wall-clipped cone instead of two decorative edge lines")
+	_expect(Geometry2D.is_point_in_polygon(Vector2(30, 0), uv_polygon) and not Geometry2D.is_point_in_polygon(Vector2(-10, 0), uv_polygon), "the UV cone should illuminate only the player's forward sector")
 	_expect(player.rinse_mop() and player.can_mop() and is_zero_approx(player.get_mop_saturation_ratio()), "rinsing should restore full mop efficiency")
 	var dirty_visual_before_rinse: float = float(player.visual_mop_saturation)
 	await get_tree().process_frame

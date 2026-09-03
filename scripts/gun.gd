@@ -70,6 +70,7 @@ var precision_streak := 0
 var precision_primed := false
 var perfect_reload_active := false
 var active_reload_duration := 1.05
+var combat_time_scale := 1.0
 
 func _ready() -> void:
 	set_gun_data(gun_data, true)
@@ -200,6 +201,7 @@ func add_reserve_ammo(target_weapon_id: String, rounds: int) -> int:
 	return get_reserve_ammo(target_weapon_id)
 
 func _process(delta: float) -> void:
+	delta *= combat_time_scale
 	cooldown = maxf(0.0, cooldown - delta)
 	recoil = move_toward(recoil, 0.0, 24.0 * delta)
 	shot_heat = move_toward(shot_heat, 0.0, spread_recovery * delta)
@@ -214,6 +216,10 @@ func _process(delta: float) -> void:
 		weapon_pivot.rotation = snappedf(lerpf(weapon_pivot.rotation, recoil_angle, 1.0 - exp(-28.0 * delta)), PI / 32.0)
 		weapon_pivot.scale = Vector2.ONE
 	queue_redraw()
+
+func set_combat_time_scale(value: float) -> void:
+	combat_time_scale = clampf(value, 0.2, 1.0) if enemy_owned else 1.0
+	if is_instance_valid(animation_player): animation_player.speed_scale = combat_time_scale
 
 func _draw() -> void:
 	if weapon_id.is_empty(): return

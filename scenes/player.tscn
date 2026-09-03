@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource path="res://scripts/player.gd" type="Script" id="1_player"]
 [ext_resource path="res://scenes/gun.tscn" type="PackedScene" id="2_gun"]
@@ -7,6 +7,7 @@
 [ext_resource path="res://scripts/effects/blood_footprint_emitter.gd" type="Script" id="6_footprints"]
 [ext_resource path="res://scripts/visuals/pixel_actor_part.gd" type="Script" id="7_actor_part"]
 [ext_resource path="res://scripts/visuals/lifecycle_physics_rig_2d.gd" type="Script" id="8_lifecycle_rig"]
+[ext_resource path="res://scripts/effects/ultraviolet_flashlight.gd" type="Script" id="9_uv_flashlight"]
 
 [sub_resource type="CircleShape2D" id="CircleShape_player"]
 radius = 5.0
@@ -76,3 +77,6 @@ disabled = true
 
 [node name="BloodFootprintEmitter" type="Node" parent="."]
 script = ExtResource("6_footprints")
+
+[node name="UltravioletFlashlight" type="Node2D" parent="."]
+script = ExtResource("9_uv_flashlight")

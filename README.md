@@ -2,6 +2,48 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.8 responsive hostile-local Focus
+
+- Combat Focus no longer changes the global engine clock: player movement, mouse aim, reticle, camera and HUD remain fully real-time.
+- Enemy thinking, turning, movement, attack wind-up, weapon cadence and hostile bullets run at the Focus multiplier through local simulation scales.
+- Focus transitions update hostile objects only when the state changes, eliminating global slow-motion aim drag and clock-induced visual stutter.
+
+## v1.2.7 spatial ultraviolet flashlight
+
+- Right-mouse UV inspection now renders a filled, wall-clipped flashlight fan instead of two decorative guide lines.
+- Sparse pixel blood is illuminated per world pixel inside the fan, eliminating visible 32x32 chunk activation at cone edges.
+- The separate active scan remains a short radial pulse, while ordinary blood and forensic residue only fluoresce inside the actual illuminated region.
+
+## v1.2.6 exterior approach and room-scale exploration
+
+- Every campaign venue is now a complete site rather than a single floating floor plate: a playable grass/service perimeter, façade walk, parking/loading strip and entrance approach surround the authored interior.
+- Missions default to an exterior arrival aligned with the real front/service door. A per-level `player_spawn_context` switch preserves authored indoor starts for later story beats without another coordinate rewrite.
+- Existing indoor plans, enemies, patrols, ammunition, security, lights, landmarks, cleanup secrets, disposal points and restoration props are translated together into the building coordinate space, keeping all systems synchronized.
+- Each façade gains a physical exterior threshold with actor-width clearance. Offset entrances avoid internal partitions in asymmetric motel and penthouse layouts, and every hostile remains reachable from the outdoor start.
+- The camera now runs at a closer 1.35x exploration scale and derives its clamps from the complete site. At the native 320x180 viewport it shows about 237x133 world pixels: a room cluster and connected sightline rather than most of a 384x224 building.
+- Interior rooms retain functional floor zoning and perimeter furniture, while the new exterior-to-lobby-to-restricted-area sequence gives each contract a believable architectural hierarchy and a clearer first breach decision.
+- Regression coverage now validates exterior spawning, explicit outdoor room identity, partial-building camera coverage, connected entry routes and real-collider passage through every exterior and interior door.
+
+## v1.2.5 blood performance, pressure response and combat Focus
+
+- Dense blood keeps the same one-pixel density, spray counts, trails, pooling, ultraviolet residue and persistent cleanup evidence, but chunks now age and repaint only occupied or changed cells instead of scanning and rebuilding every 32x32 texture.
+- Airborne blood keeps every visible droplet and collision deposit while resolving its straight damped trajectory with one wall query, replacing the former per-droplet, per-frame physics raycasts.
+- The stock pressure washer now starts at 12 cleaning power, emits five focused or up to eight broad physical packets, reaches stable pressure sooner and builds a 35% sustained-target bonus.
+- Far/wide washing retains useful force, impact radii start at 1.9 pixels and grow to 2.4 pixels at tier two, and real pressure impacts remove more density per arrived packet without becoming an endpoint eraser.
+- Combat gains a finite Focus resource on right mouse/left trigger. Focus slows the world to 42% while preserving live aim; kills, head hits, close combat and combos replenish it, and its one-pixel HUD gauge appears only while relevant.
+- Sound response now includes a short distance-, wall- and source-aware orientation delay on top of the existing radius attenuation, uncertain localization and push/sweep/guard assignments, so alerted enemies react credibly without instantly acquiring an exact route.
+- Focus composes with lethal hit-stop instead of fighting the global time scale, then always resets for cleanup, mission completion and scene exit. Cleanup right mouse remains the ultraviolet lamp.
+
+## v1.2.4 physical pixel pressure washing
+
+- Mopping is physically anchored to the visible head in front of the character: the cursor aims the handle, while player movement and rotation determine the only floor path that can be cleaned. Upgrades widen that local head footprint and strengthen contact without creating remote reach.
+- The pressure washer now emits visible 1x1 water packets from its nozzle. They fly across the room, stop at walls, break into small impact splashes and settle into the same sparse pixel-liquid surface used by damaged plumbing.
+- Cleaning occurs only after water reaches the target: sustained spray progressively thins blood into a pale wet layer, produces short diluted-red runoff and removes the remaining ultraviolet trace.
+- Close aim remains narrow and forceful while extended aim becomes a wider, weaker fan; these modes now alter actual packet spread, impact radius and cleaning force.
+- The stock unit starts at 9 cleaning power and builds 25% extra pressure after 0.25 seconds of steady aim. Its compact HUD marks this as `WASH+`; releasing the trigger or sweeping away vents the bonus instead of rewarding blind spraying.
+- Upgrades change the physical stream: level 1 raises packet speed and pump response, level 2 adds a 20% broad-nozzle footprint with softer edge falloff, and level 3 detergent strips diluted/UV residue 50% faster with less contaminated runoff. Solid gore remains mop work.
+- The stream is a bounded batched draw list rather than dozens of physics nodes, keeping continuous spraying compatible with the existing low-pixel performance budget.
+
 ## v1.2.3 physical set dressing and cleaning flow
 
 - Mop input is now a real gesture rather than a held-button eraser: direction continuity and a deliberate stroke-speed window determine efficiency, while successful sweeps build three compact FLOW tiers for slightly wider, stronger follow-through.

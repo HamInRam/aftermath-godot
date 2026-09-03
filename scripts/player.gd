@@ -35,6 +35,7 @@ const CLEANUP_TOOLS := ["mop", "evidence_bag", "body_bag", "pressure_washer"]
 @onready var melee_weapon_visual: Node2D = $UpperBody/BodySprite/MeleeWeaponVisual
 @onready var gun = $UpperBody/Gun
 @onready var melee_shape: CollisionShape2D = $MeleeArea/CollisionShape2D
+@onready var ultraviolet_flashlight: UltravioletFlashlight = $UltravioletFlashlight
 var cleanup_mode := false
 var is_executing := false
 var execution_target: CharacterBody2D
@@ -68,6 +69,7 @@ var cleanup_flow_grace := 0.0
 var cleanup_last_stroke_direction := Vector2.ZERO
 var cleanup_stroke_quality := 0.0
 var pressure_washer_distance := 24.0
+var pressure_washer_stability := 0.0
 var cleanup_sweep_sign := 1.0
 var cleaner_charges := 6
 var stride_time := 0.0
@@ -95,6 +97,7 @@ const INPUT_BUFFER_DURATION := 0.14
 const MOP_MAX_SATURATION := 18.0
 const CLEANUP_REACH := 37.0
 const CLEANUP_FLOW_GRACE := 0.42
+const MOP_HEAD_REACH := 10.0
 
 func _ready() -> void:
 	super._ready()
@@ -139,6 +142,8 @@ func _physics_process(delta: float) -> void:
 	ultraviolet_scan_time = maxf(0.0, ultraviolet_scan_time - delta)
 	ultraviolet_scan_cooldown = maxf(0.0, ultraviolet_scan_cooldown - delta)
 	cleanup_stroke_cooldown = maxf(0.0, cleanup_stroke_cooldown - delta)
+	if not cleanup_mode or current_cleanup_tool != "pressure_washer" or not Input.is_action_pressed("shoot"):
+		pressure_washer_stability = move_toward(pressure_washer_stability, 0.0, delta * 4.8)
 	cleanup_flow_grace = maxf(0.0, cleanup_flow_grace - delta)
 	if cleanup_mode and current_cleanup_tool == "mop" and cleanup_flow_grace <= 0.0:
 		cleanup_flow = move_toward(cleanup_flow, 0.0, delta * 0.72)
@@ -283,6 +288,7 @@ func _ensure_gamepad_inputs() -> void:
 	_add_joy_motion("aim_up", JOY_AXIS_RIGHT_Y, -1.0)
 	_add_joy_motion("aim_down", JOY_AXIS_RIGHT_Y, 1.0)
 	_add_joy_motion("shoot", JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	_add_joy_motion("combat_focus", JOY_AXIS_TRIGGER_LEFT, 1.0)
 	_add_joy_button("reload", JOY_BUTTON_X)
 	_add_joy_button("interact", JOY_BUTTON_A)
 	_add_joy_button("execute", JOY_BUTTON_B)
@@ -461,10 +467,9 @@ func _handle_cleanup_stroke() -> void:
 	var raw_cursor := get_global_mouse_position()
 	var to_cursor := raw_cursor - global_position
 	var cursor_distance := to_cursor.length()
-	var cursor := raw_cursor
-	if cursor_distance > CLEANUP_REACH:
-		cursor = global_position + to_cursor.normalized() * CLEANUP_REACH
-		cursor_distance = CLEANUP_REACH
+	var washer := current_cleanup_tool == "pressure_washer"
+	var cursor := get_cleanup_contact_position(raw_cursor)
+	if washer: cursor_distance = minf(cursor_distance, CLEANUP_REACH)
 	pressure_washer_distance = cursor_distance
 	if last_cleanup_cursor == Vector2.INF: last_cleanup_cursor = cursor
 	if not Input.is_action_pressed("shoot"):
@@ -472,7 +477,6 @@ func _handle_cleanup_stroke() -> void:
 		return
 	var stroke := cursor - last_cleanup_cursor
 	var stroke_length := stroke.length()
-	var washer := current_cleanup_tool == "pressure_washer"
 	if (not washer and stroke_length < 1.25) or cleanup_stroke_cooldown > 0.0: return
 	cleanup_stroke_cooldown = 0.052 if washer else 0.065
 	var stroke_direction := stroke.normalized() if stroke_length >= 0.35 else (to_cursor.normalized() if cursor_distance > 0.01 else Vector2.RIGHT.rotated(rotation))
@@ -494,19 +498,32 @@ func _handle_cleanup_stroke() -> void:
 	cleanup_last_stroke_direction = stroke_direction
 	last_cleanup_cursor = cursor
 
+func get_cleanup_contact_position(raw_cursor: Vector2) -> Vector2:
+	var to_cursor := raw_cursor - global_position
+	var aim_direction := to_cursor.normalized() if to_cursor.length_squared() > 0.01 else Vector2.RIGHT.rotated(rotation)
+	if current_cleanup_tool == "mop":
+		# Cursor controls the handle angle only. Cleaning happens under the visible
+		# mop head at a fixed physical reach from the player's hands.
+		return global_position + Vector2.RIGHT.rotated(rotation) * MOP_HEAD_REACH
+	if to_cursor.length() > CLEANUP_REACH: return global_position + aim_direction * CLEANUP_REACH
+	return raw_cursor
+
 func get_cleanup_stroke_profile(cursor_distance: float, quality := 1.0) -> Dictionary:
 	if current_cleanup_tool == "pressure_washer":
 		var distance_ratio := clampf((cursor_distance - 10.0) / 27.0, 0.0, 1.0)
+		var washer_level := clampi(Progression.get_upgrade_level("pressure_washer"), 0, 3)
+		var coverage_scale := lerpf(1.0, 1.2, distance_ratio) if washer_level >= 2 else 1.0
 		return {
-			"radius": lerpf(3.2, 8.0, distance_ratio),
-			"power": lerpf(1.42, 0.68, distance_ratio),
-			"strength": lerpf(1.22, 0.78, distance_ratio),
+			"radius": lerpf(3.2, 8.0, distance_ratio) * coverage_scale,
+			"power": lerpf(1.48, 0.82, distance_ratio),
+			"strength": lerpf(1.28, 0.92, distance_ratio),
 			"mode": "NARROW" if distance_ratio < 0.48 else "WIDE",
 			"focus": 1.0 - distance_ratio,
 		}
 	var flow_bonus := cleanup_flow * 0.18
+	var mop_level := clampi(Progression.get_upgrade_level("mop"), 0, 3)
 	return {
-		"radius": (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0) + floorf(cleanup_flow * 3.0) * 0.5,
+		"radius": 4.0 + float(mop_level) * 0.35 + (0.45 if Progression.has_upgrade_perk("wide_finish") else 0.0) + floorf(cleanup_flow * 3.0) * 0.5,
 		"power": lerpf(0.66, 1.12, clampf(quality, 0.0, 1.0)) + flow_bonus,
 		"strength": lerpf(0.58, 1.12, clampf(quality, 0.0, 1.0)),
 		"mode": "FLOW",
@@ -534,12 +551,23 @@ func get_pressure_washer_mode() -> String:
 func get_pressure_washer_focus() -> float:
 	return float(get_cleanup_stroke_profile(pressure_washer_distance).focus)
 
+func set_pressure_washer_stability(value: float) -> void:
+	var next_value := clampf(value, 0.0, 1.0)
+	if is_equal_approx(next_value, pressure_washer_stability): return
+	pressure_washer_stability = next_value
+	queue_redraw()
+
+func get_pressure_washer_stability() -> float:
+	return clampf(pressure_washer_stability, 0.0, 1.0)
+
 func select_cleanup_tool(tool_name: String) -> bool:
 	if tool_name not in CLEANUP_TOOLS: return false
 	if current_cleanup_tool != tool_name:
 		cleanup_flow = 0.0
+		pressure_washer_stability = 0.0
 		cleanup_flow_grace = 0.0
 		cleanup_last_stroke_direction = Vector2.ZERO
+		last_cleanup_cursor = Vector2.INF
 	current_cleanup_tool = tool_name
 	queue_redraw()
 	return true
@@ -589,7 +617,7 @@ func get_cleanup_efficiency(cleanup_type: String) -> int:
 	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]:
 		var base_efficiency := 4 + Progression.get_upgrade_level("mop") + Progression.get_specialization_level("cleaner")
 		return maxi(1, roundi(base_efficiency * lerpf(1.0, 0.6, get_mop_saturation_ratio())))
-	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]: return 7 + Progression.get_upgrade_level("pressure_washer") * 2 + Progression.get_specialization_level("cleaner")
+	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "spill"]: return 12 + Progression.get_upgrade_level("pressure_washer") * 3 + Progression.get_specialization_level("cleaner")
 	if current_cleanup_tool == "evidence_bag" and cleanup_type in ["shell", "dropped_weapon", "debris"]: return 3
 	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 1
 	return 0
@@ -842,11 +870,12 @@ func set_cleanup_mode(enabled: bool) -> void:
 	ultraviolet_scan_time = 0.0
 	ultraviolet_scan_cooldown = 0.0
 	scan_button_was_down = false
-	last_cleanup_cursor = get_global_mouse_position() if enabled else Vector2.INF
+	last_cleanup_cursor = Vector2.INF
 	cleanup_flow = 0.0
 	cleanup_flow_grace = 0.0
 	cleanup_last_stroke_direction = Vector2.ZERO
 	cleanup_stroke_quality = 0.0
+	pressure_washer_stability = 0.0
 	if has_node("BloodFootprintEmitter"):
 		$BloodFootprintEmitter.set_generation_enabled(not enabled)
 	if not enabled and is_instance_valid(dragged_corpse):
@@ -911,29 +940,23 @@ func _draw() -> void:
 			mop_color = mop_color.lerp(Color("730019"), smoothstep(0.62, 1.0, mop_dirty))
 		if current_cleanup_tool == "pressure_washer":
 			PIXEL_PAINTER.material_block(self, Vector2(10, 0), Vector2(4, 4), Color("5bc8e8"), 19, &"metal")
-			var washer_profile := get_cleanup_stroke_profile(pressure_washer_distance)
-			var spray_reach := clampi(roundi(pressure_washer_distance), 10, roundi(CLEANUP_REACH))
-			var spray_half_width := maxi(1, roundi(float(washer_profile.radius) * 0.45))
-			var spray_color := Color(0.55, 0.9, 1.0, lerpf(0.48, 0.82, float(washer_profile.focus)))
-			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(spray_reach, 0), spray_color)
-			PIXEL_PAINTER.line(self, Vector2(14, -1), Vector2(spray_reach, -spray_half_width), Color(spray_color, spray_color.a * 0.58))
-			PIXEL_PAINTER.line(self, Vector2(14, 1), Vector2(spray_reach, spray_half_width), Color(spray_color, spray_color.a * 0.58))
-			for distance in range(16, spray_reach + 1, 4):
-				var scatter := roundi(lerpf(0.0, float(spray_half_width), float(distance - 14) / maxf(1.0, float(spray_reach - 14))))
-				PIXEL_PAINTER.pixel(self, Vector2(distance, scatter if distance % 8 == 0 else -scatter), Color(0.68, 0.95, 1.0, 0.42))
-		else: PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, 6), mop_color, 23, &"fabric")
+			# The old full-length cone was only a preview and made the washer look like
+			# an instant eraser. Keep a tiny nozzle glint; PixelLiquidSystem now renders
+			# every water pixel actually travelling through the room.
+			PIXEL_PAINTER.line(self, Vector2(12, 0), Vector2(14, 0), Color(0.76, 0.96, 1.0, 0.88))
+		else:
+			var mop_visual_width := 6 + clampi(Progression.get_upgrade_level("mop"), 0, 3)
+			PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, mop_visual_width), mop_color, 23, &"fabric")
 		if mop_dirty >= 0.75:
 			PIXEL_PAINTER.material_circle(self, Vector2(9, 4), 1, Color(0.65, 0.0, 0.08, 0.85), Color(0.85, 0.04, 0.12, 0.85), Color(0.3, 0.0, 0.04, 0.85), 29)
-		if ultraviolet_lamp_active:
-			var cone_color := Color(0.58, 0.2, 1.0, 0.12)
-			PIXEL_PAINTER.line(self, Vector2(7, 0), Vector2(66, -29), Color(0.75, 0.45, 1.0, 0.3))
-			PIXEL_PAINTER.line(self, Vector2(7, 0), Vector2(66, 29), Color(0.75, 0.45, 1.0, 0.3))
-			for distance in range(14, 66, 6):
-				PIXEL_PAINTER.pixel(self, Vector2(distance, roundi(sin(float(distance)) * 0.3 * distance)), cone_color)
 		if ultraviolet_scan_time > 0.0:
 			var scan_progress := 1.0 - ultraviolet_scan_time / ULTRAVIOLET_SCAN_DURATION
 			var scan_alpha := sin(scan_progress * PI) * (0.48 + 0.18 * absf(sin(scan_progress * PI * 4.0)))
 			PIXEL_PAINTER.arc(self, Vector2.ZERO, 82, 0.0, TAU, Color(0.76, 0.42, 1.0, scan_alpha), 64)
+
+func get_ultraviolet_beam_polygon() -> PackedVector2Array:
+	if not ultraviolet_lamp_active or not is_instance_valid(ultraviolet_flashlight): return PackedVector2Array()
+	return ultraviolet_flashlight.get_world_polygon()
 	if is_executing:
 		PIXEL_PAINTER.arc(self, Vector2(6, -3), 3, -1.2, 1.2, Color("ffd6c2"), 6)
 		PIXEL_PAINTER.arc(self, Vector2(6, 3), 3, -1.2, 1.2, Color("ffd6c2"), 6)

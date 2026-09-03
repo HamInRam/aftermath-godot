@@ -9,7 +9,7 @@ const UPGRADE_DEFINITIONS := {
 	"capacity": {"name": "FIELD CAPACITY", "description": "Larger reservoir; level 2 expands batch evidence collection.", "base_cost": 110, "cost_step": 120},
 	"scanner": {"name": "FORENSIC SCAN", "description": "Longer scan reach; level 2 prioritizes high-risk evidence.", "base_cost": 150, "cost_step": 150},
 	"body_handling": {"name": "BODY HANDLING", "description": "Faster hauling; level 2 unlocks rapid two-stage sealing.", "base_cost": 140, "cost_step": 145},
-	"pressure_washer": {"name": "PRESSURE WASHER", "description": "Broader passes; level 3 removes treated residue in one sweep.", "base_cost": 180, "cost_step": 170},
+	"pressure_washer": {"name": "PRESSURE WASHER", "description": "Faster pump, wider nozzle; level 3 detergent strips diluted and UV residue.", "base_cost": 180, "cost_step": 170},
 }
 
 var save_path := DEFAULT_SAVE_PATH

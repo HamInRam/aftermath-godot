@@ -1,5 +1,56 @@
 # Changelog
 
+## [v1.2.8] - Responsive Hostile-Local Focus
+
+- Replaced global `Engine.time_scale` Focus with local hostile simulation scaling, keeping player movement, aiming, reticle feedback, camera interpolation and UI at full responsiveness.
+- Focus now slows enemy decision timers, turning, locomotion, attack wind-up, firearm cooldown/animation and already-airborne or newly spawned hostile projectiles while player rounds remain full-speed.
+- Applies the scale only on Focus state transitions, restores all hostile systems at cleanup/run completion and preserves the separate millisecond-scale global hit-stop used for lethal impact punctuation.
+- Added vertical-slice regression coverage for an unchanged engine clock, locally slowed enemy/weapon simulation and immediate hostile-speed restoration.
+
+## [v1.2.7] - Spatial Ultraviolet Flashlight
+
+- Replaced the UV lamp's two-line preview with a continuous additive fan assembled from 25 collision rays; the rendered light now stops against solid room geometry.
+- Removed 32x32 chunk-level illumination from sparse blood. Every blood and forensic-residue pixel now tests against the same world-space light polygon, producing a continuous cone edge without square activation bands.
+- Kept the active scanner as a distinct radial reveal and added focused regressions for forward-only illumination, per-pixel chunk masking, radial scans and release cleanup.
+
+## [v1.2.6] - Exterior Sites & Exploration Camera
+
+- Embedded every authored campaign interior inside a larger playable site with grass/service perimeter, hard-surface façade circulation, parking/loading surface and a direct entrance approach.
+- Added a physical exterior threshold to all twelve layouts, widened its architectural jamb clearance for the real player collider and offset motel/penthouse entrances away from internal partition walls.
+- Made outdoor arrival the campaign default while adding an `authored_interior` spawn context for future narrative starts inside a building.
+- Centralized authored-to-world coordinate translation for enemies, patrol origins, ammunition, lights, cameras, landmarks, lures, disposal stations, secrets and restoration furniture.
+- Reframed play around a 1.35x close exploration camera with map-derived clamps; the 320x180 base viewport now covers roughly 237x133 world pixels instead of exposing most of the floor plan.
+- Added an explicit `exterior_approach` tactical region and retained room-specific interior identities for cleanup, AI coordination and telemetry.
+- Fixed two migration defects found by regression: legacy boundary-only tactical doors becoming falsely valid against outdoor floor, and unshifted signature props blocking translated doorways.
+- Extended campaign and doorway regressions to require exterior starts, incomplete-building camera coverage, connected breach routes and safe passage through every threshold.
+
+## [v1.2.5] - Blood Runtime & Combat Focus
+
+- Preserved every authored blood particle, one-pixel trail, permanent stain, pool and residue layer while replacing full 1024-cell chunk aging/painting with sparse active-cell and dirty-cell queues.
+- Replaced per-frame wall raycasts for every airborne blood pixel with one analytical damped-trajectory query per droplet; collision deposits and flight rendering remain unchanged.
+- Increased the stock washer to 12 base power with three points per tier, five focused/eight broad physical packets, 1.9px stock and 2.4px tier-two impact footprints, stronger far-nozzle pressure and 35% sustained-target pressure.
+- Added finite combat Focus on RMB/left trigger: the world slows to 42%, precise and aggressive kills recharge the meter, and a contextual one-pixel gauge avoids permanent HUD clutter.
+- Refined tactical hearing with a short distance-, occlusion- and source-aware orientation delay while preserving the existing uncertain sound position and distributed push/sweep/guard response.
+- Made Focus and lethal hit-stop share a composable base time scale and guaranteed restoration on cleanup, run completion and scene teardown; cleanup RMB continues to operate ultraviolet inspection.
+- Extended regression coverage for sparse blood texture writes, single-query blood trajectories, stronger physical water packets, contextual Focus HUD and hit-stop restoration under Focus.
+
+## [v1.2.4] - Physical Pixel Pressure Washing
+
+- Rebalanced the stock pressure washer from 7 to 9 base cleaning power and increased the focused jet from three to four physical water packets, making the first cleanup loadout useful without purchased upgrades.
+- Added target-stability pressure: maintaining the nozzle over one small region for 0.25 seconds builds to a visible WASH+ state and a 25% cleaning bonus; moving away or releasing the trigger rapidly vents the pressure.
+- Gave every washer tier a physical identity. Level 1 accelerates water by 15% and reaches stable pressure sooner, level 2 widens the broad nozzle by 20% with a 2px minimum impact and softer edge falloff, and level 3 detergent deals 50% more work to diluted/UV layers while producing less red runoff and stronger completion feedback.
+- Removed solid gore from pressure-washer efficiency so heavy tissue remains a deliberate mop task instead of collapsing both wet-cleaning tools into one dominant option.
+- Re-anchored mop cleaning to the visible head ten pixels in front of the player. Mouse position now controls handle direction only; moving or turning the actual head paints the continuous cleaning path, and dragging the cursor farther away cannot clean remotely.
+- Reduced legacy biological target queries to the real mop-head footprint instead of the former 22-27px invisible batch radius.
+- Mop upgrades now visibly widen the rendered head and its centered brush footprint while existing efficiency levels strengthen each pass; neither upgrade nor FLOW extends the tool away from the character.
+- Replaced the pressure washer's full-length preview cone and instant endpoint eraser with actual one-pixel water packets emitted from the held nozzle.
+- Water now traverses the room at a fixed 60Hz simulation cadence, forms a coherent broken hose stream, stops against solid wall geometry and splashes into persistent hard-pixel floor water only when it arrives.
+- Pressure impacts gradually lift blood density, visibly shift it into the diluted wet palette, strip UV residue over sustained exposure and carry a small conserved fraction into short pale-red runoff trails.
+- Near/focused and far/wide washer modes now shape both the real stream and its impact footprint instead of changing only an abstract cleanup radius.
+- Other liquids are displaced at the physical impact point before fresh water settles, while the mop retains its existing continuous cleaner stroke without behavioral changes.
+- Airborne water uses one bounded draw list rather than scene nodes, with a strict 112-packet cap and automatic settling to preserve frame rate during continuous spraying.
+- Added integration and regression coverage for delayed-on-arrival cleaning, persistent wet footprints, gradual blood reduction, transient cleanup and the water-packet runtime budget.
+
 ## [v1.2.3] - Physical Set Dressing & Cleaning Flow
 
 - Rebuilt mopping around direction and stroke speed: deliberate 4-9px samples clean best, erratic or stalled strokes remain useful but weaker, and successful continuous sweeps build a short-lived three-tier FLOW bonus to coverage and cleaning power.

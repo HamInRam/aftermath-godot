@@ -26,6 +26,7 @@ const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 100)
+@export_enum("exterior", "authored_interior") var player_spawn_context := "exterior"
 @export var enemy_spawns := PackedVector2Array([Vector2(52, 52), Vector2(52, 180), Vector2(132, 52), Vector2(204, 76), Vector2(236, 132), Vector2(300, 52), Vector2(340, 92), Vector2(140, 188), Vector2(228, 188), Vector2(340, 188)])
 @export var enemy_patrol_offsets := PackedVector2Array([Vector2(0, 40), Vector2(48, 0), Vector2(0, 40), Vector2(-48, 0), Vector2(48, 0), Vector2(0, 48), Vector2(0, 40), Vector2(56, 0), Vector2(0, -48), Vector2(-48, 0)])
 @export var enemy_types := PackedStringArray(["melee", "gunner", "melee", "assault", "gunner", "gunner", "dog", "melee", "gunner", "heavy"])
@@ -122,6 +123,12 @@ var playtest_telemetry: Node
 var verified_cleanup_rooms: Dictionary = {}
 var cleanup_layer_feedback_cooldown := 0.0
 var world_context_marker: WorldContextMarker
+var combat_focus_energy := 1.0
+var combat_focus_active := false
+var hostile_combat_time_scale := 1.0
+var frame_real_delta := 0.0
+const COMBAT_FOCUS_TIME_SCALE := 0.42
+const COMBAT_FOCUS_DRAIN_PER_SECOND := 1.0 / 3.0
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -230,9 +237,10 @@ func _apply_visual_theme() -> void:
 
 func _process(delta: float) -> void:
 	if get_tree().paused: return
-	elapsed += delta
-	if phase == "combat": combat_phase_elapsed += delta
-	elif phase == "cleanup": cleanup_phase_elapsed += delta
+	_update_combat_focus(delta)
+	elapsed += frame_real_delta
+	if phase == "combat": combat_phase_elapsed += frame_real_delta
+	elif phase == "cleanup": cleanup_phase_elapsed += frame_real_delta
 	if is_instance_valid(player):
 		if route_anchor == Vector2.ZERO: route_anchor = player.global_position
 		var route_step := player.global_position.distance_to(route_anchor)
@@ -271,7 +279,7 @@ func _process(delta: float) -> void:
 				cleanup_pressure_active = false
 				_finish_run(true)
 				return
-		hud.set_cleanup_tool(player.current_cleanup_tool, player.get_mop_saturation_ratio(), player.get_cleanup_flow_ratio(), player.get_pressure_washer_mode(), player.get_pressure_washer_focus())
+		hud.set_cleanup_tool(player.current_cleanup_tool, player.get_mop_saturation_ratio(), player.get_cleanup_flow_ratio(), player.get_pressure_washer_mode(), player.get_pressure_washer_focus(), player.get_pressure_washer_stability())
 		cleanup_scan_timer -= delta
 		if cleanup_scan_timer <= 0.0:
 			cleanup_scan_timer = 0.1
@@ -623,11 +631,18 @@ func _start_run() -> void:
 	if not doors_enabled and has_node("Doors"): $Doors.queue_free()
 	player = PLAYER_SCENE.instantiate()
 	var world := get_node_or_null("TileMap")
+	if is_instance_valid(world) and world.has_method("get_camera_world_rect"):
+		trauma_camera.configure_world_bounds(world.get_camera_world_rect())
 	_configure_level_doors(world)
 	_configure_security_layout(world)
 	var resolved_player_spawn := player_spawn
+	if is_instance_valid(world):
+		if player_spawn_context == "exterior" and world.has_method("get_default_player_spawn"):
+			resolved_player_spawn = world.get_default_player_spawn()
+		elif world.has_method("map_authored_position"):
+			resolved_player_spawn = world.map_authored_position(player_spawn)
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-		var candidate: Vector2 = world.get_nearest_walkable_position(player_spawn, 8)
+		var candidate: Vector2 = world.get_nearest_walkable_position(resolved_player_spawn, 8)
 		if candidate != Vector2.INF: resolved_player_spawn = candidate
 	player.global_position = resolved_player_spawn
 	player.projectile_requested.connect(_on_projectile_requested)
@@ -644,7 +659,7 @@ func _start_run() -> void:
 	_spawn_level_landmarks(world)
 	route_anchor = player.global_position
 	extraction_zone = EXTRACTION_ZONE_SCENE.instantiate() as ExtractionZone
-	var resolved_extraction := resolved_player_spawn if extraction_position == Vector2.ZERO else extraction_position
+	var resolved_extraction := resolved_player_spawn if extraction_position == Vector2.ZERO else _map_authored_position(extraction_position)
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 		var extraction_candidate: Vector2 = world.get_nearest_walkable_position(resolved_extraction, 8)
 		if extraction_candidate != Vector2.INF: resolved_extraction = extraction_candidate
@@ -706,9 +721,9 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	enemy.died_at.connect(_on_enemy_died.bind(enemy))
 	enemies_container.add_child(enemy)
 	var world := get_node_or_null("TileMap")
-	var resolved_position := pos
+	var resolved_position := _map_authored_position(pos)
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-		var candidate: Vector2 = world.get_nearest_walkable_position(pos, 8)
+		var candidate: Vector2 = world.get_nearest_walkable_position(resolved_position, 8)
 		if candidate != Vector2.INF: resolved_position = candidate
 	enemy.global_position = resolved_position
 	enemy.debug_draw_vision = vision_debug_enabled
@@ -716,6 +731,7 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	if str(active_modifier.get("id", "standard")) == "armed_response" and patrol_index >= 0 and patrol_index % 3 == 1:
 		configured_type = "heavy" if patrol_index % 2 == 1 else "assault"
 	enemy.configure_combat(configured_type)
+	if enemy.has_method("set_combat_time_scale"): enemy.set_combat_time_scale(hostile_combat_time_scale)
 	if enemy.enemy_type == "gunner":
 		var enemy_weapon_ids := ["pistol", "smg", "lmg"]
 		var enemy_weapon_id: String = enemy.default_weapon_id if not enemy.default_weapon_id.is_empty() else enemy_weapon_ids[patrol_index % enemy_weapon_ids.size()]
@@ -769,6 +785,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 		bullet.shot_id = player.gun.current_shot_id
 		bullet.shot_resolved.connect(_on_player_shot_resolved)
 	bullet.setup(direction, enemy_owned, damage, weapon_id, origin, data.bullet_speed, shooter)
+	if enemy_owned and bullet.has_method("set_combat_time_scale"): bullet.set_combat_time_scale(hostile_combat_time_scale)
 	if not RuntimeBudget.try_add("bullet", bullet, self): return
 
 func _on_player_shot_resolved(shot_id: int, outcome: String, lethal: bool, _weapon_id: String) -> void:
@@ -796,6 +813,7 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	mission_tracker.record_enemy_eliminated()
 	combo += 1
 	combo_timer = 2.2
+	_reward_combat_focus(pending_death_attack_id, pending_death_hit_zone, combo)
 	trauma_camera.trigger_kill_effect(0.72, "red")
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.position = to_local(pos)
@@ -824,6 +842,12 @@ func _get_mission_profile() -> MissionProfile:
 	fallback.display_name = level_title
 	return fallback
 
+func _map_authored_position(position: Vector2) -> Vector2:
+	var world := get_node_or_null("TileMap")
+	if is_instance_valid(world) and world.has_method("map_authored_position"):
+		return world.map_authored_position(position)
+	return position
+
 func _get_security_devices() -> Array[SecurityCamera]:
 	if security_devices_cached: return security_devices
 	var devices: Array[SecurityCamera] = []
@@ -849,9 +873,9 @@ func _spawn_tactical_lures() -> void:
 	if positions.is_empty(): positions = PackedVector2Array([player_spawn + Vector2(76, -28), player_spawn + Vector2(164, -70)])
 	var world := get_node_or_null("TileMap")
 	for position in positions:
-		var resolved: Vector2 = position
+		var resolved: Vector2 = _map_authored_position(position)
 		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-			resolved = world.get_nearest_walkable_position(position, 8)
+			resolved = world.get_nearest_walkable_position(resolved, 8)
 			if resolved == Vector2.INF: continue
 		var lure := NOISE_LURE.new() as NoiseLure
 		add_child(lure)
@@ -980,7 +1004,7 @@ func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: in
 func _spawn_ammo_pickup(index: int) -> void:
 	var pickup = AMMO_PICKUP_SCENE.instantiate()
 	if not RuntimeBudget.try_add("ammo_pickup", pickup, self): return
-	var spawn_position := ammo_pickup_positions[index]
+	var spawn_position := _map_authored_position(ammo_pickup_positions[index])
 	var world := get_node_or_null("TileMap")
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 		var candidate: Vector2 = world.get_nearest_walkable_position(spawn_position, 8)
@@ -1011,7 +1035,7 @@ func _spawn_level_landmarks(world: Node) -> void:
 	if not landmark_data.has(variant): return
 	var data: Array = landmark_data[variant]
 	var landmark := LEVEL_LANDMARK.new() as LevelLandmark
-	landmark.position = data[1]
+	landmark.position = _map_authored_position(data[1])
 	landmark.setup(data[0], data[2])
 	add_child(landmark)
 	if world.has_method("set_dynamic_obstacle"):
@@ -1115,6 +1139,37 @@ func _trigger_hit_stop(duration: float) -> void:
 	duration *= Settings.hit_stop_strength
 	if duration <= 0.001: return
 	combat_feedback.trigger_hit_stop(duration)
+
+func _update_combat_focus(delta: float) -> void:
+	if not is_instance_valid(combat_feedback): return
+	# Hit-stop may briefly alter the engine clock, but Focus itself must never do
+	# so: mouse aim, player motion, camera interpolation and UI stay responsive.
+	var real_delta := minf(delta / maxf(Engine.time_scale, 0.05), 0.05)
+	frame_real_delta = real_delta
+	var wants_focus := phase == "combat" and not run_over and not transitioning_cleanup and combat_focus_energy > 0.001 and Input.is_action_pressed("combat_focus")
+	combat_focus_active = wants_focus
+	if combat_focus_active:
+		combat_focus_energy = maxf(0.0, combat_focus_energy - COMBAT_FOCUS_DRAIN_PER_SECOND * real_delta)
+		if combat_focus_energy <= 0.001: combat_focus_active = false
+	_set_hostile_combat_time_scale(COMBAT_FOCUS_TIME_SCALE if combat_focus_active else 1.0)
+	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active)
+
+func _set_hostile_combat_time_scale(value: float) -> void:
+	var next_scale := clampf(value, 0.2, 1.0)
+	if is_equal_approx(next_scale, hostile_combat_time_scale): return
+	hostile_combat_time_scale = next_scale
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(enemy) and enemy.has_method("set_combat_time_scale"): enemy.set_combat_time_scale(next_scale)
+	for bullet in get_tree().get_nodes_in_group("bullet"):
+		if is_instance_valid(bullet) and bool(bullet.get("enemy_owned")) and bullet.has_method("set_combat_time_scale"): bullet.set_combat_time_scale(next_scale)
+
+func _reward_combat_focus(attack_id: String, hit_zone: String, current_combo: int) -> void:
+	var reward := 0.10
+	if attack_id in ["fist", "knife", "bat", "door", "execution_fist", "execution_knife", "execution_bat"]: reward += 0.06
+	if hit_zone == "head": reward += 0.04
+	if current_combo >= 3: reward += 0.03
+	combat_focus_energy = minf(1.0, combat_focus_energy + reward)
+	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active)
 
 func _on_player_died(source_position := Vector2.ZERO) -> void:
 	if is_instance_valid(playtest_telemetry):
@@ -1222,6 +1277,9 @@ func _exit_tree() -> void:
 
 func _enter_cleanup_phase() -> void:
 	phase = "cleanup"
+	combat_focus_active = false
+	_set_hostile_combat_time_scale(1.0)
+	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if blood_system.has_method("settle_pixel_blood_for_cleanup"): blood_system.settle_pixel_blood_for_cleanup()
 	hud.set_phase("cleanup")
 	player.set_cleanup_mode(true)
@@ -1257,7 +1315,7 @@ func _spawn_corpse_disposals() -> void:
 	for index in range(disposal_positions.size()):
 		var disposal := CORPSE_DISPOSAL.new() as CorpseDisposal
 		add_child(disposal)
-		disposal.global_position = disposal_positions[index]
+		disposal.global_position = _map_authored_position(disposal_positions[index])
 		var kind := disposal_types[index] if index < disposal_types.size() else "dumpster"
 		disposal.setup(kind, 2 if kind == "incinerator" else 3)
 		corpse_disposals.append(disposal)
@@ -1266,12 +1324,14 @@ func _spawn_cleanup_opportunities() -> void:
 	if cleanup_opportunities_spawned: return
 	cleanup_opportunities_spawned = true
 	var world := get_node_or_null("TileMap")
+	var secrets_are_authored := not cleanup_secret_positions.is_empty()
+	var furniture_is_authored := not cleanup_furniture_positions.is_empty()
 	var authored_secrets := cleanup_secret_positions
 	var authored_furniture := cleanup_furniture_positions
 	if authored_secrets.is_empty(): authored_secrets = PackedVector2Array([player.global_position + Vector2(54, -34), player.global_position + Vector2(92, 30), player.global_position + Vector2(-48, -42)])
 	if authored_furniture.is_empty(): authored_furniture = PackedVector2Array([player.global_position + Vector2(72, 62), player.global_position + Vector2(-62, 48), player.global_position + Vector2(112, -54)])
 	for index in range(authored_secrets.size()):
-		var spawn_position: Vector2 = authored_secrets[index]
+		var spawn_position: Vector2 = _map_authored_position(authored_secrets[index]) if secrets_are_authored else authored_secrets[index]
 		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 			spawn_position = world.get_nearest_walkable_position(spawn_position, 8)
 			if spawn_position == Vector2.INF: continue
@@ -1280,7 +1340,7 @@ func _spawn_cleanup_opportunities() -> void:
 		secret.global_position = spawn_position
 		secret.setup(cleanup_secret_types[index] if index < cleanup_secret_types.size() else ("clue" if index < 2 else "valuable"))
 	for spawn_position in authored_furniture:
-		var resolved_position: Vector2 = spawn_position
+		var resolved_position: Vector2 = _map_authored_position(spawn_position) if furniture_is_authored else spawn_position
 		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 			resolved_position = world.get_nearest_walkable_position(resolved_position, 8)
 			if resolved_position == Vector2.INF: continue
@@ -1340,6 +1400,9 @@ func _update_ultraviolet_mode() -> void:
 			ultraviolet_shader_material.shader = shader
 		var illuminated := {}
 		for evidence in get_tree().get_nodes_in_group("blood_evidence"):
+			if evidence.is_in_group("pixel_blood_chunk"):
+				_update_pixel_blood_ultraviolet(evidence)
+				continue
 			if not evidence is CanvasItem or not _is_inside_ultraviolet_beam(evidence): continue
 			var instance_id := evidence.get_instance_id()
 			illuminated[instance_id] = true
@@ -1358,6 +1421,8 @@ func _update_ultraviolet_mode() -> void:
 			no_longer_visible.append(instance_id)
 		for instance_id in no_longer_visible: ultraviolet_materials.erase(instance_id)
 	elif ultraviolet_was_active:
+		for chunk in get_tree().get_nodes_in_group("pixel_blood_chunk"):
+			if is_instance_valid(chunk) and chunk.has_method("clear_ultraviolet"): chunk.clear_ultraviolet()
 		for saved in ultraviolet_materials.values():
 			var evidence := (saved.node as WeakRef).get_ref() as CanvasItem
 			if is_instance_valid(evidence):
@@ -1365,6 +1430,16 @@ func _update_ultraviolet_mode() -> void:
 				if evidence.has_method("set_ultraviolet_visible"): evidence.set_ultraviolet_visible(false)
 		ultraviolet_materials.clear()
 	ultraviolet_was_active = active
+
+func _update_pixel_blood_ultraviolet(chunk: Node) -> void:
+	if player.ultraviolet_scan_time > 0.0:
+		var scan_radius := 82.0 + Progression.get_upgrade_level("scanner") * 18.0
+		if mission_tracker.profile != null and mission_tracker.profile.mission_id == "nightclub": scan_radius += 20.0
+		chunk.set_ultraviolet_circle(player.global_position, scan_radius)
+		return
+	var polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon() if player.has_method("get_ultraviolet_beam_polygon") else PackedVector2Array()
+	if polygon.size() >= 3: chunk.set_ultraviolet_polygon(polygon)
+	else: chunk.clear_ultraviolet()
 
 func _is_inside_ultraviolet_beam(evidence: CanvasItem) -> bool:
 	if not evidence is Node2D: return false
@@ -1376,9 +1451,8 @@ func _is_inside_ultraviolet_beam(evidence: CanvasItem) -> bool:
 		if mission_tracker.profile != null and mission_tracker.profile.mission_id == "nightclub": scan_radius += 20.0
 		if to_evidence.length_squared() > scan_radius * scan_radius: return false
 	else:
-		if to_evidence.length_squared() > 66.0 * 66.0 or to_evidence.length_squared() < 1.0: return false
-		var beam_direction := Vector2.RIGHT.rotated(player.rotation)
-		if absf(beam_direction.angle_to(to_evidence.normalized())) > 0.44: return false
+		var polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon() if player.has_method("get_ultraviolet_beam_polygon") else PackedVector2Array()
+		return polygon.size() >= 3 and Geometry2D.is_point_in_polygon(evidence.global_position, polygon)
 	var query := PhysicsRayQueryParameters2D.create(player.global_position, evidence.global_position, 4)
 	query.collide_with_areas = false
 	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
@@ -1408,17 +1482,29 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 	# gesture. They keep separate evidence channels but never disappear in blocks.
 	var pixel_cleaned := false
 	var pixel_power := 0
-	if player.current_cleanup_tool in ["mop", "pressure_washer"] and blood_system.has_method("clean_pixel_stroke"):
+	var liquid_system := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
+	if not is_instance_valid(liquid_system):
+		liquid_system = preload("res://scripts/effects/pixel_liquid_system.gd").get_or_create(get_tree()) as Node2D
+	if player.current_cleanup_tool == "pressure_washer":
 		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else (7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0))
+		var spray_radius := brush_radius_override if brush_radius_override > 0.0 else 7.0
+		var spray_direction := player.global_position.direction_to(world_position)
+		var nozzle_origin := player.global_position + spray_direction * 12.0
+		if is_instance_valid(liquid_system) and liquid_system.has_method("emit_pressure_stream"):
+			var stability: float = liquid_system.emit_pressure_stream(nozzle_origin, world_position, spray_radius, pixel_power, Progression.get_upgrade_level("pressure_washer"))
+			player.set_pressure_washer_stability(stability)
+	elif player.current_cleanup_tool == "mop" and blood_system.has_method("clean_pixel_stroke"):
+		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
+		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius)
 		pixel_cleaned = blood_system.clean_pixel_stroke(stroke_start, world_position, brush_radius, pixel_power, player.current_cleanup_tool)
 	var compatible_types := CleanupWorkflow.get_compatible_types(player.current_cleanup_tool)
-	var target := CleanupRegistry.get_nearest_compatible_target(world_position, 26.0, compatible_types)
+	var target_query_radius := float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius) + 2.0 if player.current_cleanup_tool == "mop" else 26.0
+	var target := CleanupRegistry.get_nearest_compatible_target(world_position, target_query_radius, compatible_types)
 	# The owning canvas already handled every crossed chunk above; choose another
 	# nearby legacy/solid evidence target instead of cleaning the endpoint twice.
 	if is_instance_valid(target) and target.is_in_group("pixel_blood_chunk"):
 		target = null
-		for candidate in CleanupRegistry.get_targets_in_radius(world_position, 26.0, 24, compatible_types):
+		for candidate in CleanupRegistry.get_targets_in_radius(world_position, target_query_radius, 24, compatible_types):
 			if candidate.is_in_group("pixel_blood_chunk"): continue
 			target = candidate
 			break
@@ -1426,7 +1512,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 	# indexed so the pressure washer can remove it when the player chooses to.
 	if player.current_cleanup_tool == "mop" and is_instance_valid(target) and target.has_method("is_ultraviolet_residue") and target.is_ultraviolet_residue():
 		target = null
-		for candidate in CleanupRegistry.get_targets_in_radius(world_position, 26.0, 24, compatible_types):
+		for candidate in CleanupRegistry.get_targets_in_radius(world_position, target_query_radius, 24, compatible_types):
 			if candidate.has_method("is_ultraviolet_residue") and candidate.is_ultraviolet_residue(): continue
 			target = candidate
 			break
@@ -1442,11 +1528,10 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 		detail_label.text = "SOURCE STILL ACTIVE // RESTORE DAMAGED EQUIPMENT FIRST"
 		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
 		return
-	if player.current_cleanup_tool in ["mop", "pressure_washer"]:
-		var liquid_system := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
+	if player.current_cleanup_tool == "mop":
 		if is_instance_valid(liquid_system):
 			if pixel_power <= 0: pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("spill")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else (7.0 if player.current_cleanup_tool == "pressure_washer" else (5.0 if Progression.has_upgrade_perk("wide_finish") else 4.0))
+			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius)
 			pixel_cleaned = liquid_system.clean_stroke(stroke_start, world_position, liquid_brush, pixel_power, player.current_cleanup_tool) or pixel_cleaned
 	if not is_instance_valid(target):
 		if pixel_cleaned:
@@ -1483,7 +1568,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 		steps += 3
 	var targets: Array[Node2D] = [target]
 	if player.current_cleanup_tool in ["mop", "pressure_washer"]:
-		var clean_radius := 30.0 if player.current_cleanup_tool == "pressure_washer" else (27.0 if Progression.has_upgrade_perk("wide_finish") else 22.0)
+		var clean_radius := 30.0 if player.current_cleanup_tool == "pressure_washer" else target_query_radius
 		var clean_count := 10 if player.current_cleanup_tool == "pressure_washer" else 6
 		targets = CleanupRegistry.get_targets_in_radius(world_position, clean_radius, clean_count, compatible_types)
 	for cleanup_target in targets:
@@ -1496,10 +1581,7 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 				if not is_instance_valid(cleanup_target) or cleanup_target.is_queued_for_deletion(): break
 				cleanup_target.clean_step()
 	if used_cleaner and is_instance_valid(target): target.modulate = Color.WHITE
-	var liquid_surface := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
-	if not is_instance_valid(liquid_surface):
-		liquid_surface = preload("res://scripts/effects/pixel_liquid_system.gd").get_or_create(get_tree()) as Node2D
-	if is_instance_valid(liquid_surface): liquid_surface.stamp_cleaning_stroke(stroke_start, world_position, player.current_cleanup_tool)
+	if is_instance_valid(liquid_system) and player.current_cleanup_tool == "mop": liquid_system.stamp_cleaning_stroke(stroke_start, world_position, player.current_cleanup_tool)
 	if player.current_cleanup_tool == "mop": player.record_mop_use(0.38 + 0.16 * steps)
 	player.report_cleanup_stroke_result(true, stroke_quality, stroke_direction)
 	ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
@@ -1514,8 +1596,10 @@ func _on_blood_cleaning_layer_changed(_world_position: Vector2, layer_name: Stri
 
 func _on_blood_cleaning_region_completed(_world_position: Vector2) -> void:
 	if phase != "cleanup" or run_over: return
-	detail_label.text = "REGION CLEAN // FLOW MAINTAINED"
-	combat_feedback.show_flash(Color(0.20, 0.95, 0.78, 0.08), 0.07)
+	var washer_finish: bool = player.current_cleanup_tool == "pressure_washer"
+	var detergent_finish: bool = washer_finish and Progression.get_upgrade_level("pressure_washer") >= 3
+	detail_label.text = "REGION STRIPPED // DETERGENT CLEAR" if detergent_finish else ("REGION RINSED" if washer_finish else "REGION CLEAN // FLOW MAINTAINED")
+	combat_feedback.show_flash(Color(0.35, 0.88, 1.0, 0.13 if detergent_finish else 0.08), 0.11 if detergent_finish else 0.07)
 	if cleanup_layer_feedback_cooldown <= 0.12: _play_area_clean_feedback()
 	cleanup_layer_feedback_cooldown = 0.34
 
@@ -1557,6 +1641,9 @@ func _on_extraction_requested() -> void:
 func _finish_run(left_evidence: bool) -> void:
 	if run_over: return
 	run_over = true
+	combat_focus_active = false
+	_set_hostile_combat_time_scale(1.0)
+	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
 	var cleanup_ratio := CleanupRegistry.get_cleanup_ratio()
 	var contract := ContractCatalog.get_contract(Progression.get_current_contract_id())

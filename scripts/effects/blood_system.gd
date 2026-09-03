@@ -120,6 +120,12 @@ func has_pixel_blood_near(world_position: Vector2, radius: float) -> bool:
 func apply_pixel_water(world_position: Vector2, amount: int, flow_direction := Vector2.ZERO) -> void:
 	if is_instance_valid(ground_canvas): ground_canvas.apply_external_water(world_position, amount, flow_direction)
 
+func pressure_wash_pixel_water(world_position: Vector2, brush_radius: float, power: int, flow_direction := Vector2.ZERO, washer_level := 0) -> bool:
+	var cleaned := false
+	if is_instance_valid(ground_canvas): cleaned = ground_canvas.pressure_wash_at(world_position, brush_radius, power, flow_direction, washer_level) or cleaned
+	if is_instance_valid(wall_canvas): cleaned = wall_canvas.pressure_wash_at(world_position, brush_radius * 0.72, power, flow_direction, washer_level) or cleaned
+	return cleaned
+
 func settle_pixel_blood_for_cleanup() -> void:
 	if is_instance_valid(ground_canvas): ground_canvas.settle_all_pools()
 

@@ -6,6 +6,7 @@ var hit_stop_generation := 0
 var hit_stop_deadline_msec := 0
 var hit_stop_active := false
 var flash_intensity := 1.0
+var base_time_scale := 1.0
 
 func configure(flash_rect: ColorRect, intensity := 1.0) -> void:
 	flash = flash_rect
@@ -22,9 +23,15 @@ func trigger_hit_stop(duration: float) -> void:
 	while generation == hit_stop_generation and Time.get_ticks_msec() < hit_stop_deadline_msec:
 		await get_tree().process_frame
 	if generation == hit_stop_generation:
-		Engine.time_scale = 1.0
+		Engine.time_scale = base_time_scale
 		hit_stop_active = false
 		hit_stop_deadline_msec = 0
+
+func set_base_time_scale(_value: float) -> void:
+	# Sustained gameplay slowdown is actor-local. Keep this compatibility entry
+	# point real-time so no UI/controller can accidentally make player aim sticky.
+	base_time_scale = 1.0
+	if not hit_stop_active: Engine.time_scale = 1.0
 
 func show_flash(color: Color, duration: float) -> void:
 	if not is_instance_valid(flash): return
@@ -37,4 +44,5 @@ func reset() -> void:
 	hit_stop_generation += 1
 	hit_stop_active = false
 	hit_stop_deadline_msec = 0
+	base_time_scale = 1.0
 	Engine.time_scale = 1.0

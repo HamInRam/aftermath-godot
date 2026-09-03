@@ -29,6 +29,7 @@ var shot_id := -1
 var resolution_emitted := false
 var passed_overkill_target := false
 var source_actor: CollisionObject2D
+var combat_time_scale := 1.0
 
 func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0, shooter: CollisionObject2D = null) -> void:
 	direction = dir.normalized()
@@ -53,6 +54,7 @@ func _install_source_exception() -> void:
 	if is_instance_valid(source_actor): add_collision_exception_with(source_actor)
 
 func _physics_process(delta: float) -> void:
+	if enemy_owned: delta *= combat_time_scale
 	travel_distance += velocity.length() * delta
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
@@ -109,6 +111,9 @@ func _physics_process(delta: float) -> void:
 	if lifetime <= 0.0:
 		_resolve_shot("overkill" if passed_overkill_target else "miss", false)
 		queue_free()
+
+func set_combat_time_scale(value: float) -> void:
+	combat_time_scale = clampf(value, 0.2, 1.0) if enemy_owned else 1.0
 
 func _resolve_shot(outcome: String, lethal: bool) -> void:
 	if resolution_emitted or enemy_owned or shot_id < 0: return
