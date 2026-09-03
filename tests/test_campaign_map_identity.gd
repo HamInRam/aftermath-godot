@@ -69,10 +69,19 @@ func _ready() -> void:
 		_expect(not signatures.has(signature), "%s must not reuse another mission's wall topology" % mission_id)
 		signatures[signature] = mission_id
 		_expect(world.is_navigation_position_walkable(level.player.global_position), "%s player spawn must resolve to walkable floor" % mission_id)
+		var door_specs: Array[Dictionary] = world.get_door_specs()
+		var exterior_passage: Vector2 = door_specs[-1].passage_center if not door_specs.is_empty() else Vector2.INF
 		for enemy in level.get_node("Enemies").get_children():
 			_expect(world.is_navigation_position_walkable(enemy.global_position), "%s enemy spawn must resolve to walkable floor" % mission_id)
 			var route := world.get_navigation_path(level.player.global_position, enemy.global_position)
 			_expect(not route.is_empty() or level.player.global_position.distance_to(enemy.global_position) < 8.0, "%s must connect every enemy room to the player route" % mission_id)
+			var to_player: Vector2 = level.player.global_position - enemy.global_position
+			_expect(not enemy._can_see_player(to_player.length(), to_player), "%s must not give an enemy direct sight of the motionless exterior spawn" % mission_id)
+			for waypoint: Vector2 in enemy.patrol_waypoints:
+				_expect(waypoint.distance_to(exterior_passage) >= 20.0, "%s patrol routes must not automatically open or camp the exterior threshold" % mission_id)
+			if enemy.patrol_waypoints.size() >= 2:
+				var initial_heading: float = enemy.patrol_waypoints[0].direction_to(enemy.patrol_waypoints[1]).angle()
+				_expect(absf(angle_difference(enemy.rotation, initial_heading)) < 0.01, "%s patrol actors must initially face their authored route" % mission_id)
 		for spec: Dictionary in world.get_door_specs():
 			var passage_center: Vector2 = spec.passage_center
 			var opening_cell: Vector2i = spec.opening_cell
@@ -80,6 +89,18 @@ func _ready() -> void:
 			_expect(world.is_navigation_position_walkable(passage_center), "%s door centre must remain on navigable floor" % mission_id)
 			_expect(not world.path_grid.is_point_solid(opening_cell), "%s door hinge-side cell must be open" % mission_id)
 			_expect(not world.path_grid.is_point_solid(opening_cell + leaf_step), "%s door far-side cell must be open" % mission_id)
+		if mission_id == "sandwich_shop":
+			var hounds := level.get_node("Enemies").get_children().filter(func(enemy: Node) -> bool: return str(enemy.actor_type) == "dog")
+			_expect(hounds.size() == 1, "sandwich_shop should retain one authored hound encounter")
+			for hound in hounds:
+				for waypoint: Vector2 in hound.patrol_waypoints:
+					_expect(world.get_tactical_room_id(waypoint) == "kitchen", "sandwich_shop hound patrol must remain inside the kitchen")
+			# Exercise real AI/physics time: a player who provides no input and makes
+			# no noise must receive a genuine arrival/read phase before breaching.
+			for frame in 150: await get_tree().physics_frame
+			for enemy in level.get_node("Enemies").get_children():
+				_expect(enemy.state not in [enemy.State.CHASE, enemy.State.ATTACK], "sandwich_shop enemies must not acquire a motionless exterior arrival")
+			_expect(not level.player.is_dead, "sandwich_shop exterior arrival must survive without player input")
 		_expect(world.get_door_specs().size() >= 4 and world.get_door_specs().size() <= 7, "%s should combine one exterior threshold with a legible interior doorway budget" % mission_id)
 		_expect(world.get_children().filter(func(child: Node) -> bool: return child is DestructibleProp and child.prop_kind == "sink").size() >= 1, "%s needs a reachable cleanup rinse point" % mission_id)
 		if level.mission_profile != null and level.mission_profile.required_security_shutdowns > 0:

@@ -6,8 +6,8 @@
 [node name="SandwichShop" instance=ExtResource("1_main")]
 level_title = "SANDWICH SHOP"
 player_spawn = Vector2(44, 92)
-enemy_spawns = PackedVector2Array(52,44,116,76,196,44,276,44,340,76,60,164,132,204,212,164,276,204,348,164)
-enemy_patrol_offsets = PackedVector2Array(48,0,0,40,-48,0,56,0,0,-40,48,0,56,0,0,40,48,0,0,48)
+enemy_spawns = PackedVector2Array(52,44,116,76,196,44,276,44,340,76,60,164,132,164,212,164,276,204,348,164)
+enemy_patrol_offsets = PackedVector2Array(48,0,0,40,-48,0,56,0,0,-40,48,0,-56,0,0,40,48,0,0,48)
 ammo_pickup_positions = PackedVector2Array(92,84,204,84,276,196,348,196)
 ammo_pickup_weapon_ids = PackedStringArray("pistol", "smg", "lmg", "shotgun")
 ammo_pickup_rounds = PackedInt32Array(12, 24, 30, 8)

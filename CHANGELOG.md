@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.2.9] - Exterior Spawn Safety
+
+- Relocated the Sandwich Shop hound from the exterior-wall staging strip into the kitchen and reversed its patrol away from the public entrance.
+- Initialized every moving patrol actor from its first authored route heading, removing the one-frame east-facing pose that could accidentally expose a new arrival.
+- Extended campaign-map regression coverage to reject direct hostile sight on a stationary exterior spawn, patrol waypoints within the exterior threshold buffer and mismatched initial headings.
+
 ## [v1.2.8] - Responsive Hostile-Local Focus
 
 - Replaced global `Engine.time_scale` Focus with local hostile simulation scaling, keeping player movement, aiming, reticle feedback, camera interpolation and UI at full responsiveness.

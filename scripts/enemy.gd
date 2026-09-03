@@ -421,7 +421,16 @@ func configure_patrol(points: PackedVector2Array) -> void:
 	path_points.clear()
 	path_refresh = 0.0
 	_reset_movement_progress()
-	if not points.is_empty(): home_position = points[0]
+	if not points.is_empty():
+		home_position = points[0]
+	# Patrol routes are authored as encounter-facing information. Initializing
+	# every actor at rotation zero made guards briefly face east regardless of
+	# their route, which could expose an exterior spawn before the first movement
+	# update. Face the first real leg immediately and use it as the sentry base.
+	if points.size() >= 2 and points[0].distance_squared_to(points[1]) > 0.01:
+		rotation = points[0].direction_to(points[1]).angle()
+		sentry_base_rotation = rotation
+		sentry_target_rotation = rotation
 
 func configure_combat(type_name: String) -> void:
 	var profile := EnemyCatalog.get_profile(type_name)

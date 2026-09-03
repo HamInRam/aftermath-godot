@@ -2,6 +2,12 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.9 exterior spawn safety
+
+- Moved the Sandwich Shop hound and its patrol deeper into the kitchen so a motionless player is not attacked from the exterior arrival point.
+- Patrol actors now face the first authored route leg immediately instead of briefly inheriting an arbitrary east-facing orientation.
+- Campaign regressions now reject direct hostile sight on an exterior spawn, patrol points that camp the exterior threshold and incorrect initial patrol headings.
+
 ## v1.2.8 responsive hostile-local Focus
 
 - Combat Focus no longer changes the global engine clock: player movement, mouse aim, reticle, camera and HUD remain fully real-time.
