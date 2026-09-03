@@ -86,7 +86,8 @@ func _ready() -> void:
 		_expect(level.ammo_pickup_positions.size() >= 4, "%s should author reserve-ammo pickups for pistol, SMG, LMG and shotgun" % scene_path)
 		_expect(level.ammo_pickup_positions.size() == level.ammo_pickup_weapon_ids.size() and level.ammo_pickup_positions.size() == level.ammo_pickup_rounds.size(), "%s ammo pickup configuration arrays must stay aligned" % scene_path)
 		for position in level.ammo_pickup_positions:
-			_expect(tile_world.is_navigation_position_walkable(position), "%s ammo pickup at %s must be reachable; nearest %s" % [scene_path, position, _nearest_walkable(tile_world, position)])
+			var world_position: Vector2 = tile_world.map_authored_position(position)
+			_expect(tile_world.is_navigation_position_walkable(world_position), "%s ammo pickup at %s must be reachable; nearest %s" % [scene_path, world_position, _nearest_walkable(tile_world, world_position)])
 		level.queue_free()
 		await get_tree().process_frame
 		await get_tree().process_frame

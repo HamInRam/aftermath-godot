@@ -26,6 +26,7 @@ const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 100)
+@export_enum("exterior", "authored_interior") var player_spawn_context := "exterior"
 @export var enemy_spawns := PackedVector2Array([Vector2(52, 52), Vector2(52, 180), Vector2(132, 52), Vector2(204, 76), Vector2(236, 132), Vector2(300, 52), Vector2(340, 92), Vector2(140, 188), Vector2(228, 188), Vector2(340, 188)])
 @export var enemy_patrol_offsets := PackedVector2Array([Vector2(0, 40), Vector2(48, 0), Vector2(0, 40), Vector2(-48, 0), Vector2(48, 0), Vector2(0, 48), Vector2(0, 40), Vector2(56, 0), Vector2(0, -48), Vector2(-48, 0)])
 @export var enemy_types := PackedStringArray(["melee", "gunner", "melee", "assault", "gunner", "gunner", "dog", "melee", "gunner", "heavy"])
@@ -629,11 +630,18 @@ func _start_run() -> void:
 	if not doors_enabled and has_node("Doors"): $Doors.queue_free()
 	player = PLAYER_SCENE.instantiate()
 	var world := get_node_or_null("TileMap")
+	if is_instance_valid(world) and world.has_method("get_camera_world_rect"):
+		trauma_camera.configure_world_bounds(world.get_camera_world_rect())
 	_configure_level_doors(world)
 	_configure_security_layout(world)
 	var resolved_player_spawn := player_spawn
+	if is_instance_valid(world):
+		if player_spawn_context == "exterior" and world.has_method("get_default_player_spawn"):
+			resolved_player_spawn = world.get_default_player_spawn()
+		elif world.has_method("map_authored_position"):
+			resolved_player_spawn = world.map_authored_position(player_spawn)
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-		var candidate: Vector2 = world.get_nearest_walkable_position(player_spawn, 8)
+		var candidate: Vector2 = world.get_nearest_walkable_position(resolved_player_spawn, 8)
 		if candidate != Vector2.INF: resolved_player_spawn = candidate
 	player.global_position = resolved_player_spawn
 	player.projectile_requested.connect(_on_projectile_requested)
@@ -650,7 +658,7 @@ func _start_run() -> void:
 	_spawn_level_landmarks(world)
 	route_anchor = player.global_position
 	extraction_zone = EXTRACTION_ZONE_SCENE.instantiate() as ExtractionZone
-	var resolved_extraction := resolved_player_spawn if extraction_position == Vector2.ZERO else extraction_position
+	var resolved_extraction := resolved_player_spawn if extraction_position == Vector2.ZERO else _map_authored_position(extraction_position)
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 		var extraction_candidate: Vector2 = world.get_nearest_walkable_position(resolved_extraction, 8)
 		if extraction_candidate != Vector2.INF: resolved_extraction = extraction_candidate
@@ -712,9 +720,9 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	enemy.died_at.connect(_on_enemy_died.bind(enemy))
 	enemies_container.add_child(enemy)
 	var world := get_node_or_null("TileMap")
-	var resolved_position := pos
+	var resolved_position := _map_authored_position(pos)
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-		var candidate: Vector2 = world.get_nearest_walkable_position(pos, 8)
+		var candidate: Vector2 = world.get_nearest_walkable_position(resolved_position, 8)
 		if candidate != Vector2.INF: resolved_position = candidate
 	enemy.global_position = resolved_position
 	enemy.debug_draw_vision = vision_debug_enabled
@@ -831,6 +839,12 @@ func _get_mission_profile() -> MissionProfile:
 	fallback.display_name = level_title
 	return fallback
 
+func _map_authored_position(position: Vector2) -> Vector2:
+	var world := get_node_or_null("TileMap")
+	if is_instance_valid(world) and world.has_method("map_authored_position"):
+		return world.map_authored_position(position)
+	return position
+
 func _get_security_devices() -> Array[SecurityCamera]:
 	if security_devices_cached: return security_devices
 	var devices: Array[SecurityCamera] = []
@@ -856,9 +870,9 @@ func _spawn_tactical_lures() -> void:
 	if positions.is_empty(): positions = PackedVector2Array([player_spawn + Vector2(76, -28), player_spawn + Vector2(164, -70)])
 	var world := get_node_or_null("TileMap")
 	for position in positions:
-		var resolved: Vector2 = position
+		var resolved: Vector2 = _map_authored_position(position)
 		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-			resolved = world.get_nearest_walkable_position(position, 8)
+			resolved = world.get_nearest_walkable_position(resolved, 8)
 			if resolved == Vector2.INF: continue
 		var lure := NOISE_LURE.new() as NoiseLure
 		add_child(lure)
@@ -987,7 +1001,7 @@ func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: in
 func _spawn_ammo_pickup(index: int) -> void:
 	var pickup = AMMO_PICKUP_SCENE.instantiate()
 	if not RuntimeBudget.try_add("ammo_pickup", pickup, self): return
-	var spawn_position := ammo_pickup_positions[index]
+	var spawn_position := _map_authored_position(ammo_pickup_positions[index])
 	var world := get_node_or_null("TileMap")
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 		var candidate: Vector2 = world.get_nearest_walkable_position(spawn_position, 8)
@@ -1018,7 +1032,7 @@ func _spawn_level_landmarks(world: Node) -> void:
 	if not landmark_data.has(variant): return
 	var data: Array = landmark_data[variant]
 	var landmark := LEVEL_LANDMARK.new() as LevelLandmark
-	landmark.position = data[1]
+	landmark.position = _map_authored_position(data[1])
 	landmark.setup(data[0], data[2])
 	add_child(landmark)
 	if world.has_method("set_dynamic_obstacle"):
@@ -1287,7 +1301,7 @@ func _spawn_corpse_disposals() -> void:
 	for index in range(disposal_positions.size()):
 		var disposal := CORPSE_DISPOSAL.new() as CorpseDisposal
 		add_child(disposal)
-		disposal.global_position = disposal_positions[index]
+		disposal.global_position = _map_authored_position(disposal_positions[index])
 		var kind := disposal_types[index] if index < disposal_types.size() else "dumpster"
 		disposal.setup(kind, 2 if kind == "incinerator" else 3)
 		corpse_disposals.append(disposal)
@@ -1296,12 +1310,14 @@ func _spawn_cleanup_opportunities() -> void:
 	if cleanup_opportunities_spawned: return
 	cleanup_opportunities_spawned = true
 	var world := get_node_or_null("TileMap")
+	var secrets_are_authored := not cleanup_secret_positions.is_empty()
+	var furniture_is_authored := not cleanup_furniture_positions.is_empty()
 	var authored_secrets := cleanup_secret_positions
 	var authored_furniture := cleanup_furniture_positions
 	if authored_secrets.is_empty(): authored_secrets = PackedVector2Array([player.global_position + Vector2(54, -34), player.global_position + Vector2(92, 30), player.global_position + Vector2(-48, -42)])
 	if authored_furniture.is_empty(): authored_furniture = PackedVector2Array([player.global_position + Vector2(72, 62), player.global_position + Vector2(-62, 48), player.global_position + Vector2(112, -54)])
 	for index in range(authored_secrets.size()):
-		var spawn_position: Vector2 = authored_secrets[index]
+		var spawn_position: Vector2 = _map_authored_position(authored_secrets[index]) if secrets_are_authored else authored_secrets[index]
 		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 			spawn_position = world.get_nearest_walkable_position(spawn_position, 8)
 			if spawn_position == Vector2.INF: continue
@@ -1310,7 +1326,7 @@ func _spawn_cleanup_opportunities() -> void:
 		secret.global_position = spawn_position
 		secret.setup(cleanup_secret_types[index] if index < cleanup_secret_types.size() else ("clue" if index < 2 else "valuable"))
 	for spawn_position in authored_furniture:
-		var resolved_position: Vector2 = spawn_position
+		var resolved_position: Vector2 = _map_authored_position(spawn_position) if furniture_is_authored else spawn_position
 		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 			resolved_position = world.get_nearest_walkable_position(resolved_position, 8)
 			if resolved_position == Vector2.INF: continue

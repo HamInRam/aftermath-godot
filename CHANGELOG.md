@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.2.6] - Exterior Sites & Exploration Camera
+
+- Embedded every authored campaign interior inside a larger playable site with grass/service perimeter, hard-surface façade circulation, parking/loading surface and a direct entrance approach.
+- Added a physical exterior threshold to all twelve layouts, widened its architectural jamb clearance for the real player collider and offset motel/penthouse entrances away from internal partition walls.
+- Made outdoor arrival the campaign default while adding an `authored_interior` spawn context for future narrative starts inside a building.
+- Centralized authored-to-world coordinate translation for enemies, patrol origins, ammunition, lights, cameras, landmarks, lures, disposal stations, secrets and restoration furniture.
+- Reframed play around a 1.35x close exploration camera with map-derived clamps; the 320x180 base viewport now covers roughly 237x133 world pixels instead of exposing most of the floor plan.
+- Added an explicit `exterior_approach` tactical region and retained room-specific interior identities for cleanup, AI coordination and telemetry.
+- Fixed two migration defects found by regression: legacy boundary-only tactical doors becoming falsely valid against outdoor floor, and unshifted signature props blocking translated doorways.
+- Extended campaign and doorway regressions to require exterior starts, incomplete-building camera coverage, connected breach routes and safe passage through every threshold.
+
 ## [v1.2.5] - Blood Runtime & Combat Focus
 
 - Preserved every authored blood particle, one-pixel trail, permanent stain, pool and residue layer while replacing full 1024-cell chunk aging/painting with sparse active-cell and dirty-cell queues.

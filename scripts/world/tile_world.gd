@@ -3,6 +3,7 @@ extends Node2D
 
 const TILE_SIZE := Vector2i(8, 8)
 const DEFAULT_MAP_SIZE := Vector2i(48, 28)
+const EXTERIOR_MARGIN := Vector2i(8, 7)
 const PIXEL_ENVIRONMENT_ATLAS := preload("res://utility/pixel_environment_atlas.gd")
 const GLASS_SHARDS_SCENE := preload("res://scenes/effects/glass_shards.tscn")
 const DESTRUCTIBLE_PROP := preload("res://scripts/props/destructible_prop.gd")
@@ -12,6 +13,8 @@ enum Tile { CONCRETE, WOOD, RED_CARPET, WALL, WINDOW, DARK_TILE, GRASS, STAIRS, 
 @export_enum("nightclub", "sandwich_shop", "tactical_lab", "harbor_exchange", "motel_witness", "penthouse", "cold_storage", "casino_floor", "police_archive", "slaughterhouse", "broadcast_tower", "last_call") var layout_id := "nightclub"
 @export var map_size := DEFAULT_MAP_SIZE
 var layout_variant := "nightclub"
+var world_size := Vector2i.ZERO
+var building_origin := EXTERIOR_MARGIN
 
 @onready var exterior_layer: TileMapLayer = $ExteriorBackdrop
 @onready var floor_layer: TileMapLayer = $Floor
@@ -28,6 +31,7 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	layout_variant = layout_id
 	layout_id = _get_layout_family(layout_variant)
+	world_size = map_size + EXTERIOR_MARGIN * 2
 	floor_layer.tile_set = _create_tile_set(false)
 	exterior_layer.tile_set = floor_layer.tile_set
 	wall_layer.tile_set = _create_tile_set(true)
@@ -81,6 +85,38 @@ func _paint_floor(rect: Rect2i, tile: Tile) -> void:
 	for y in range(clipped.position.y, clipped.end.y):
 		for x in range(clipped.position.x, clipped.end.x):
 			_set_tile(floor_layer, Vector2i(x, y), tile)
+
+func _set_world_tile(layer: TileMapLayer, cell: Vector2i, tile: Tile) -> void:
+	layer.set_cell(cell, 0, Vector2i(int(tile), 0), 0)
+
+func _paint_world_floor(rect: Rect2i, tile: Tile) -> void:
+	var clipped := rect.intersection(Rect2i(Vector2i.ONE, world_size - Vector2i(2, 2)))
+	for y in range(clipped.position.y, clipped.end.y):
+		for x in range(clipped.position.x, clipped.end.x):
+			_set_world_tile(floor_layer, Vector2i(x, y), tile)
+
+func _build_exterior_floor() -> void:
+	# The playable world now has a genuine exterior apron around the authored
+	# building. A hard-surface service walk wraps the façade while grass/asphalt
+	# define readable outdoor approach routes without adding collision clutter.
+	_paint_world_floor(Rect2i(Vector2i.ONE, world_size - Vector2i(2, 2)), Tile.GRASS)
+	var building_rect := Rect2i(building_origin, map_size)
+	_paint_world_floor(building_rect.grow(2), Tile.CONCRETE)
+	var approach_x := building_origin.x + _get_entrance_authored_x() - 3
+	_paint_world_floor(Rect2i(approach_x, building_rect.end.y, 6, EXTERIOR_MARGIN.y - 1), Tile.CONCRETE)
+	_paint_world_floor(Rect2i(1, building_rect.end.y + 3, world_size.x - 2, EXTERIOR_MARGIN.y - 4), Tile.DARK_TILE)
+	# Sparse lane markings sell parking/loading space while leaving the route open.
+	for x in range(4, world_size.x - 4, 8):
+		for y in range(building_rect.end.y + 4, mini(world_size.y - 2, building_rect.end.y + 6)):
+			_set_world_tile(decoration_layer, Vector2i(x, y), Tile.HAZARD)
+
+func _build_world_boundary() -> void:
+	for x in range(world_size.x):
+		_set_world_tile(wall_layer, Vector2i(x, 0), Tile.WALL)
+		_set_world_tile(wall_layer, Vector2i(x, world_size.y - 1), Tile.WALL)
+	for y in range(1, world_size.y - 1):
+		_set_world_tile(wall_layer, Vector2i(0, y), Tile.WALL)
+		_set_world_tile(wall_layer, Vector2i(world_size.x - 1, y), Tile.WALL)
 
 func _build_custom_floor() -> void:
 	_paint_floor(Rect2i(Vector2i.ONE, map_size - Vector2i(2, 2)), Tile.CONCRETE)
@@ -149,12 +185,24 @@ func _build_custom_floor() -> void:
 			_paint_floor(Rect2i(16, 15, 19, 11), Tile.RED_BRICK)
 
 func _build_boundary(edge_wall: Tile, top_windows: Array[int] = [], side_windows: Array[int] = []) -> void:
+	var entrance_x := _get_entrance_authored_x()
+	# The physical doorway uses a 16px leaf, but actors need one extra 8px jamb
+	# cell of clearance so the real collision capsule never scrapes the façade.
+	var entrance_cells := [entrance_x - 2, entrance_x - 1, entrance_x]
 	for x in range(1, map_size.x - 1):
 		_set_tile(wall_layer, Vector2i(x, 1), Tile.WINDOW if x in top_windows else edge_wall)
-		_set_tile(wall_layer, Vector2i(x, map_size.y - 2), edge_wall)
+		if x not in entrance_cells:
+			_set_tile(wall_layer, Vector2i(x, map_size.y - 2), edge_wall)
 	for y in range(2, map_size.y - 2):
 		_set_tile(wall_layer, Vector2i(1, y), edge_wall)
 		_set_tile(wall_layer, Vector2i(map_size.x - 2, y), Tile.WINDOW if y in side_windows else edge_wall)
+
+func _get_entrance_authored_x() -> int:
+	# Entrances align to believable lobby/corridor space, never directly into an
+	# interior partition. These two asymmetric façades need an offset threshold.
+	if layout_variant == "motel_witness": return 18
+	if layout_variant == "penthouse": return 36
+	return map_size.x / 2
 
 func _wall_h(y: int, x0: int, x1: int, openings: Array[int] = [], windows: Array[int] = [], tile: Tile = Tile.BRIGHT_WALL) -> void:
 	for x in range(x0, x1 + 1):
@@ -183,7 +231,8 @@ func _build_custom_walls() -> void:
 			_wall_v(42, 2, map_size.y - 3, [7, 8, 20, 21, 30, 31], [12, 13, 26, 27])
 			_wall_h(18, 21, 41, [30, 31], [35, 36])
 			_wall_h(12, 2, 19, [9, 10], [14, 15])
-			_wall_h(26, 21, 41, [31, 32], [36, 37])
+			if map_size.y > DEFAULT_MAP_SIZE.y:
+				_wall_h(26, 21, 41, [31, 32], [36, 37])
 			_wall_h(16, 43, map_size.x - 3, [52, 53], [58, 59])
 		"harbor_exchange":
 			_wall_v(14, 2, 25, [7, 8, 19, 20], [3, 4])
@@ -287,12 +336,12 @@ func _build_custom_decorations() -> void:
 func _place_decor(cells: Array[Vector2i], tile: Tile) -> void:
 	for cell: Vector2i in cells:
 		if cell.x <= 1 or cell.y <= 1 or cell.x >= map_size.x - 1 or cell.y >= map_size.y - 1: continue
-		if wall_layer.get_cell_source_id(cell) < 0: _set_tile(decoration_layer, cell, tile)
+		if wall_layer.get_cell_source_id(cell + building_origin) < 0: _set_tile(decoration_layer, cell, tile)
 
 func _place_objects(cells: Array[Vector2i], tile: Tile) -> void:
 	for cell: Vector2i in cells:
 		if cell.x <= 1 or cell.y <= 1 or cell.x >= map_size.x - 1 or cell.y >= map_size.y - 1: continue
-		if wall_layer.get_cell_source_id(cell) < 0: _set_tile(object_layer, cell, tile)
+		if wall_layer.get_cell_source_id(cell + building_origin) < 0: _set_tile(object_layer, cell, tile)
 
 func _build_custom_objects() -> void:
 	match layout_variant:
@@ -397,15 +446,16 @@ func _create_tile_set(with_physics: bool) -> TileSet:
 	return tile_set
 
 func _set_tile(layer: TileMapLayer, cell: Vector2i, tile: Tile) -> void:
-	layer.set_cell(cell, 0, Vector2i(int(tile), 0), 0)
+	layer.set_cell(cell + building_origin, 0, Vector2i(int(tile), 0), 0)
 
 func _build_exterior() -> void:
-	for y in range(map_size.y):
-		for x in range(map_size.x):
+	for y in range(world_size.y):
+		for x in range(world_size.x):
 			var tile := Tile.DARK_TILE if (x + y) % 2 == 0 else Tile.BLACK_PLANK
-			_set_tile(exterior_layer, Vector2i(x, y), tile)
+			_set_world_tile(exterior_layer, Vector2i(x, y), tile)
 
 func _build_floor() -> void:
+	_build_exterior_floor()
 	if _is_custom_layout():
 		_build_custom_floor()
 		return
@@ -432,6 +482,7 @@ func _build_floor() -> void:
 			_set_tile(floor_layer, Vector2i(x, y), tile)
 
 func _build_walls() -> void:
+	_build_world_boundary()
 	if _is_custom_layout():
 		_build_custom_walls()
 		return
@@ -599,8 +650,9 @@ func _spawn_signature_props() -> void:
 		"last_call": [["speaker", Vector2i(19, 7)], ["speaker", Vector2i(31, 7)], ["bar", Vector2i(40, 20)]],
 	}
 	for entry: Array in authored.get(layout_variant, []):
-		var cell: Vector2i = entry[1]
-		if cell.x <= 1 or cell.y <= 1 or cell.x >= map_size.x - 1 or cell.y >= map_size.y - 1: continue
+		var authored_cell: Vector2i = entry[1]
+		if authored_cell.x <= 1 or authored_cell.y <= 1 or authored_cell.x >= map_size.x - 1 or authored_cell.y >= map_size.y - 1: continue
+		var cell := authored_cell + building_origin
 		if wall_layer.get_cell_source_id(cell) >= 0 or cell in destructible_cells: continue
 		var prop := DESTRUCTIBLE_PROP.new() as DestructibleProp
 		prop.position = floor_layer.map_to_local(cell)
@@ -610,12 +662,12 @@ func _spawn_signature_props() -> void:
 		destructible_cells.append(cell)
 
 func _build_path_grid() -> void:
-	path_grid.region = Rect2i(Vector2i.ZERO, map_size)
+	path_grid.region = Rect2i(Vector2i.ZERO, world_size)
 	path_grid.cell_size = Vector2(TILE_SIZE)
 	path_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 	path_grid.update()
-	for y in range(map_size.y):
-		for x in range(map_size.x):
+	for y in range(world_size.y):
+		for x in range(world_size.x):
 			var cell := Vector2i(x, y)
 			if floor_layer.get_cell_source_id(cell) < 0: path_grid.set_point_solid(cell, true)
 	for cell in wall_layer.get_used_cells(): path_grid.set_point_solid(cell, true)
@@ -627,8 +679,8 @@ func _build_path_grid() -> void:
 
 func _apply_navigation_clearance_cost() -> void:
 	var neighbor_offsets := [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN, Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]
-	for y in range(map_size.y):
-		for x in range(map_size.x):
+	for y in range(world_size.y):
+		for x in range(world_size.x):
 			var cell := Vector2i(x, y)
 			if path_grid.is_point_solid(cell): continue
 			var nearby_obstacles := 0
@@ -641,8 +693,8 @@ func _apply_navigation_clearance_cost() -> void:
 func get_navigation_path(from_world: Vector2, to_world: Vector2) -> PackedVector2Array:
 	var from_cell := floor_layer.local_to_map(floor_layer.to_local(from_world))
 	var to_cell := floor_layer.local_to_map(floor_layer.to_local(to_world))
-	from_cell = from_cell.clamp(Vector2i.ZERO, map_size - Vector2i.ONE)
-	to_cell = to_cell.clamp(Vector2i.ZERO, map_size - Vector2i.ONE)
+	from_cell = from_cell.clamp(Vector2i.ZERO, world_size - Vector2i.ONE)
+	to_cell = to_cell.clamp(Vector2i.ZERO, world_size - Vector2i.ONE)
 	if path_grid.is_point_solid(from_cell) or path_grid.is_point_solid(to_cell): return PackedVector2Array()
 	var id_path := path_grid.get_id_path(from_cell, to_cell)
 	var world_path := PackedVector2Array()
@@ -654,7 +706,7 @@ func get_door_specs() -> Array[Dictionary]:
 	var authored := {
 		"nightclub": [[Vector2i(11, 7), 0.0], [Vector2i(20, 15), -PI * 0.5], [Vector2i(34, 18), 0.0]],
 		"sandwich_shop": [[Vector2i(8, 13), -PI * 0.5], [Vector2i(22, 7), 0.0], [Vector2i(30, 20), 0.0]],
-		"tactical_lab": [[Vector2i(20, 8), 0.0], [Vector2i(20, 23), 0.0], [Vector2i(42, 7), 0.0], [Vector2i(30, 18), -PI * 0.5], [Vector2i(9, 12), -PI * 0.5], [Vector2i(31, 26), -PI * 0.5], [Vector2i(52, 16), -PI * 0.5]],
+		"tactical_lab": [[Vector2i(20, 8), 0.0], [Vector2i(20, 23), 0.0], [Vector2i(42, 7), 0.0], [Vector2i(30, 18), -PI * 0.5], [Vector2i(9, 12), -PI * 0.5]],
 		"harbor_exchange": [[Vector2i(14, 7), 0.0], [Vector2i(24, 14), -PI * 0.5], [Vector2i(34, 21), 0.0]],
 		"motel_witness": [[Vector2i(7, 10), -PI * 0.5], [Vector2i(31, 10), -PI * 0.5], [Vector2i(19, 17), -PI * 0.5]],
 		"penthouse": [[Vector2i(24, 8), 0.0], [Vector2i(34, 13), -PI * 0.5], [Vector2i(10, 16), -PI * 0.5]],
@@ -666,8 +718,13 @@ func get_door_specs() -> Array[Dictionary]:
 		"last_call": [[Vector2i(14, 7), 0.0], [Vector2i(36, 17), 0.0], [Vector2i(24, 15), -PI * 0.5]],
 	}
 	var result: Array[Dictionary] = []
-	for entry: Array in authored.get(layout_variant, []):
-		var opening_cell: Vector2i = entry[0]
+	# Every venue has a public/service threshold connecting the outdoor approach
+	# to the interior. It is part of the same physical door system as room doors.
+	var entries: Array = authored.get(layout_variant, []).duplicate(true)
+	var entrance_x := _get_entrance_authored_x()
+	entries.append([Vector2i(entrance_x - 1, map_size.y - 2), -PI * 0.5])
+	for entry: Array in entries:
+		var opening_cell: Vector2i = entry[0] + building_origin
 		var door_rotation := float(entry[1])
 		var leaf_axis := Vector2.DOWN.rotated(door_rotation)
 		var first_cell_center := floor_layer.map_to_local(opening_cell)
@@ -690,6 +747,8 @@ func _door_has_open_approaches(opening_cell: Vector2i, door_rotation: float) -> 
 	var horizontal_leaf := absf(door_rotation) > 0.1
 	var leaf_step := Vector2i.RIGHT if horizontal_leaf else Vector2i.DOWN
 	var normal_step := Vector2i.UP if horizontal_leaf else Vector2i.RIGHT
+	if not _is_bare_floor_cell(opening_cell) or not _is_bare_floor_cell(opening_cell + leaf_step):
+		return false
 	var negative_open := false
 	var positive_open := false
 	for leaf_offset in [Vector2i.ZERO, leaf_step]:
@@ -700,7 +759,7 @@ func _door_has_open_approaches(opening_cell: Vector2i, door_rotation: float) -> 
 	return negative_open and positive_open
 
 func _is_bare_floor_cell(cell: Vector2i) -> bool:
-	if cell.x < 0 or cell.y < 0 or cell.x >= map_size.x or cell.y >= map_size.y: return false
+	if cell.x < 0 or cell.y < 0 or cell.x >= world_size.x or cell.y >= world_size.y: return false
 	return floor_layer.get_cell_source_id(cell) >= 0 and wall_layer.get_cell_source_id(cell) < 0
 
 func get_security_specs() -> Array[Dictionary]:
@@ -715,7 +774,7 @@ func get_security_specs() -> Array[Dictionary]:
 	}
 	var result: Array[Dictionary] = []
 	for entry: Array in authored.get(layout_variant, []):
-		var cell: Vector2i = entry[0]
+		var cell: Vector2i = entry[0] + building_origin
 		if path_grid.is_in_boundsv(cell) and not path_grid.is_point_solid(cell):
 			result.append({"position": floor_layer.map_to_local(cell), "rotation": float(entry[1])})
 	return result
@@ -736,10 +795,28 @@ func get_light_positions() -> Array[Vector2]:
 		"last_call": [Vector2(68, 64), Vector2(200, 72), Vector2(276, 184), Vector2(356, 104)],
 	}
 	var result: Array[Vector2] = []
-	for position: Vector2 in authored.get(layout_variant, []): result.append(position)
+	var world_offset := Vector2(building_origin * TILE_SIZE)
+	for position: Vector2 in authored.get(layout_variant, []): result.append(position + world_offset)
 	if layout_variant == "tactical_lab" and map_size.x > DEFAULT_MAP_SIZE.x:
-		result.append_array([Vector2(428, 60), Vector2(468, 156), Vector2(300, 252), Vector2(460, 252)])
+		for position in [Vector2(428, 60), Vector2(468, 156), Vector2(300, 252), Vector2(460, 252)]:
+			result.append(position + world_offset)
 	return result
+
+func map_authored_position(authored_position: Vector2) -> Vector2:
+	return authored_position + Vector2(building_origin * TILE_SIZE)
+
+func get_default_player_spawn() -> Vector2:
+	# Spawn on the exterior approach, centred on the entrance. The main scene can
+	# opt back into an authored indoor spawn for story-driven missions.
+	var entrance_x := building_origin.x + _get_entrance_authored_x()
+	var exterior_y := mini(world_size.y - 3, building_origin.y + map_size.y + 3)
+	return floor_layer.to_global(floor_layer.map_to_local(Vector2i(entrance_x, exterior_y)))
+
+func get_camera_world_rect() -> Rect2:
+	return Rect2(Vector2.ZERO, Vector2(world_size * TILE_SIZE))
+
+func get_building_world_rect() -> Rect2:
+	return Rect2(Vector2(building_origin * TILE_SIZE), Vector2(map_size * TILE_SIZE))
 
 func is_navigation_position_walkable(world_position: Vector2) -> bool:
 	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
@@ -762,7 +839,10 @@ func get_nearest_walkable_position(world_position: Vector2, search_radius_cells 
 	return floor_layer.to_global(floor_layer.map_to_local(best_cell))
 
 func get_tactical_room_id(world_position: Vector2) -> String:
-	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
+	var world_cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
+	var cell := world_cell - building_origin
+	if cell.x < 0 or cell.y < 0 or cell.x >= map_size.x or cell.y >= map_size.y:
+		return "exterior_approach"
 	match layout_variant:
 		"nightclub": return ("service" if cell.x < 11 else ("dance_floor" if cell.x < 34 else "vip")) + ("_north" if cell.y < 15 else "_south")
 		"sandwich_shop": return ("dining" if cell.x < 22 else "counter") if cell.y < 13 else ("kitchen" if cell.x < 30 else ("storage" if cell.x < 39 else "office"))

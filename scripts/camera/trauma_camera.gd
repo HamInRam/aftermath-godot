@@ -14,6 +14,7 @@ signal impact_flash_requested(color: Color)
 @export_range(0.0, 1.0, 0.05) var extended_look_weight := 0.55
 @export_range(1.0, 20.0, 0.5) var follow_speed_x := 7.5
 @export_range(1.0, 20.0, 0.5) var follow_speed_y := 6.5
+@export_range(1.0, 2.0, 0.05) var exploration_zoom := 1.35
 @export var camera_center_bounds := Rect2(160.0, 90.0, 64.0, 44.0)
 @export_group("Position Tilt")
 @export_range(0.0, 4.0, 0.05) var tilt_max_degrees := 0.55
@@ -37,6 +38,7 @@ var drift_time := 0.0
 var shake_strength := 1.0
 
 func _ready() -> void:
+	zoom = Vector2.ONE * exploration_zoom
 	shake_strength = Settings.screen_shake_strength
 	ambient_drift_enabled = ambient_drift_enabled and Settings.ambient_camera_motion_enabled
 	noise.seed = randi()
@@ -47,6 +49,19 @@ func _ready() -> void:
 	process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	follow_target = get_tree().get_first_node_in_group("player") as Node2D
 	smooth_follow_position = global_position
+
+func configure_world_bounds(world_rect: Rect2) -> void:
+	# Derive legal camera centres from the actual visible footprint. At 320x180
+	# and 1.35x zoom the player sees roughly 237x133 world pixels: enough to read
+	# the current room and a connected sightline, never the whole building.
+	var viewport_size := get_viewport_rect().size
+	var half_visible := viewport_size / maxf(1.0, exploration_zoom) * 0.5
+	var minimum := world_rect.position + half_visible
+	var maximum := world_rect.end - half_visible
+	if maximum.x < minimum.x: minimum.x = world_rect.get_center().x; maximum.x = minimum.x
+	if maximum.y < minimum.y: minimum.y = world_rect.get_center().y; maximum.y = minimum.y
+	camera_center_bounds = Rect2(minimum, maximum - minimum)
+	tilt_room_center_x = world_rect.get_center().x
 
 func add_trauma(amount: float) -> void:
 	# Repeated impacts should intensify the shake without pinning the camera at its

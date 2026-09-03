@@ -2,6 +2,16 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.6 exterior approach and room-scale exploration
+
+- Every campaign venue is now a complete site rather than a single floating floor plate: a playable grass/service perimeter, façade walk, parking/loading strip and entrance approach surround the authored interior.
+- Missions default to an exterior arrival aligned with the real front/service door. A per-level `player_spawn_context` switch preserves authored indoor starts for later story beats without another coordinate rewrite.
+- Existing indoor plans, enemies, patrols, ammunition, security, lights, landmarks, cleanup secrets, disposal points and restoration props are translated together into the building coordinate space, keeping all systems synchronized.
+- Each façade gains a physical exterior threshold with actor-width clearance. Offset entrances avoid internal partitions in asymmetric motel and penthouse layouts, and every hostile remains reachable from the outdoor start.
+- The camera now runs at a closer 1.35x exploration scale and derives its clamps from the complete site. At the native 320x180 viewport it shows about 237x133 world pixels: a room cluster and connected sightline rather than most of a 384x224 building.
+- Interior rooms retain functional floor zoning and perimeter furniture, while the new exterior-to-lobby-to-restricted-area sequence gives each contract a believable architectural hierarchy and a clearer first breach decision.
+- Regression coverage now validates exterior spawning, explicit outdoor room identity, partial-building camera coverage, connected entry routes and real-collider passage through every exterior and interior door.
+
 ## v1.2.5 blood performance, pressure response and combat Focus
 
 - Dense blood keeps the same one-pixel density, spray counts, trails, pooling, ultraviolet residue and persistent cleanup evidence, but chunks now age and repaint only occupied or changed cells instead of scanning and rebuilding every 32x32 texture.

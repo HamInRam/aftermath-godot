@@ -28,6 +28,11 @@ func _ready() -> void:
 		await get_tree().process_frame
 		var world := level.get_node("TileMap") as TileWorld
 		_expect(world.layout_variant == mission_id, "%s must use its own authored topology" % mission_id)
+		var building_rect := world.get_building_world_rect()
+		_expect(not building_rect.has_point(level.player.global_position), "%s should begin on a readable exterior approach by default" % mission_id)
+		_expect(world.get_tactical_room_id(level.player.global_position) == "exterior_approach", "%s exterior spawn needs an explicit tactical room identity" % mission_id)
+		var visible_world: Vector2 = Vector2(320.0, 180.0) / Vector2(level.trauma_camera.zoom)
+		_expect(visible_world.x < building_rect.size.x and visible_world.y < building_rect.size.y, "%s camera should reveal a local room cluster, not the complete building" % mission_id)
 		_expect(level.started_enemy_count >= 7 and level.started_enemy_count <= 11, "%s should use a readable 7-11 enemy encounter budget instead of crowding rooms (%d)" % [mission_id, level.started_enemy_count])
 		var authored_archetypes: Dictionary = {}
 		for enemy_type in level.enemy_types: authored_archetypes[str(enemy_type)] = true
@@ -75,7 +80,7 @@ func _ready() -> void:
 			_expect(world.is_navigation_position_walkable(passage_center), "%s door centre must remain on navigable floor" % mission_id)
 			_expect(not world.path_grid.is_point_solid(opening_cell), "%s door hinge-side cell must be open" % mission_id)
 			_expect(not world.path_grid.is_point_solid(opening_cell + leaf_step), "%s door far-side cell must be open" % mission_id)
-		_expect(world.get_door_specs().size() >= 3 and world.get_door_specs().size() <= 7, "%s should use a legible three-to-seven tactical doorway budget" % mission_id)
+		_expect(world.get_door_specs().size() >= 4 and world.get_door_specs().size() <= 7, "%s should combine one exterior threshold with a legible interior doorway budget" % mission_id)
 		_expect(world.get_children().filter(func(child: Node) -> bool: return child is DestructibleProp and child.prop_kind == "sink").size() >= 1, "%s needs a reachable cleanup rinse point" % mission_id)
 		if level.mission_profile != null and level.mission_profile.required_security_shutdowns > 0:
 			_expect(level._get_security_devices().size() >= level.mission_profile.required_security_shutdowns, "%s must author enough security devices for its objective" % mission_id)
