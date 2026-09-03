@@ -139,6 +139,10 @@ var actor_tracks: Dictionary = {}
 var jet_accumulator := 0.0
 var jet_particles: Array[Dictionary] = []
 var jet_sequence := 0
+var pressure_target := Vector2.INF
+var pressure_sustain := 0.0
+var pressure_emit_gap := 1.0
+var pressure_stability := 0.0
 
 func _ready() -> void:
 	add_to_group("pixel_liquid_system")
@@ -159,6 +163,10 @@ func _process(delta: float) -> void:
 	texture_accumulator += delta
 	surface_accumulator += delta
 	contact_accumulator += delta
+	pressure_emit_gap += delta
+	if pressure_emit_gap > 0.18:
+		pressure_sustain = move_toward(pressure_sustain, 0.0, delta * 2.8)
+		pressure_stability = move_toward(pressure_stability, 0.0, delta * 4.8)
 	jet_accumulator += minf(delta, 0.1)
 	while jet_accumulator >= JET_FIXED_STEP:
 		jet_accumulator -= JET_FIXED_STEP
@@ -175,32 +183,43 @@ func _process(delta: float) -> void:
 		contact_accumulator = 0.0
 		_update_actor_contacts()
 
-func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float, power: int) -> void:
+func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float, power: int, washer_level := 0) -> float:
 	var segment := target - origin
-	if segment.length_squared() <= 4.0: return
+	if segment.length_squared() <= 4.0: return pressure_stability
+	washer_level = clampi(washer_level, 0, 3)
+	var continuing := pressure_target != Vector2.INF and pressure_target.distance_to(target) <= maxf(4.0, brush_radius * 0.7) and pressure_emit_gap <= 0.18
+	pressure_sustain = pressure_sustain + maxf(pressure_emit_gap, 0.052) if continuing else 0.0
+	var stability_time := 0.18 if washer_level >= 1 else 0.25
+	pressure_stability = clampf(pressure_sustain / stability_time, 0.0, 1.0)
+	pressure_target = target
+	pressure_emit_gap = 0.0
 	var forward := segment.normalized()
 	var distance := minf(segment.length(), 40.0)
 	var width_ratio := clampf((brush_radius - 3.2) / 4.8, 0.0, 1.0)
-	var particle_count := clampi(roundi(lerpf(3.0, 6.0, width_ratio)), 3, 6)
+	var particle_count := clampi(roundi(lerpf(4.0, 6.0, width_ratio)), 4, 6)
+	var stable_power := maxi(1, roundi(float(power) * lerpf(1.0, 1.25, pressure_stability)))
 	for index in particle_count:
 		if jet_particles.size() >= MAX_JET_PARTICLES: jet_particles.pop_front()
 		jet_sequence += 1
 		var lateral := randf_range(-brush_radius * 0.64, brush_radius * 0.64) * width_ratio
 		var endpoint := target + forward.orthogonal() * lateral + forward * randf_range(-1.5, 1.5)
 		var ray := origin.direction_to(endpoint)
-		var speed := randf_range(154.0, 205.0)
+		var speed := randf_range(154.0, 205.0) * (1.15 if washer_level >= 1 else 1.0)
 		jet_particles.append({
 			"position": origin + ray * float(index % 3),
 			"previous": origin,
 			"direction": ray,
 			"speed": speed,
 			"remaining": minf(origin.distance_to(endpoint), distance + 3.0),
-			"power": maxi(1, power),
-			"radius": maxf(1.2, brush_radius * lerpf(0.28, 0.42, width_ratio)),
+			"power": stable_power,
+			"radius": maxf(2.0 if washer_level >= 2 else 1.6, brush_radius * lerpf(0.28, 0.42, width_ratio)),
 			"amount": clampi(roundi(44.0 + float(power) * 2.4), 42, 76),
 			"sequence": jet_sequence,
+			"washer_level": washer_level,
+			"stability": pressure_stability,
 		})
 	queue_redraw()
+	return pressure_stability
 
 func _update_pressure_jets(delta: float) -> void:
 	if jet_particles.is_empty(): return
@@ -242,7 +261,7 @@ func _pressure_impact(particle: Dictionary, surface_normal: Vector2) -> void:
 		_add_liquid_pixel_raw(position + offset, &"water", maxi(12, amount - index * 7))
 	var blood_system := get_tree().get_first_node_in_group("blood_system")
 	if is_instance_valid(blood_system) and blood_system.has_method("pressure_wash_pixel_water"):
-		blood_system.pressure_wash_pixel_water(position, radius, int(particle.power), direction)
+		blood_system.pressure_wash_pixel_water(position, radius, int(particle.power), direction, int(particle.washer_level))
 
 func _draw() -> void:
 	# Every airborne droplet is rendered as an integer-aligned 1x1 source pixel.
@@ -255,7 +274,7 @@ func _draw() -> void:
 		var steps := clampi(ceili(length), 1, 4)
 		for step in range(steps + 1):
 			var point := previous.lerp(current, float(step) / float(steps)).floor()
-			var bright := posmod(int(particle.sequence) + step, 4) == 0
+			var bright := posmod(int(particle.sequence) + step, 4) == 0 or (float(particle.stability) >= 0.75 and step % 2 == 0)
 			var color := Color(0.86, 0.98, 1.0, 0.92) if bright else Color(0.25, 0.78, 0.92, 0.78)
 			draw_rect(Rect2(point, Vector2.ONE), color, true)
 
@@ -267,6 +286,15 @@ func _raycast_solid(start: Vector2, finish: Vector2) -> Dictionary:
 
 func get_debug_jet_count() -> int:
 	return jet_particles.size()
+
+func get_debug_pressure_stability() -> float:
+	return pressure_stability
+
+func reset_pressure_stream() -> void:
+	pressure_target = Vector2.INF
+	pressure_sustain = 0.0
+	pressure_emit_gap = 1.0
+	pressure_stability = 0.0
 
 func emit_burst(origin: Vector2, kind: StringName, direction := Vector2.RIGHT, strength := 1.0) -> void:
 	if kind not in LIQUID_KINDS: return

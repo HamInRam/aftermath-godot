@@ -271,7 +271,7 @@ func _process(delta: float) -> void:
 				cleanup_pressure_active = false
 				_finish_run(true)
 				return
-		hud.set_cleanup_tool(player.current_cleanup_tool, player.get_mop_saturation_ratio(), player.get_cleanup_flow_ratio(), player.get_pressure_washer_mode(), player.get_pressure_washer_focus())
+		hud.set_cleanup_tool(player.current_cleanup_tool, player.get_mop_saturation_ratio(), player.get_cleanup_flow_ratio(), player.get_pressure_washer_mode(), player.get_pressure_washer_focus(), player.get_pressure_washer_stability())
 		cleanup_scan_timer -= delta
 		if cleanup_scan_timer <= 0.0:
 			cleanup_scan_timer = 0.1
@@ -1417,7 +1417,8 @@ func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RI
 		var spray_direction := player.global_position.direction_to(world_position)
 		var nozzle_origin := player.global_position + spray_direction * 12.0
 		if is_instance_valid(liquid_system) and liquid_system.has_method("emit_pressure_stream"):
-			liquid_system.emit_pressure_stream(nozzle_origin, world_position, spray_radius, pixel_power)
+			var stability: float = liquid_system.emit_pressure_stream(nozzle_origin, world_position, spray_radius, pixel_power, Progression.get_upgrade_level("pressure_washer"))
+			player.set_pressure_washer_stability(stability)
 	elif player.current_cleanup_tool == "mop" and blood_system.has_method("clean_pixel_stroke"):
 		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
 		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius)
@@ -1521,8 +1522,10 @@ func _on_blood_cleaning_layer_changed(_world_position: Vector2, layer_name: Stri
 
 func _on_blood_cleaning_region_completed(_world_position: Vector2) -> void:
 	if phase != "cleanup" or run_over: return
-	detail_label.text = "REGION CLEAN // FLOW MAINTAINED"
-	combat_feedback.show_flash(Color(0.20, 0.95, 0.78, 0.08), 0.07)
+	var washer_finish: bool = player.current_cleanup_tool == "pressure_washer"
+	var detergent_finish: bool = washer_finish and Progression.get_upgrade_level("pressure_washer") >= 3
+	detail_label.text = "REGION STRIPPED // DETERGENT CLEAR" if detergent_finish else ("REGION RINSED" if washer_finish else "REGION CLEAN // FLOW MAINTAINED")
+	combat_feedback.show_flash(Color(0.35, 0.88, 1.0, 0.13 if detergent_finish else 0.08), 0.11 if detergent_finish else 0.07)
 	if cleanup_layer_feedback_cooldown <= 0.12: _play_area_clean_feedback()
 	cleanup_layer_feedback_cooldown = 0.34
 

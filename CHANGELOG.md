@@ -2,6 +2,10 @@
 
 ## [v1.2.4] - Physical Pixel Pressure Washing
 
+- Rebalanced the stock pressure washer from 7 to 9 base cleaning power and increased the focused jet from three to four physical water packets, making the first cleanup loadout useful without purchased upgrades.
+- Added target-stability pressure: maintaining the nozzle over one small region for 0.25 seconds builds to a visible WASH+ state and a 25% cleaning bonus; moving away or releasing the trigger rapidly vents the pressure.
+- Gave every washer tier a physical identity. Level 1 accelerates water by 15% and reaches stable pressure sooner, level 2 widens the broad nozzle by 20% with a 2px minimum impact and softer edge falloff, and level 3 detergent deals 50% more work to diluted/UV layers while producing less red runoff and stronger completion feedback.
+- Removed solid gore from pressure-washer efficiency so heavy tissue remains a deliberate mop task instead of collapsing both wet-cleaning tools into one dominant option.
 - Re-anchored mop cleaning to the visible head ten pixels in front of the player. Mouse position now controls handle direction only; moving or turning the actual head paints the continuous cleaning path, and dragging the cursor farther away cannot clean remotely.
 - Reduced legacy biological target queries to the real mop-head footprint instead of the former 22-27px invisible batch radius.
 - Mop upgrades now visibly widen the rendered head and its centered brush footprint while existing efficiency levels strengthen each pass; neither upgrade nor FLOW extends the tool away from the character.

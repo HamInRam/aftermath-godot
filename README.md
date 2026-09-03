@@ -8,6 +8,8 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - The pressure washer now emits visible 1x1 water packets from its nozzle. They fly across the room, stop at walls, break into small impact splashes and settle into the same sparse pixel-liquid surface used by damaged plumbing.
 - Cleaning occurs only after water reaches the target: sustained spray progressively thins blood into a pale wet layer, produces short diluted-red runoff and removes the remaining ultraviolet trace.
 - Close aim remains narrow and forceful while extended aim becomes a wider, weaker fan; these modes now alter actual packet spread, impact radius and cleaning force.
+- The stock unit starts at 9 cleaning power and builds 25% extra pressure after 0.25 seconds of steady aim. Its compact HUD marks this as `WASH+`; releasing the trigger or sweeping away vents the bonus instead of rewarding blind spraying.
+- Upgrades change the physical stream: level 1 raises packet speed and pump response, level 2 adds a 20% broad-nozzle footprint with softer edge falloff, and level 3 detergent strips diluted/UV residue 50% faster with less contaminated runoff. Solid gore remains mop work.
 - The stream is a bounded batched draw list rather than dozens of physics nodes, keeping continuous spraying compatible with the existing low-pixel performance budget.
 
 ## v1.2.3 physical set dressing and cleaning flow

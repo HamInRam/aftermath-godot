@@ -68,6 +68,7 @@ var cleanup_flow_grace := 0.0
 var cleanup_last_stroke_direction := Vector2.ZERO
 var cleanup_stroke_quality := 0.0
 var pressure_washer_distance := 24.0
+var pressure_washer_stability := 0.0
 var cleanup_sweep_sign := 1.0
 var cleaner_charges := 6
 var stride_time := 0.0
@@ -140,6 +141,8 @@ func _physics_process(delta: float) -> void:
 	ultraviolet_scan_time = maxf(0.0, ultraviolet_scan_time - delta)
 	ultraviolet_scan_cooldown = maxf(0.0, ultraviolet_scan_cooldown - delta)
 	cleanup_stroke_cooldown = maxf(0.0, cleanup_stroke_cooldown - delta)
+	if not cleanup_mode or current_cleanup_tool != "pressure_washer" or not Input.is_action_pressed("shoot"):
+		pressure_washer_stability = move_toward(pressure_washer_stability, 0.0, delta * 4.8)
 	cleanup_flow_grace = maxf(0.0, cleanup_flow_grace - delta)
 	if cleanup_mode and current_cleanup_tool == "mop" and cleanup_flow_grace <= 0.0:
 		cleanup_flow = move_toward(cleanup_flow, 0.0, delta * 0.72)
@@ -506,8 +509,10 @@ func get_cleanup_contact_position(raw_cursor: Vector2) -> Vector2:
 func get_cleanup_stroke_profile(cursor_distance: float, quality := 1.0) -> Dictionary:
 	if current_cleanup_tool == "pressure_washer":
 		var distance_ratio := clampf((cursor_distance - 10.0) / 27.0, 0.0, 1.0)
+		var washer_level := clampi(Progression.get_upgrade_level("pressure_washer"), 0, 3)
+		var coverage_scale := lerpf(1.0, 1.2, distance_ratio) if washer_level >= 2 else 1.0
 		return {
-			"radius": lerpf(3.2, 8.0, distance_ratio),
+			"radius": lerpf(3.2, 8.0, distance_ratio) * coverage_scale,
 			"power": lerpf(1.42, 0.68, distance_ratio),
 			"strength": lerpf(1.22, 0.78, distance_ratio),
 			"mode": "NARROW" if distance_ratio < 0.48 else "WIDE",
@@ -544,10 +549,20 @@ func get_pressure_washer_mode() -> String:
 func get_pressure_washer_focus() -> float:
 	return float(get_cleanup_stroke_profile(pressure_washer_distance).focus)
 
+func set_pressure_washer_stability(value: float) -> void:
+	var next_value := clampf(value, 0.0, 1.0)
+	if is_equal_approx(next_value, pressure_washer_stability): return
+	pressure_washer_stability = next_value
+	queue_redraw()
+
+func get_pressure_washer_stability() -> float:
+	return clampf(pressure_washer_stability, 0.0, 1.0)
+
 func select_cleanup_tool(tool_name: String) -> bool:
 	if tool_name not in CLEANUP_TOOLS: return false
 	if current_cleanup_tool != tool_name:
 		cleanup_flow = 0.0
+		pressure_washer_stability = 0.0
 		cleanup_flow_grace = 0.0
 		cleanup_last_stroke_direction = Vector2.ZERO
 		last_cleanup_cursor = Vector2.INF
@@ -600,7 +615,7 @@ func get_cleanup_efficiency(cleanup_type: String) -> int:
 	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]:
 		var base_efficiency := 4 + Progression.get_upgrade_level("mop") + Progression.get_specialization_level("cleaner")
 		return maxi(1, roundi(base_efficiency * lerpf(1.0, 0.6, get_mop_saturation_ratio())))
-	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]: return 7 + Progression.get_upgrade_level("pressure_washer") * 2 + Progression.get_specialization_level("cleaner")
+	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "spill"]: return 9 + Progression.get_upgrade_level("pressure_washer") * 2 + Progression.get_specialization_level("cleaner")
 	if current_cleanup_tool == "evidence_bag" and cleanup_type in ["shell", "dropped_weapon", "debris"]: return 3
 	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 1
 	return 0
@@ -858,6 +873,7 @@ func set_cleanup_mode(enabled: bool) -> void:
 	cleanup_flow_grace = 0.0
 	cleanup_last_stroke_direction = Vector2.ZERO
 	cleanup_stroke_quality = 0.0
+	pressure_washer_stability = 0.0
 	if has_node("BloodFootprintEmitter"):
 		$BloodFootprintEmitter.set_generation_enabled(not enabled)
 	if not enabled and is_instance_valid(dragged_corpse):

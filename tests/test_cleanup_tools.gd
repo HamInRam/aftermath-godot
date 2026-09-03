@@ -48,11 +48,23 @@ func _run() -> void:
 	var flowing_mop_profile: Dictionary = player.get_cleanup_stroke_profile(18.0, 1.0)
 	_expect(player.get_cleanup_flow_ratio() > 0.45, "successful continuous mop strokes should build FLOW")
 	_expect(float(flowing_mop_profile.power) > float(deliberate_mop_profile.power) and float(flowing_mop_profile.radius) > float(deliberate_mop_profile.radius), "FLOW should reward rhythm with a modest power and coverage bonus")
+	var previous_washer_upgrade := Progression.get_upgrade_level("pressure_washer")
+	Progression.data.upgrades["pressure_washer"] = 0
 	player.select_cleanup_tool("pressure_washer")
 	var focused_washer_profile: Dictionary = player.get_cleanup_stroke_profile(11.0)
 	var wide_washer_profile: Dictionary = player.get_cleanup_stroke_profile(36.0)
+	var base_washer_efficiency: int = int(player.get_cleanup_efficiency("blood_pool"))
 	_expect(str(focused_washer_profile.mode) == "NARROW" and str(wide_washer_profile.mode) == "WIDE", "washer aim distance should switch between readable narrow and wide modes")
 	_expect(float(focused_washer_profile.radius) < float(wide_washer_profile.radius) and float(focused_washer_profile.power) > float(wide_washer_profile.power), "near washer spray should be narrow and strong while far spray is broad and weaker")
+	_expect(base_washer_efficiency >= 9, "the stock pressure washer must feel useful before any upgrade")
+	_expect(player.get_cleanup_efficiency("gore") == 0, "pressure water must not replace the mop for solid biological matter")
+	Progression.data.upgrades["pressure_washer"] = 1
+	_expect(player.get_cleanup_efficiency("blood_pool") == base_washer_efficiency + 2, "washer level one should add meaningful pump pressure")
+	Progression.data.upgrades["pressure_washer"] = 2
+	_expect(float(player.get_cleanup_stroke_profile(36.0).radius) >= float(wide_washer_profile.radius) * 1.19, "washer level two should widen the broad nozzle by twenty percent")
+	Progression.data.upgrades["pressure_washer"] = 3
+	_expect(player.get_cleanup_efficiency("blood_pool") == base_washer_efficiency + 6, "washer level three should reach its intended power fifteen baseline")
+	Progression.data.upgrades["pressure_washer"] = previous_washer_upgrade
 	_expect(is_zero_approx(player.get_cleanup_flow_ratio()), "switching away from the mop should reset its FLOW chain")
 	_expect(player.select_cleanup_tool("evidence_bag") and player.get_cleanup_efficiency("shell") == 3, "evidence bag should collect small evidence efficiently")
 	_expect(player.get_cleanup_efficiency("debris") == 3, "one evidence-bag tool should also collect sorted physical debris without adding tool bloat")

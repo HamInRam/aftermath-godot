@@ -328,7 +328,7 @@ func set_cleanup_summary(cleanliness: float, risk: int, police_seconds := -1.0) 
 	objective_label.text = ""
 	objective_icon.visible = false
 
-func set_cleanup_tool(tool_name: String, saturation: float, flow := 0.0, washer_mode := "WIDE", washer_focus := 0.0) -> void:
+func set_cleanup_tool(tool_name: String, saturation: float, flow := 0.0, washer_mode := "WIDE", washer_focus := 0.0, washer_stability := 0.0) -> void:
 	var clean_name := tool_name.to_upper().replace("PRESSURE_WASHER", "WASH").replace("EVIDENCE_BAG", "EVIDENCE").replace("BODY_BAG", "BODY")
 	var icon_kind := "washer" if tool_name == "pressure_washer" else ("bag" if tool_name in ["evidence_bag", "body_bag"] else "mop")
 	# A continuously changing color generated a unique runtime icon almost every
@@ -337,7 +337,8 @@ func set_cleanup_tool(tool_name: String, saturation: float, flow := 0.0, washer_
 	var ratio := snappedf(clampf(saturation, 0.0, 1.0), 1.0 / 16.0) if tool_name == "mop" else 0.0
 	var flow_tier := clampi(ceili(clampf(flow, 0.0, 1.0) * 3.0), 0, 3)
 	var focus_step := roundi(clampf(washer_focus, 0.0, 1.0) * 8.0)
-	var signature: Array = [tool_name, roundi(ratio * 16.0), flow_tier, washer_mode, focus_step]
+	var stable := washer_stability >= 0.75
+	var signature: Array = [tool_name, roundi(ratio * 16.0), flow_tier, washer_mode, focus_step, stable]
 	if signature == _last_cleanup_tool_signature: return
 	_last_cleanup_tool_signature = signature
 	var tool_color := Color("73f7e4").lerp(Color("b51232"), ratio)
@@ -345,7 +346,7 @@ func set_cleanup_tool(tool_name: String, saturation: float, flow := 0.0, washer_
 	if tool_name == "mop" and flow_tier > 0:
 		cleanup_tool_label.text = ("MOP F%d" % flow_tier).left(9)
 	elif tool_name == "pressure_washer":
-		cleanup_tool_label.text = ("WASH N" if washer_mode == "NARROW" else "WASH W")
+		cleanup_tool_label.text = ("WASH N" if washer_mode == "NARROW" else "WASH W") + ("+" if stable else "")
 	else:
 		cleanup_tool_label.text = clean_name.left(9)
 	cleanup_tool_meter.visible = tool_name in ["mop", "pressure_washer"]
