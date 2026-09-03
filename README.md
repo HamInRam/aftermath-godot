@@ -2,6 +2,12 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.8 responsive hostile-local Focus
+
+- Combat Focus no longer changes the global engine clock: player movement, mouse aim, reticle, camera and HUD remain fully real-time.
+- Enemy thinking, turning, movement, attack wind-up, weapon cadence and hostile bullets run at the Focus multiplier through local simulation scales.
+- Focus transitions update hostile objects only when the state changes, eliminating global slow-motion aim drag and clock-induced visual stutter.
+
 ## v1.2.7 spatial ultraviolet flashlight
 
 - Right-mouse UV inspection now renders a filled, wall-clipped flashlight fan instead of two decorative guide lines.

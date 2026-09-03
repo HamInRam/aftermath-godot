@@ -123,6 +123,7 @@ var previous_visual_state := State.IDLE
 var state_pose_pulse := 0.0
 var knockdown_pose_phase := 0.0
 var lifecycle_context_impact_frame := -1
+var combat_time_scale := 1.0
 const KNOCKDOWN_DURATION := 4.0
 
 static func clear_shared_caches() -> void:
@@ -154,6 +155,9 @@ func _ready() -> void:
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
+	# Focus is hostile-local. Scaling AI time here keeps player input, aim and the
+	# camera on the real clock while enemy decisions and rotations advance slowly.
+	delta *= combat_time_scale
 	melee_cooldown = maxf(0.0, melee_cooldown - delta)
 	melee_swing_time = maxf(0.0, melee_swing_time - delta)
 	reposition_time = maxf(0.0, reposition_time - delta)
@@ -461,6 +465,19 @@ func configure_combat(type_name: String) -> void:
 			"melee": role_color = Color("7d163f"); role_accent = Color("ff4f91")
 		legs_visual.configure("dog" if actor_type == "dog" else "enemy", role_color, role_accent)
 		if is_instance_valid(lifecycle_rig): lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("6e4a37") if actor_type == "dog" else role_color, Color("e8d8c8") if actor_type == "dog" else role_accent, "hound" if actor_type == "dog" else archetype_id)
+
+func set_combat_time_scale(value: float) -> void:
+	var next_scale := clampf(value, 0.2, 1.0)
+	if is_equal_approx(next_scale, combat_time_scale): return
+	var ratio := next_scale / maxf(0.001, combat_time_scale)
+	# CharacterBody2D consumes velocity in real physics time, so authored movement
+	# speed is rescaled in addition to AI timer deltas. Do not rescale the current
+	# velocity: it may be a hit/door impulse and scaling it back up on release would
+	# launch an enemy through a wall.
+	move_speed *= ratio
+	combat_time_scale = next_scale
+	if is_instance_valid(gun) and gun.has_method("set_combat_time_scale"):
+		gun.set_combat_time_scale(next_scale)
 
 func _apply_compatibility_frame() -> void:
 	var frame_role := "hound" if actor_type == "dog" else archetype_id

@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.8] - Responsive Hostile-Local Focus
+
+- Replaced global `Engine.time_scale` Focus with local hostile simulation scaling, keeping player movement, aiming, reticle feedback, camera interpolation and UI at full responsiveness.
+- Focus now slows enemy decision timers, turning, locomotion, attack wind-up, firearm cooldown/animation and already-airborne or newly spawned hostile projectiles while player rounds remain full-speed.
+- Applies the scale only on Focus state transitions, restores all hostile systems at cleanup/run completion and preserves the separate millisecond-scale global hit-stop used for lethal impact punctuation.
+- Added vertical-slice regression coverage for an unchanged engine clock, locally slowed enemy/weapon simulation and immediate hostile-speed restoration.
+
 ## [v1.2.7] - Spatial Ultraviolet Flashlight
 
 - Replaced the UV lamp's two-line preview with a continuous additive fan assembled from 25 collision rays; the rendered light now stops against solid room geometry.

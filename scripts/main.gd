@@ -125,6 +125,7 @@ var cleanup_layer_feedback_cooldown := 0.0
 var world_context_marker: WorldContextMarker
 var combat_focus_energy := 1.0
 var combat_focus_active := false
+var hostile_combat_time_scale := 1.0
 var frame_real_delta := 0.0
 const COMBAT_FOCUS_TIME_SCALE := 0.42
 const COMBAT_FOCUS_DRAIN_PER_SECOND := 1.0 / 3.0
@@ -730,6 +731,7 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	if str(active_modifier.get("id", "standard")) == "armed_response" and patrol_index >= 0 and patrol_index % 3 == 1:
 		configured_type = "heavy" if patrol_index % 2 == 1 else "assault"
 	enemy.configure_combat(configured_type)
+	if enemy.has_method("set_combat_time_scale"): enemy.set_combat_time_scale(hostile_combat_time_scale)
 	if enemy.enemy_type == "gunner":
 		var enemy_weapon_ids := ["pistol", "smg", "lmg"]
 		var enemy_weapon_id: String = enemy.default_weapon_id if not enemy.default_weapon_id.is_empty() else enemy_weapon_ids[patrol_index % enemy_weapon_ids.size()]
@@ -783,6 +785,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 		bullet.shot_id = player.gun.current_shot_id
 		bullet.shot_resolved.connect(_on_player_shot_resolved)
 	bullet.setup(direction, enemy_owned, damage, weapon_id, origin, data.bullet_speed, shooter)
+	if enemy_owned and bullet.has_method("set_combat_time_scale"): bullet.set_combat_time_scale(hostile_combat_time_scale)
 	if not RuntimeBudget.try_add("bullet", bullet, self): return
 
 func _on_player_shot_resolved(shot_id: int, outcome: String, lethal: bool, _weapon_id: String) -> void:
@@ -1139,16 +1142,26 @@ func _trigger_hit_stop(duration: float) -> void:
 
 func _update_combat_focus(delta: float) -> void:
 	if not is_instance_valid(combat_feedback): return
-	var previous_scale := maxf(combat_feedback.base_time_scale, 0.05)
-	var real_delta := minf(delta / previous_scale, 0.05)
+	# Hit-stop may briefly alter the engine clock, but Focus itself must never do
+	# so: mouse aim, player motion, camera interpolation and UI stay responsive.
+	var real_delta := minf(delta / maxf(Engine.time_scale, 0.05), 0.05)
 	frame_real_delta = real_delta
 	var wants_focus := phase == "combat" and not run_over and not transitioning_cleanup and combat_focus_energy > 0.001 and Input.is_action_pressed("combat_focus")
 	combat_focus_active = wants_focus
 	if combat_focus_active:
 		combat_focus_energy = maxf(0.0, combat_focus_energy - COMBAT_FOCUS_DRAIN_PER_SECOND * real_delta)
 		if combat_focus_energy <= 0.001: combat_focus_active = false
-	combat_feedback.set_base_time_scale(COMBAT_FOCUS_TIME_SCALE if combat_focus_active else 1.0)
+	_set_hostile_combat_time_scale(COMBAT_FOCUS_TIME_SCALE if combat_focus_active else 1.0)
 	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active)
+
+func _set_hostile_combat_time_scale(value: float) -> void:
+	var next_scale := clampf(value, 0.2, 1.0)
+	if is_equal_approx(next_scale, hostile_combat_time_scale): return
+	hostile_combat_time_scale = next_scale
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(enemy) and enemy.has_method("set_combat_time_scale"): enemy.set_combat_time_scale(next_scale)
+	for bullet in get_tree().get_nodes_in_group("bullet"):
+		if is_instance_valid(bullet) and bool(bullet.get("enemy_owned")) and bullet.has_method("set_combat_time_scale"): bullet.set_combat_time_scale(next_scale)
 
 func _reward_combat_focus(attack_id: String, hit_zone: String, current_combo: int) -> void:
 	var reward := 0.10
@@ -1265,6 +1278,7 @@ func _exit_tree() -> void:
 func _enter_cleanup_phase() -> void:
 	phase = "cleanup"
 	combat_focus_active = false
+	_set_hostile_combat_time_scale(1.0)
 	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if blood_system.has_method("settle_pixel_blood_for_cleanup"): blood_system.settle_pixel_blood_for_cleanup()
 	hud.set_phase("cleanup")
@@ -1628,6 +1642,7 @@ func _finish_run(left_evidence: bool) -> void:
 	if run_over: return
 	run_over = true
 	combat_focus_active = false
+	_set_hostile_combat_time_scale(1.0)
 	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
 	var cleanup_ratio := CleanupRegistry.get_cleanup_ratio()
