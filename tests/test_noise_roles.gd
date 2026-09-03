@@ -24,6 +24,7 @@ func _run() -> void:
 	_expect(enemies[0].tactical_role == "push", "nearest guard should receive PUSH")
 	_expect(enemies[1].tactical_role == "push", "second guard should receive PUSH")
 	_expect(enemies[2].tactical_role == "sweep", "third guard should receive SWEEP")
+	_expect(enemies[0].noise_reaction_delay > 0.0 and enemies[2].noise_reaction_delay >= enemies[0].noise_reaction_delay, "sound responders should briefly orient, with farther contacts taking at least as long to localize")
 	_expect(enemies[3].tactical_role == "guard" and enemies[4].tactical_role == "guard", "remaining guards should hold position")
 	_expect(enemies[3].state == enemies[3].State.IDLE, "GUARD role should not abandon its patrol position")
 	CombatDirector.register_casualty(Vector2(64, 64), Vector2.LEFT, 1000)

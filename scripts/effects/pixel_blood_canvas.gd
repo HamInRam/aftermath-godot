@@ -22,11 +22,15 @@ class PixelBloodChunk extends Node2D:
 	var water := PackedByteArray()
 	var age := PackedByteArray()
 	var residue := PackedByteArray()
+	var active_pixels := PackedInt32Array()
+	var active_flags := PackedByteArray()
+	var dirty_pixels := PackedInt32Array()
+	var dirty_flags := PackedByteArray()
 	var initial_load := 0.0
 	var blood_load := 0
 	var residue_load := 0
 	var ultraviolet_visible := false
-	var dirty := true
+	var dirty := false
 	var registered := false
 	var image: Image
 	var texture: ImageTexture
@@ -43,6 +47,8 @@ class PixelBloodChunk extends Node2D:
 		water.resize(PixelBloodCanvas.PIXELS_PER_CHUNK); water.fill(0)
 		age.resize(PixelBloodCanvas.PIXELS_PER_CHUNK); age.fill(0)
 		residue.resize(PixelBloodCanvas.PIXELS_PER_CHUNK); residue.fill(0)
+		active_flags.resize(PixelBloodCanvas.PIXELS_PER_CHUNK); active_flags.fill(0)
+		dirty_flags.resize(PixelBloodCanvas.PIXELS_PER_CHUNK); dirty_flags.fill(0)
 		image = Image.create(PixelBloodCanvas.CHUNK_SIZE, PixelBloodCanvas.CHUNK_SIZE, false, Image.FORMAT_RGBA8)
 		image.fill(Color.TRANSPARENT)
 		texture = ImageTexture.create_from_image(image)
@@ -53,6 +59,17 @@ class PixelBloodChunk extends Node2D:
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite.texture = texture
 		add_child(sprite)
+
+	func _mark_active(index: int) -> void:
+		if active_flags[index] != 0: return
+		active_flags[index] = 1
+		active_pixels.append(index)
+
+	func _mark_dirty(index: int) -> void:
+		dirty = true
+		if dirty_flags[index] != 0: return
+		dirty_flags[index] = 1
+		dirty_pixels.append(index)
 
 	func add_local_pixel(local_cell: Vector2i, amount: int, new_water := 0, new_age := 0) -> int:
 		if local_cell.x < 0 or local_cell.y < 0 or local_cell.x >= PixelBloodCanvas.CHUNK_SIZE or local_cell.y >= PixelBloodCanvas.CHUNK_SIZE: return 0
@@ -65,7 +82,8 @@ class PixelBloodChunk extends Node2D:
 		var added := after - before
 		blood_load += added
 		initial_load += float(maxi(0, added))
-		dirty = true
+		if after > 0 or water[index] > 0 or residue[index] > 0: _mark_active(index)
+		_mark_dirty(index)
 		if after > 0 and not registered:
 			registered = true
 			CleanupRegistry.register_target(self)
@@ -97,42 +115,57 @@ class PixelBloodChunk extends Node2D:
 			residue_load -= washed_residue
 			water[index] = 220
 			removed = washed_residue
-		dirty = true
+		_mark_active(index)
+		_mark_dirty(index)
 		return removed
 
 	func apply_external_water(local_cell: Vector2i, amount: int) -> int:
 		if local_cell.x < 0 or local_cell.y < 0 or local_cell.x >= PixelBloodCanvas.CHUNK_SIZE or local_cell.y >= PixelBloodCanvas.CHUNK_SIZE: return 0
 		var index := local_cell.y * PixelBloodCanvas.CHUNK_SIZE + local_cell.x
 		var blood_before := int(blood[index])
-		water[index] = maxi(int(water[index]), clampi(amount, 0, 255))
+		var water_before := int(water[index])
+		water[index] = maxi(water_before, clampi(amount, 0, 255))
 		# Running water thins the source without deleting the forensic event. Part
 		# of that mass is moved downstream by the owning canvas below.
 		var lifted := mini(blood_before, maxi(0, amount / 18))
 		if lifted > 0:
 			blood[index] = blood_before - lifted
 			blood_load -= lifted
-		dirty = true
+		if blood[index] > 0 or water[index] > 0 or residue[index] > 0: _mark_active(index)
+		if lifted > 0 or int(water[index]) != water_before: _mark_dirty(index)
 		return lifted
 
 	func tick_surface() -> void:
-		var changed := false
-		for index in range(PixelBloodCanvas.PIXELS_PER_CHUNK):
+		# Only occupied/wet/residual cells age. Empty cells never enter this sparse
+		# list, so a room with many blood chunks no longer scans 1024 cells/chunk.
+		var survivors := PackedInt32Array()
+		for index in active_pixels:
+			if active_flags[index] == 0: continue
+			var changed := false
 			if blood[index] > 0:
 				var next_age := mini(255, int(age[index]) + 5)
-				changed = changed or next_age / 48 != int(age[index]) / 48
+				changed = next_age / 48 != int(age[index]) / 48
 				age[index] = next_age
 			if water[index] > 0:
 				water[index] = maxi(0, int(water[index]) - 34)
 				changed = true
-		if changed: dirty = true
+			if blood[index] > 0 or water[index] > 0 or residue[index] > 0:
+				survivors.append(index)
+			else:
+				active_flags[index] = 0
+			if changed: _mark_dirty(index)
+		active_pixels = survivors
 
 	func flush_texture() -> void:
 		if not dirty: return
 		dirty = false
-		for y in range(PixelBloodCanvas.CHUNK_SIZE):
-			for x in range(PixelBloodCanvas.CHUNK_SIZE):
-				var index := y * PixelBloodCanvas.CHUNK_SIZE + x
-				image.set_pixel(x, y, _pixel_color(index))
+		# Preserve the exact same RGBA image, but repaint only cells changed since
+		# the last upload instead of rebuilding the complete 32x32 chunk.
+		var pending := dirty_pixels
+		dirty_pixels = PackedInt32Array()
+		for index in pending:
+			dirty_flags[index] = 0
+			image.set_pixel(index % PixelBloodCanvas.CHUNK_SIZE, index / PixelBloodCanvas.CHUNK_SIZE, _pixel_color(index))
 		texture.update(image)
 
 	func _pixel_color(index: int) -> Color:
@@ -167,7 +200,15 @@ class PixelBloodChunk extends Node2D:
 	func set_ultraviolet_visible(enabled: bool) -> void:
 		if ultraviolet_visible == enabled: return
 		ultraviolet_visible = enabled
-		dirty = true
+		# UV changes only residual pixels; blood/wet pixels render identically.
+		for index in active_pixels:
+			if residue[index] > 0: _mark_dirty(index)
+
+	func get_debug_active_pixel_count() -> int:
+		return active_pixels.size()
+
+	func get_debug_dirty_pixel_count() -> int:
+		return dirty_pixels.size()
 
 	func is_ultraviolet_residue() -> bool:
 		return blood_load <= 0 and residue_load > 0
@@ -368,8 +409,8 @@ func pressure_wash_at(world_position: Vector2, brush_radius: float, power: int, 
 			var edge_loss := 0.40 if washer_level >= 2 else 0.58
 			var falloff := 1.0 - clampf(distance / maxf(1.0, brush_radius), 0.0, 1.0) * edge_loss
 			var residue_bonus := 1.5 if washer_level >= 3 and int(touched_chunks[chunk_id].before) <= 2 else 1.0
-			var lifted := chunk.apply_external_water(local, clampi(roundi(34.0 * falloff), 12, 34))
-			var washed := chunk.clean_local_pixel(local, maxi(1, roundi(float(power) * 0.78 * falloff * residue_bonus)), "pressure_washer")
+			var lifted := chunk.apply_external_water(local, clampi(roundi(42.0 * falloff), 15, 42))
+			var washed := chunk.clean_local_pixel(local, maxi(1, roundi(float(power) * 1.05 * falloff * residue_bonus)), "pressure_washer")
 			lifted_total += lifted
 			cleaned = cleaned or lifted > 0 or washed > 0
 	if evidence_layer == "ground" and lifted_total > 0:

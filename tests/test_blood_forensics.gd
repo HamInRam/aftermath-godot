@@ -5,6 +5,7 @@ const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const STAIN_SCENE := preload("res://scenes/blood_stain.tscn")
 const BLOOD_SYSTEM_SCRIPT := preload("res://scripts/effects/blood_system.gd")
 const CORPSE_SCENE := preload("res://scenes/corpse.tscn")
+const BLOOD_MIST_SCRIPT := preload("res://scripts/effects/blood_mist.gd")
 
 var failures := 0
 
@@ -68,6 +69,13 @@ func _ready() -> void:
 	_expect(shotgun_context.violence_profile == shotgun_violence, "DamageContext should carry the shared violence profile without re-deriving it downstream")
 	blood_system.emit_context(shotgun_context)
 	_expect(blood_system.violence_scale == 1.0, "blood intensity scaling should remain an explicit run modifier")
+	var mist = BLOOD_MIST_SCRIPT.new()
+	mist.setup(Vector2.RIGHT, 2.2, NeonPalette.BLOOD_FRESH, 0.72, 16)
+	add_child(mist)
+	var mist_particle_count: int = mist.particles.size()
+	mist._prepare_trajectories()
+	mist._prepare_trajectories()
+	_expect(mist.get_debug_trajectory_raycast_count() == mist_particle_count, "each airborne blood pixel should resolve wall collision once instead of raycasting every frame")
 	var enemy := ENEMY_SCENE.instantiate()
 	add_child(enemy)
 	var first_regions: Dictionary = enemy._get_blood_clue_regions()
@@ -132,6 +140,7 @@ func _ready() -> void:
 	pistol_corpse.queue_free()
 	lmg_corpse.queue_free()
 	fallback_corpse.queue_free()
+	if is_instance_valid(mist): mist.queue_free()
 	blood_system.queue_free()
 	await get_tree().process_frame
 	CleanupRegistry.reset()

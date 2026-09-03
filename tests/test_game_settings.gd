@@ -83,6 +83,11 @@ func _ready() -> void:
 	feedback.trigger_hit_stop(0.08)
 	_expect(feedback.hit_stop_deadline_msec > first_deadline and feedback.hit_stop_active, "overlapping hit-stop should preserve the longest remaining deadline")
 	feedback.reset()
+	feedback.set_base_time_scale(0.42)
+	feedback.trigger_hit_stop(0.02)
+	await get_tree().create_timer(0.04, true, false, true).timeout
+	_expect(is_equal_approx(feedback.base_time_scale, 0.42) and is_equal_approx(Engine.time_scale, 0.42), "hit-stop should restore the active combat-focus scale instead of snapping gameplay to full speed")
+	feedback.reset()
 	settings_ui.queue_free()
 	effects_ui.queue_free()
 	camera.queue_free()

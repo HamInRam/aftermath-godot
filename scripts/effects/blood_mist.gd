@@ -5,6 +5,8 @@ signal droplet_settled(world_position: Vector2, strength: float, direction: Vect
 var particles: Array[Dictionary] = []
 var max_lifetime := 0.34
 var deposits_remaining := 16
+var trajectories_prepared := false
+var trajectory_raycast_count := 0
 
 func setup(spray_direction: Vector2, intensity: float, color := NeonPalette.BLOOD_FRESH, cone := 0.72, deposit_count := 16) -> void:
 	var direction := spray_direction.normalized()
@@ -21,20 +23,22 @@ func setup(spray_direction: Vector2, intensity: float, color := NeonPalette.BLOO
 			"size": randf_range(0.45, 1.25),
 			"life": randf_range(0.18, max_lifetime),
 			"color": color.darkened(randf_range(0.0, 0.38)),
+			"impact_distance": INF,
+			"impact_position": Vector2.INF,
 		})
 	queue_redraw()
 
 func _process(delta: float) -> void:
+	if not trajectories_prepared: _prepare_trajectories()
 	var alive_particles: Array[Dictionary] = []
 	for particle in particles:
 		var previous_life: float = particle.life
 		var previous_position: Vector2 = particle.position
 		var next_position: Vector2 = previous_position + particle.velocity * delta
-		var query := PhysicsRayQueryParameters2D.create(to_global(previous_position), to_global(next_position), 4)
-		var collision := get_world_2d().direct_space_state.intersect_ray(query)
-		if not collision.is_empty() and deposits_remaining > 0:
+		var impact_distance := float(particle.impact_distance)
+		if impact_distance < INF and next_position.length() >= impact_distance and deposits_remaining > 0:
 			var travel_direction: Vector2 = particle.velocity.normalized()
-			droplet_settled.emit(collision.position - travel_direction, clampf(float(particle.size) / 1.25, 0.25, 1.0), travel_direction)
+			droplet_settled.emit(to_global(particle.impact_position), clampf(float(particle.size) / 1.25, 0.25, 1.0), travel_direction)
 			deposits_remaining -= 1
 			continue
 		particle.position = next_position
@@ -43,16 +47,36 @@ func _process(delta: float) -> void:
 		if particle.life > 0.0:
 			alive_particles.append(particle)
 		elif previous_life > 0.0 and deposits_remaining > 0 and randf() < 0.48:
-			var settle_position := to_global(particle.position)
 			var travel_direction: Vector2 = particle.velocity.normalized()
-			var settle_query := PhysicsRayQueryParameters2D.create(global_position, settle_position, 4)
-			var wall_hit := get_world_2d().direct_space_state.intersect_ray(settle_query)
-			if not wall_hit.is_empty(): settle_position = wall_hit.position - travel_direction * 1.5
-			droplet_settled.emit(settle_position, clampf(float(particle.size) / 1.25, 0.25, 1.0), travel_direction)
+			droplet_settled.emit(to_global(particle.position), clampf(float(particle.size) / 1.25, 0.25, 1.0), travel_direction)
 			deposits_remaining -= 1
 	particles = alive_particles
 	queue_redraw()
 	if particles.is_empty(): queue_free()
+
+func _prepare_trajectories() -> void:
+	if trajectories_prepared: return
+	trajectories_prepared = true
+	# Damping changes speed but never direction. One ray to the analytically
+	# predicted endpoint is therefore equivalent to per-frame segment rays, while
+	# eliminating dozens of physics queries per visible droplet.
+	for particle in particles:
+		var velocity: Vector2 = particle.velocity
+		if velocity.length_squared() <= 0.001: continue
+		var lifetime := float(particle.life)
+		var travel_distance := velocity.length() * (1.0 - exp(-7.5 * lifetime)) / 7.5
+		var direction := velocity.normalized()
+		var query := PhysicsRayQueryParameters2D.create(global_position, global_position + direction * travel_distance, 4)
+		query.collide_with_areas = false
+		var collision := get_world_2d().direct_space_state.intersect_ray(query)
+		trajectory_raycast_count += 1
+		if collision.is_empty(): continue
+		var local_impact := to_local(collision.position - direction)
+		particle.impact_position = local_impact
+		particle.impact_distance = local_impact.length()
+
+func get_debug_trajectory_raycast_count() -> int:
+	return trajectory_raycast_count
 
 func _draw() -> void:
 	for particle in particles:

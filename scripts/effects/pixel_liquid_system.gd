@@ -189,15 +189,15 @@ func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float,
 	washer_level = clampi(washer_level, 0, 3)
 	var continuing := pressure_target != Vector2.INF and pressure_target.distance_to(target) <= maxf(4.0, brush_radius * 0.7) and pressure_emit_gap <= 0.18
 	pressure_sustain = pressure_sustain + maxf(pressure_emit_gap, 0.052) if continuing else 0.0
-	var stability_time := 0.18 if washer_level >= 1 else 0.25
+	var stability_time := 0.14 if washer_level >= 1 else 0.20
 	pressure_stability = clampf(pressure_sustain / stability_time, 0.0, 1.0)
 	pressure_target = target
 	pressure_emit_gap = 0.0
 	var forward := segment.normalized()
 	var distance := minf(segment.length(), 40.0)
 	var width_ratio := clampf((brush_radius - 3.2) / 4.8, 0.0, 1.0)
-	var particle_count := clampi(roundi(lerpf(4.0, 6.0, width_ratio)), 4, 6)
-	var stable_power := maxi(1, roundi(float(power) * lerpf(1.0, 1.25, pressure_stability)))
+	var particle_count := clampi(roundi(lerpf(5.0, 8.0, width_ratio)), 5, 8)
+	var stable_power := maxi(1, roundi(float(power) * lerpf(1.0, 1.35, pressure_stability)))
 	for index in particle_count:
 		if jet_particles.size() >= MAX_JET_PARTICLES: jet_particles.pop_front()
 		jet_sequence += 1
@@ -212,7 +212,7 @@ func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float,
 			"speed": speed,
 			"remaining": minf(origin.distance_to(endpoint), distance + 3.0),
 			"power": stable_power,
-			"radius": maxf(2.0 if washer_level >= 2 else 1.6, brush_radius * lerpf(0.28, 0.42, width_ratio)),
+			"radius": maxf(2.4 if washer_level >= 2 else 1.9, brush_radius * lerpf(0.31, 0.46, width_ratio)),
 			"amount": clampi(roundi(44.0 + float(power) * 2.4), 42, 76),
 			"sequence": jet_sequence,
 			"washer_level": washer_level,

@@ -57,6 +57,7 @@ var alert_level := AlertLevel.NORMAL
 var alert_memory_time := 0.0
 var investigation_target := Vector2.ZERO
 var investigation_wait := 0.0
+var noise_reaction_delay := 0.0
 var stagger_time := 0.0
 var patrol_index := 0
 var patrol_mode := PatrolMode.SENTRY
@@ -237,6 +238,15 @@ func _physics_process(delta: float) -> void:
 			_clear_tactical_move()
 			_begin_search(investigation_target, last_seen_direction)
 	if _update_weapon_scavenge(delta): return
+	# Heard threats first orient and parse the imperfect sound location. Distant or
+	# wall-muted events take a fraction longer, while direct visual contact above
+	# still interrupts this delay immediately.
+	if state == State.INVESTIGATE and noise_reaction_delay > 0.0:
+		noise_reaction_delay = maxf(0.0, noise_reaction_delay - delta)
+		velocity = velocity.move_toward(Vector2.ZERO, 220.0 * delta)
+		rotation = lerp_angle(rotation, global_position.direction_to(investigation_target).angle(), 1.0 - exp(-12.0 * delta))
+		move_and_slide()
+		return
 	if state in [State.IDLE, State.INVESTIGATE, State.SEARCH, State.RETURN]: _scan_for_corpses(delta)
 	if state == State.IDLE:
 		_update_patrol(delta)
@@ -690,6 +700,7 @@ func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_cla
 	state = State.INVESTIGATE
 	investigation_target = target
 	investigation_wait = 0.0
+	noise_reaction_delay = 0.0
 	investigation_look_rotation = rotation
 	investigation_look_time = 0.0
 	alertness = maxf(alertness, new_alertness)
@@ -913,6 +924,8 @@ func receive_combat_noise_result(world_position: Vector2, radius: float, _source
 	if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable"):
 		if not tile_world.is_navigation_position_walkable(perceived_position): perceived_position = world_position
 	_begin_investigation(perceived_position, 0.55)
+	var urgency := 0.65 if _source_kind == "gunshot" else 1.0
+	noise_reaction_delay = (0.04 + distance_ratio * 0.20 + (0.12 if occluded else 0.0)) * urgency
 	return true
 
 func evaluate_tactical_assignment(world_position: Vector2) -> Dictionary:

@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.5] - Blood Runtime & Combat Focus
+
+- Preserved every authored blood particle, one-pixel trail, permanent stain, pool and residue layer while replacing full 1024-cell chunk aging/painting with sparse active-cell and dirty-cell queues.
+- Replaced per-frame wall raycasts for every airborne blood pixel with one analytical damped-trajectory query per droplet; collision deposits and flight rendering remain unchanged.
+- Increased the stock washer to 12 base power with three points per tier, five focused/eight broad physical packets, 1.9px stock and 2.4px tier-two impact footprints, stronger far-nozzle pressure and 35% sustained-target pressure.
+- Added finite combat Focus on RMB/left trigger: the world slows to 42%, precise and aggressive kills recharge the meter, and a contextual one-pixel gauge avoids permanent HUD clutter.
+- Refined tactical hearing with a short distance-, occlusion- and source-aware orientation delay while preserving the existing uncertain sound position and distributed push/sweep/guard response.
+- Made Focus and lethal hit-stop share a composable base time scale and guaranteed restoration on cleanup, run completion and scene teardown; cleanup RMB continues to operate ultraviolet inspection.
+- Extended regression coverage for sparse blood texture writes, single-query blood trajectories, stronger physical water packets, contextual Focus HUD and hit-stop restoration under Focus.
+
 ## [v1.2.4] - Physical Pixel Pressure Washing
 
 - Rebalanced the stock pressure washer from 7 to 9 base cleaning power and increased the focused jet from three to four physical water packets, making the first cleanup loadout useful without purchased upgrades.

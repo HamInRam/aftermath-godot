@@ -287,6 +287,7 @@ func _ensure_gamepad_inputs() -> void:
 	_add_joy_motion("aim_up", JOY_AXIS_RIGHT_Y, -1.0)
 	_add_joy_motion("aim_down", JOY_AXIS_RIGHT_Y, 1.0)
 	_add_joy_motion("shoot", JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	_add_joy_motion("combat_focus", JOY_AXIS_TRIGGER_LEFT, 1.0)
 	_add_joy_button("reload", JOY_BUTTON_X)
 	_add_joy_button("interact", JOY_BUTTON_A)
 	_add_joy_button("execute", JOY_BUTTON_B)
@@ -513,8 +514,8 @@ func get_cleanup_stroke_profile(cursor_distance: float, quality := 1.0) -> Dicti
 		var coverage_scale := lerpf(1.0, 1.2, distance_ratio) if washer_level >= 2 else 1.0
 		return {
 			"radius": lerpf(3.2, 8.0, distance_ratio) * coverage_scale,
-			"power": lerpf(1.42, 0.68, distance_ratio),
-			"strength": lerpf(1.22, 0.78, distance_ratio),
+			"power": lerpf(1.48, 0.82, distance_ratio),
+			"strength": lerpf(1.28, 0.92, distance_ratio),
 			"mode": "NARROW" if distance_ratio < 0.48 else "WIDE",
 			"focus": 1.0 - distance_ratio,
 		}
@@ -615,7 +616,7 @@ func get_cleanup_efficiency(cleanup_type: String) -> int:
 	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]:
 		var base_efficiency := 4 + Progression.get_upgrade_level("mop") + Progression.get_specialization_level("cleaner")
 		return maxi(1, roundi(base_efficiency * lerpf(1.0, 0.6, get_mop_saturation_ratio())))
-	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "spill"]: return 9 + Progression.get_upgrade_level("pressure_washer") * 2 + Progression.get_specialization_level("cleaner")
+	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "spill"]: return 12 + Progression.get_upgrade_level("pressure_washer") * 3 + Progression.get_specialization_level("cleaner")
 	if current_cleanup_tool == "evidence_bag" and cleanup_type in ["shell", "dropped_weapon", "debris"]: return 3
 	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 1
 	return 0

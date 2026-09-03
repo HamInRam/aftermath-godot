@@ -122,6 +122,11 @@ var playtest_telemetry: Node
 var verified_cleanup_rooms: Dictionary = {}
 var cleanup_layer_feedback_cooldown := 0.0
 var world_context_marker: WorldContextMarker
+var combat_focus_energy := 1.0
+var combat_focus_active := false
+var frame_real_delta := 0.0
+const COMBAT_FOCUS_TIME_SCALE := 0.42
+const COMBAT_FOCUS_DRAIN_PER_SECOND := 1.0 / 3.0
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -230,9 +235,10 @@ func _apply_visual_theme() -> void:
 
 func _process(delta: float) -> void:
 	if get_tree().paused: return
-	elapsed += delta
-	if phase == "combat": combat_phase_elapsed += delta
-	elif phase == "cleanup": cleanup_phase_elapsed += delta
+	_update_combat_focus(delta)
+	elapsed += frame_real_delta
+	if phase == "combat": combat_phase_elapsed += frame_real_delta
+	elif phase == "cleanup": cleanup_phase_elapsed += frame_real_delta
 	if is_instance_valid(player):
 		if route_anchor == Vector2.ZERO: route_anchor = player.global_position
 		var route_step := player.global_position.distance_to(route_anchor)
@@ -796,6 +802,7 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	mission_tracker.record_enemy_eliminated()
 	combo += 1
 	combo_timer = 2.2
+	_reward_combat_focus(pending_death_attack_id, pending_death_hit_zone, combo)
 	trauma_camera.trigger_kill_effect(0.72, "red")
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.position = to_local(pos)
@@ -1116,6 +1123,27 @@ func _trigger_hit_stop(duration: float) -> void:
 	if duration <= 0.001: return
 	combat_feedback.trigger_hit_stop(duration)
 
+func _update_combat_focus(delta: float) -> void:
+	if not is_instance_valid(combat_feedback): return
+	var previous_scale := maxf(combat_feedback.base_time_scale, 0.05)
+	var real_delta := minf(delta / previous_scale, 0.05)
+	frame_real_delta = real_delta
+	var wants_focus := phase == "combat" and not run_over and not transitioning_cleanup and combat_focus_energy > 0.001 and Input.is_action_pressed("combat_focus")
+	combat_focus_active = wants_focus
+	if combat_focus_active:
+		combat_focus_energy = maxf(0.0, combat_focus_energy - COMBAT_FOCUS_DRAIN_PER_SECOND * real_delta)
+		if combat_focus_energy <= 0.001: combat_focus_active = false
+	combat_feedback.set_base_time_scale(COMBAT_FOCUS_TIME_SCALE if combat_focus_active else 1.0)
+	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active)
+
+func _reward_combat_focus(attack_id: String, hit_zone: String, current_combo: int) -> void:
+	var reward := 0.10
+	if attack_id in ["fist", "knife", "bat", "door", "execution_fist", "execution_knife", "execution_bat"]: reward += 0.06
+	if hit_zone == "head": reward += 0.04
+	if current_combo >= 3: reward += 0.03
+	combat_focus_energy = minf(1.0, combat_focus_energy + reward)
+	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active)
+
 func _on_player_died(source_position := Vector2.ZERO) -> void:
 	if is_instance_valid(playtest_telemetry):
 		var world := get_node_or_null("TileMap")
@@ -1222,6 +1250,8 @@ func _exit_tree() -> void:
 
 func _enter_cleanup_phase() -> void:
 	phase = "cleanup"
+	combat_focus_active = false
+	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if blood_system.has_method("settle_pixel_blood_for_cleanup"): blood_system.settle_pixel_blood_for_cleanup()
 	hud.set_phase("cleanup")
 	player.set_cleanup_mode(true)
@@ -1567,6 +1597,8 @@ func _on_extraction_requested() -> void:
 func _finish_run(left_evidence: bool) -> void:
 	if run_over: return
 	run_over = true
+	combat_focus_active = false
+	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
 	var cleanup_ratio := CleanupRegistry.get_cleanup_ratio()
 	var contract := ContractCatalog.get_contract(Progression.get_current_contract_id())

@@ -2,6 +2,16 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.5 blood performance, pressure response and combat Focus
+
+- Dense blood keeps the same one-pixel density, spray counts, trails, pooling, ultraviolet residue and persistent cleanup evidence, but chunks now age and repaint only occupied or changed cells instead of scanning and rebuilding every 32x32 texture.
+- Airborne blood keeps every visible droplet and collision deposit while resolving its straight damped trajectory with one wall query, replacing the former per-droplet, per-frame physics raycasts.
+- The stock pressure washer now starts at 12 cleaning power, emits five focused or up to eight broad physical packets, reaches stable pressure sooner and builds a 35% sustained-target bonus.
+- Far/wide washing retains useful force, impact radii start at 1.9 pixels and grow to 2.4 pixels at tier two, and real pressure impacts remove more density per arrived packet without becoming an endpoint eraser.
+- Combat gains a finite Focus resource on right mouse/left trigger. Focus slows the world to 42% while preserving live aim; kills, head hits, close combat and combos replenish it, and its one-pixel HUD gauge appears only while relevant.
+- Sound response now includes a short distance-, wall- and source-aware orientation delay on top of the existing radius attenuation, uncertain localization and push/sweep/guard assignments, so alerted enemies react credibly without instantly acquiring an exact route.
+- Focus composes with lethal hit-stop instead of fighting the global time scale, then always resets for cleanup, mission completion and scene exit. Cleanup right mouse remains the ultraviolet lamp.
+
 ## v1.2.4 physical pixel pressure washing
 
 - Mopping is physically anchored to the visible head in front of the character: the cursor aims the handle, while player movement and rotation determine the only floor path that can be cleaned. Upgrades widen that local head footprint and strengthen contact without creating remote reach.

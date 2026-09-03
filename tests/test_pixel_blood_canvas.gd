@@ -9,6 +9,12 @@ func _ready() -> void:
 	var canvas = CANVAS_SCRIPT.new()
 	add_child(canvas)
 	canvas.configure("ground", -2)
+	var sparse_sample := Vector2(4, 4)
+	canvas.add_blood_pixel(sparse_sample, 180)
+	var sparse_chunk = canvas.chunks[canvas._chunk_coordinate(Vector2i(sparse_sample))]
+	_expect(sparse_chunk.get_debug_active_pixel_count() == 1 and sparse_chunk.get_debug_dirty_pixel_count() == 1, "one blood pixel should schedule one texture cell, not a complete 32x32 repaint")
+	sparse_chunk.flush_texture()
+	_expect(sparse_chunk.get_debug_dirty_pixel_count() == 0, "flushing a sparse blood chunk should clear only its compact dirty queue")
 	# A gunshot-style broken pixel line must cross a texture-chunk boundary without
 	# creating one scene node per droplet.
 	canvas.stamp_splatter(Vector2(27, 20), Vector2.RIGHT, 2.2, "line", 0.08, "puncture")

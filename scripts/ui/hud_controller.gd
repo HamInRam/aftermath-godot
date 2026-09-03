@@ -20,6 +20,7 @@ var interaction_icon: TextureRect
 var reticle: CombatReticle
 var banner_label: Label
 var ammo_meter
+var focus_meter
 var context_backplate: ColorRect
 var tactical_backplate: ColorRect
 var status_backplate: ColorRect
@@ -138,6 +139,16 @@ func _ready() -> void:
 	ammo_meter.show_percentage = false
 	ammo_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(ammo_meter)
+	focus_meter = COMPACT_PROGRESS.new()
+	focus_meter.position = Vector2(244, 173)
+	focus_meter.size = Vector2(26, 1)
+	focus_meter.max_value = 1.0
+	focus_meter.value = 1.0
+	focus_meter.show_percentage = false
+	focus_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	focus_meter.modulate = Color("82d8ff")
+	focus_meter.visible = false
+	add_child(focus_meter)
 	combo_label = _make_label(Vector2(273, 6), 6, Color("ff3d78"))
 	combo_label.size = Vector2(43, 8)
 	combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -157,7 +168,7 @@ func _ready() -> void:
 	tutorial_label = _make_label(Vector2(80, 169), 5, Color("9aa0a6"))
 	tutorial_label.size = Vector2(160, 7)
 	tutorial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tutorial_label.text = "WASD MOVE   MOUSE AIM   LMB FIRE"
+	tutorial_label.text = "WASD MOVE  LMB FIRE  RMB FOCUS"
 	reticle = COMBAT_RETICLE.new() as CombatReticle
 	add_child(reticle)
 	banner_label = _make_label(Vector2(60, 68), 10, Color("73f7e4"))
@@ -250,6 +261,13 @@ func set_weapon_aim_feedback(state: Dictionary, enabled: bool) -> void:
 	reticle.position = cursor_position - reticle.size * 0.5
 	reticle.set_aim_feedback(state, enabled)
 
+func set_combat_focus(value: float, active: bool) -> void:
+	if not is_instance_valid(focus_meter): return
+	var normalized := clampf(value, 0.0, 1.0)
+	focus_meter.value = normalized
+	focus_meter.visible = not _cleanup_mode and (active or normalized < 0.995)
+	focus_meter.modulate = Color("d995ff") if active else Color("82d8ff")
+
 func show_banner(text: String, color := Color("73f7e4")) -> void:
 	if not is_instance_valid(banner_label): return
 	banner_label.text = text
@@ -284,6 +302,7 @@ func set_phase(value: String) -> void:
 	ammo_icon.visible = not cleaning
 	ammo_label.visible = not cleaning
 	ammo_meter.visible = not cleaning
+	focus_meter.visible = false if cleaning else focus_meter.value < 0.995
 	if not cleaning:
 		status_icon.visible = true
 		status_label.visible = true
