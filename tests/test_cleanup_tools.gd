@@ -84,6 +84,11 @@ func _run() -> void:
 	_expect(player.ultraviolet_active, "cleanup player should expose ultraviolet inspection state")
 	_expect(player.ULTRAVIOLET_SCAN_COOLDOWN > player.ULTRAVIOLET_SCAN_DURATION, "ultraviolet inspection should use a bounded pulse and recharge")
 	_expect(player.ultraviolet_lamp_active, "right-mouse ultraviolet lamp state should remain independent from the active scan pulse")
+	player.ultraviolet_flashlight.visible = true
+	player.ultraviolet_flashlight.rebuild_geometry()
+	var uv_polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon()
+	_expect(uv_polygon.size() == player.ultraviolet_flashlight.RAY_COUNT + 1, "the UV lamp should build a continuous wall-clipped cone instead of two decorative edge lines")
+	_expect(Geometry2D.is_point_in_polygon(Vector2(30, 0), uv_polygon) and not Geometry2D.is_point_in_polygon(Vector2(-10, 0), uv_polygon), "the UV cone should illuminate only the player's forward sector")
 	_expect(player.rinse_mop() and player.can_mop() and is_zero_approx(player.get_mop_saturation_ratio()), "rinsing should restore full mop efficiency")
 	var dirty_visual_before_rinse: float = float(player.visual_mop_saturation)
 	await get_tree().process_frame

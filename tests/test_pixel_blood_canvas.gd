@@ -39,6 +39,21 @@ func _ready() -> void:
 	_expect(int(canvas.get_residue_amount(Vector2(36, 40))) > 0, "mopping should preserve UV forensic residue")
 	for pass_index in range(6): canvas.clean_stroke(Vector2(20, 40), Vector2(52, 40), 3.0, 8, "pressure_washer")
 	_expect(int(canvas.get_residue_amount(Vector2(36, 40))) == 0, "pressure washing should remove UV residue")
+	# UV illumination is evaluated per one-pixel cell, not once per 32px texture
+	# chunk. A narrow polygon must reveal a forward residue pixel without lighting
+	# a lateral residue pixel that happens to share the same texture chunk.
+	for sample in [Vector2(12, 12), Vector2(12, 24), Vector2(2, 12)]:
+		canvas.add_blood_pixel(sample, 180)
+		for pass_index in range(5): canvas.clean_stroke(sample, sample, 0.4, 8, "mop")
+	var uv_chunk = canvas.chunks[canvas._chunk_coordinate(Vector2i(12, 12))]
+	uv_chunk.set_ultraviolet_polygon(PackedVector2Array([Vector2(6, 12), Vector2(30, 4), Vector2(30, 20)]))
+	_expect(uv_chunk.is_debug_pixel_ultraviolet_lit(Vector2i(12, 12)), "a residue pixel inside the flashlight fan should fluoresce")
+	_expect(not uv_chunk.is_debug_pixel_ultraviolet_lit(Vector2i(12, 24)), "UV must not illuminate an entire 32px chunk outside the fan")
+	_expect(not uv_chunk.is_debug_pixel_ultraviolet_lit(Vector2i(2, 12)), "the flashlight fan must not reveal residue behind its origin")
+	uv_chunk.set_ultraviolet_circle(Vector2(12, 18), 7.0)
+	_expect(uv_chunk.is_debug_pixel_ultraviolet_lit(Vector2i(12, 12)) and uv_chunk.is_debug_pixel_ultraviolet_lit(Vector2i(12, 24)), "the active scan should remain a separate radial reveal")
+	uv_chunk.clear_ultraviolet()
+	_expect(not uv_chunk.is_debug_pixel_ultraviolet_lit(Vector2i(12, 12)), "releasing UV should immediately hide forensic residue")
 	# A fresh isolated chunk must expose the complete authored cleaning ladder and
 	# produce one completion event when its final forensic residue is removed.
 	var layer_events: Array[String] = []

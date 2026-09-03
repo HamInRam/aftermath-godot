@@ -2,6 +2,12 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.7 spatial ultraviolet flashlight
+
+- Right-mouse UV inspection now renders a filled, wall-clipped flashlight fan instead of two decorative guide lines.
+- Sparse pixel blood is illuminated per world pixel inside the fan, eliminating visible 32x32 chunk activation at cone edges.
+- The separate active scan remains a short radial pulse, while ordinary blood and forensic residue only fluoresce inside the actual illuminated region.
+
 ## v1.2.6 exterior approach and room-scale exploration
 
 - Every campaign venue is now a complete site rather than a single floating floor plate: a playable grass/service perimeter, façade walk, parking/loading strip and entrance approach surround the authored interior.

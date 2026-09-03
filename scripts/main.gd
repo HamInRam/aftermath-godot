@@ -1386,6 +1386,9 @@ func _update_ultraviolet_mode() -> void:
 			ultraviolet_shader_material.shader = shader
 		var illuminated := {}
 		for evidence in get_tree().get_nodes_in_group("blood_evidence"):
+			if evidence.is_in_group("pixel_blood_chunk"):
+				_update_pixel_blood_ultraviolet(evidence)
+				continue
 			if not evidence is CanvasItem or not _is_inside_ultraviolet_beam(evidence): continue
 			var instance_id := evidence.get_instance_id()
 			illuminated[instance_id] = true
@@ -1404,6 +1407,8 @@ func _update_ultraviolet_mode() -> void:
 			no_longer_visible.append(instance_id)
 		for instance_id in no_longer_visible: ultraviolet_materials.erase(instance_id)
 	elif ultraviolet_was_active:
+		for chunk in get_tree().get_nodes_in_group("pixel_blood_chunk"):
+			if is_instance_valid(chunk) and chunk.has_method("clear_ultraviolet"): chunk.clear_ultraviolet()
 		for saved in ultraviolet_materials.values():
 			var evidence := (saved.node as WeakRef).get_ref() as CanvasItem
 			if is_instance_valid(evidence):
@@ -1411,6 +1416,16 @@ func _update_ultraviolet_mode() -> void:
 				if evidence.has_method("set_ultraviolet_visible"): evidence.set_ultraviolet_visible(false)
 		ultraviolet_materials.clear()
 	ultraviolet_was_active = active
+
+func _update_pixel_blood_ultraviolet(chunk: Node) -> void:
+	if player.ultraviolet_scan_time > 0.0:
+		var scan_radius := 82.0 + Progression.get_upgrade_level("scanner") * 18.0
+		if mission_tracker.profile != null and mission_tracker.profile.mission_id == "nightclub": scan_radius += 20.0
+		chunk.set_ultraviolet_circle(player.global_position, scan_radius)
+		return
+	var polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon() if player.has_method("get_ultraviolet_beam_polygon") else PackedVector2Array()
+	if polygon.size() >= 3: chunk.set_ultraviolet_polygon(polygon)
+	else: chunk.clear_ultraviolet()
 
 func _is_inside_ultraviolet_beam(evidence: CanvasItem) -> bool:
 	if not evidence is Node2D: return false
@@ -1422,9 +1437,8 @@ func _is_inside_ultraviolet_beam(evidence: CanvasItem) -> bool:
 		if mission_tracker.profile != null and mission_tracker.profile.mission_id == "nightclub": scan_radius += 20.0
 		if to_evidence.length_squared() > scan_radius * scan_radius: return false
 	else:
-		if to_evidence.length_squared() > 66.0 * 66.0 or to_evidence.length_squared() < 1.0: return false
-		var beam_direction := Vector2.RIGHT.rotated(player.rotation)
-		if absf(beam_direction.angle_to(to_evidence.normalized())) > 0.44: return false
+		var polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon() if player.has_method("get_ultraviolet_beam_polygon") else PackedVector2Array()
+		return polygon.size() >= 3 and Geometry2D.is_point_in_polygon(evidence.global_position, polygon)
 	var query := PhysicsRayQueryParameters2D.create(player.global_position, evidence.global_position, 4)
 	query.collide_with_areas = false
 	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()

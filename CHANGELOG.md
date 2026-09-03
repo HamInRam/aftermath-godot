@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.2.7] - Spatial Ultraviolet Flashlight
+
+- Replaced the UV lamp's two-line preview with a continuous additive fan assembled from 25 collision rays; the rendered light now stops against solid room geometry.
+- Removed 32x32 chunk-level illumination from sparse blood. Every blood and forensic-residue pixel now tests against the same world-space light polygon, producing a continuous cone edge without square activation bands.
+- Kept the active scanner as a distinct radial reveal and added focused regressions for forward-only illumination, per-pixel chunk masking, radial scans and release cleanup.
+
 ## [v1.2.6] - Exterior Sites & Exploration Camera
 
 - Embedded every authored campaign interior inside a larger playable site with grass/service perimeter, hard-surface façade circulation, parking/loading surface and a direct entrance approach.

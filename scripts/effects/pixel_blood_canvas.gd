@@ -30,6 +30,11 @@ class PixelBloodChunk extends Node2D:
 	var blood_load := 0
 	var residue_load := 0
 	var ultraviolet_visible := false
+	var ultraviolet_mode := 0 # 0 off, 1 wall-clipped polygon, 2 radial scan
+	var ultraviolet_polygon := PackedVector2Array()
+	var ultraviolet_origin := Vector2.ZERO
+	var ultraviolet_radius := 0.0
+	var ultraviolet_possible := false
 	var dirty := false
 	var registered := false
 	var image: Image
@@ -171,6 +176,7 @@ class PixelBloodChunk extends Node2D:
 	func _pixel_color(index: int) -> Color:
 		var amount := float(blood[index]) / 255.0
 		var wetness := float(water[index]) / 255.0
+		var uv_lit := _is_pixel_ultraviolet_lit(index)
 		if amount > 0.0:
 			var coagulation := floorf(clampf(float(age[index]) / 255.0, 0.0, 0.999) * 4.0) / 3.0
 			var color := FRESH.lerp(DARK, coagulation)
@@ -179,13 +185,26 @@ class PixelBloodChunk extends Node2D:
 			var thinning := clampf((0.58 - amount) / 0.58, 0.0, 1.0)
 			color = color.lerp(DILUTED, clampf(thinning * 0.72 + wetness * 0.58, 0.0, 0.88))
 			color.a = clampf(0.24 + amount * 0.76, 0.0, 1.0)
+			if uv_lit:
+				color = color.lerp(UV_GLOW, 0.76)
+				color.a = maxf(color.a, 0.72)
 			return color
 		if wetness > 0.0:
 			return Color(0.58, 0.75, 0.78, wetness * 0.12)
-		if ultraviolet_visible and residue[index] > 0:
+		if uv_lit and residue[index] > 0:
 			var residue_strength := float(residue[index]) / 255.0
 			return Color(UV_GLOW, 0.18 + residue_strength * 0.72)
 		return Color.TRANSPARENT
+
+	func _is_pixel_ultraviolet_lit(index: int) -> bool:
+		if not ultraviolet_visible or not ultraviolet_possible: return false
+		var local_cell := Vector2(index % PixelBloodCanvas.CHUNK_SIZE, index / PixelBloodCanvas.CHUNK_SIZE) + Vector2(0.5, 0.5)
+		var world_point := canvas.to_global(Vector2(chunk_coordinate * PixelBloodCanvas.CHUNK_SIZE) + local_cell)
+		if ultraviolet_mode == 1:
+			return ultraviolet_polygon.size() >= 3 and Geometry2D.is_point_in_polygon(world_point, ultraviolet_polygon)
+		if ultraviolet_mode == 2:
+			return world_point.distance_squared_to(ultraviolet_origin) <= ultraviolet_radius * ultraviolet_radius
+		return false
 
 	func clean_step() -> void:
 		clean_stroke(global_position, Vector2.RIGHT, 4, "mop")
@@ -198,11 +217,61 @@ class PixelBloodChunk extends Node2D:
 		return canvas.clean_stroke(start, world_position, 4.0 if tool_name == "mop" else 7.0, power, tool_name)
 
 	func set_ultraviolet_visible(enabled: bool) -> void:
-		if ultraviolet_visible == enabled: return
-		ultraviolet_visible = enabled
-		# UV changes only residual pixels; blood/wet pixels render identically.
+		if enabled:
+			set_ultraviolet_circle(global_position, 24.0)
+		else:
+			clear_ultraviolet()
+
+	func set_ultraviolet_polygon(polygon: PackedVector2Array) -> void:
+		var bounds := _polygon_bounds(polygon)
+		var chunk_rect := Rect2(canvas.to_global(Vector2(chunk_coordinate * PixelBloodCanvas.CHUNK_SIZE)), Vector2.ONE * PixelBloodCanvas.CHUNK_SIZE)
+		var possible := polygon.size() >= 3 and bounds.intersects(chunk_rect, true)
+		if ultraviolet_mode == 1 and ultraviolet_polygon == polygon and ultraviolet_possible == possible: return
+		ultraviolet_mode = 1
+		ultraviolet_visible = true
+		ultraviolet_polygon = polygon.duplicate()
+		ultraviolet_possible = possible
+		_mark_all_uv_pixels_dirty()
+
+	func set_ultraviolet_circle(origin: Vector2, radius: float) -> void:
+		var quantized_origin := origin.round()
+		var quantized_radius := roundf(radius)
+		var chunk_rect := Rect2(canvas.to_global(Vector2(chunk_coordinate * PixelBloodCanvas.CHUNK_SIZE)), Vector2.ONE * PixelBloodCanvas.CHUNK_SIZE)
+		var nearest := Vector2(
+			clampf(quantized_origin.x, chunk_rect.position.x, chunk_rect.end.x),
+			clampf(quantized_origin.y, chunk_rect.position.y, chunk_rect.end.y)
+		)
+		var possible := nearest.distance_squared_to(quantized_origin) <= quantized_radius * quantized_radius
+		if ultraviolet_mode == 2 and ultraviolet_origin == quantized_origin and is_equal_approx(ultraviolet_radius, quantized_radius) and ultraviolet_possible == possible: return
+		ultraviolet_mode = 2
+		ultraviolet_visible = true
+		ultraviolet_origin = quantized_origin
+		ultraviolet_radius = quantized_radius
+		ultraviolet_possible = possible
+		ultraviolet_polygon = PackedVector2Array()
+		_mark_all_uv_pixels_dirty()
+
+	func clear_ultraviolet() -> void:
+		if ultraviolet_mode == 0 and not ultraviolet_visible: return
+		ultraviolet_mode = 0
+		ultraviolet_visible = false
+		ultraviolet_possible = false
+		ultraviolet_polygon = PackedVector2Array()
+		_mark_all_uv_pixels_dirty()
+
+	func _mark_all_uv_pixels_dirty() -> void:
 		for index in active_pixels:
-			if residue[index] > 0: _mark_dirty(index)
+			if blood[index] > 0 or residue[index] > 0: _mark_dirty(index)
+
+	func _polygon_bounds(polygon: PackedVector2Array) -> Rect2:
+		if polygon.is_empty(): return Rect2()
+		var bounds := Rect2(polygon[0], Vector2.ZERO)
+		for index in range(1, polygon.size()): bounds = bounds.expand(polygon[index])
+		return bounds
+
+	func is_debug_pixel_ultraviolet_lit(local_cell: Vector2i) -> bool:
+		if local_cell.x < 0 or local_cell.y < 0 or local_cell.x >= PixelBloodCanvas.CHUNK_SIZE or local_cell.y >= PixelBloodCanvas.CHUNK_SIZE: return false
+		return _is_pixel_ultraviolet_lit(local_cell.y * PixelBloodCanvas.CHUNK_SIZE + local_cell.x)
 
 	func get_debug_active_pixel_count() -> int:
 		return active_pixels.size()

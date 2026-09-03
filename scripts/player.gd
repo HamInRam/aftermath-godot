@@ -35,6 +35,7 @@ const CLEANUP_TOOLS := ["mop", "evidence_bag", "body_bag", "pressure_washer"]
 @onready var melee_weapon_visual: Node2D = $UpperBody/BodySprite/MeleeWeaponVisual
 @onready var gun = $UpperBody/Gun
 @onready var melee_shape: CollisionShape2D = $MeleeArea/CollisionShape2D
+@onready var ultraviolet_flashlight: UltravioletFlashlight = $UltravioletFlashlight
 var cleanup_mode := false
 var is_executing := false
 var execution_target: CharacterBody2D
@@ -948,16 +949,14 @@ func _draw() -> void:
 			PIXEL_PAINTER.material_block(self, Vector2(9, 0), Vector2(2, mop_visual_width), mop_color, 23, &"fabric")
 		if mop_dirty >= 0.75:
 			PIXEL_PAINTER.material_circle(self, Vector2(9, 4), 1, Color(0.65, 0.0, 0.08, 0.85), Color(0.85, 0.04, 0.12, 0.85), Color(0.3, 0.0, 0.04, 0.85), 29)
-		if ultraviolet_lamp_active:
-			var cone_color := Color(0.58, 0.2, 1.0, 0.12)
-			PIXEL_PAINTER.line(self, Vector2(7, 0), Vector2(66, -29), Color(0.75, 0.45, 1.0, 0.3))
-			PIXEL_PAINTER.line(self, Vector2(7, 0), Vector2(66, 29), Color(0.75, 0.45, 1.0, 0.3))
-			for distance in range(14, 66, 6):
-				PIXEL_PAINTER.pixel(self, Vector2(distance, roundi(sin(float(distance)) * 0.3 * distance)), cone_color)
 		if ultraviolet_scan_time > 0.0:
 			var scan_progress := 1.0 - ultraviolet_scan_time / ULTRAVIOLET_SCAN_DURATION
 			var scan_alpha := sin(scan_progress * PI) * (0.48 + 0.18 * absf(sin(scan_progress * PI * 4.0)))
 			PIXEL_PAINTER.arc(self, Vector2.ZERO, 82, 0.0, TAU, Color(0.76, 0.42, 1.0, scan_alpha), 64)
+
+func get_ultraviolet_beam_polygon() -> PackedVector2Array:
+	if not ultraviolet_lamp_active or not is_instance_valid(ultraviolet_flashlight): return PackedVector2Array()
+	return ultraviolet_flashlight.get_world_polygon()
 	if is_executing:
 		PIXEL_PAINTER.arc(self, Vector2(6, -3), 3, -1.2, 1.2, Color("ffd6c2"), 6)
 		PIXEL_PAINTER.arc(self, Vector2(6, 3), 3, -1.2, 1.2, Color("ffd6c2"), 6)
