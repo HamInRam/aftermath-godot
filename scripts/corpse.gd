@@ -159,6 +159,7 @@ func _physics_process(delta: float) -> void:
 		cleanup_freeze_delay = maxf(0.0, cleanup_freeze_delay - delta)
 		if cleanup_freeze_delay <= 0.0 and is_instance_valid(ragdoll):
 			ragdoll.freeze_pose()
+			_align_root_to_ragdoll()
 	if overkill_window > 0.0:
 		overkill_window = maxf(0.0, overkill_window - delta)
 		if overkill_window <= 0.0: collision_layer = 0
@@ -170,7 +171,10 @@ func _physics_process(delta: float) -> void:
 	_update_bleeding(delta)
 	if is_instance_valid(dragging_actor):
 		var drag_direction := Vector2.RIGHT.rotated(dragging_actor.rotation)
-		var target_position := dragging_actor.global_position - drag_direction * 13.0
+		# A sealed 30px body bag is held near one tapered end instead of being
+		# dragged from its center through the cleaner's feet.
+		var drag_offset := 15.0 if bagged else 13.0
+		var target_position := dragging_actor.global_position - drag_direction * drag_offset
 		velocity = ((target_position - global_position) * 9.0).limit_length(92.0)
 		move_and_slide()
 		if not bagged: drag_stain_distance += global_position.distance_to(last_drag_position)
@@ -255,11 +259,30 @@ func get_cleanup_cost() -> int:
 func get_cleanup_progress() -> float:
 	return 1.0 if bagged else bag_progress
 
+func get_interaction_position() -> Vector2:
+	# While a ragdoll is active its torso can settle several pixels away from the
+	# CharacterBody2D origin. All prompts, reach checks and packaging must follow
+	# the visible body rather than the obsolete death-spawn coordinate.
+	if not bagged and is_instance_valid(ragdoll):
+		return ragdoll.to_global(ragdoll.get_body_anchor_local())
+	return global_position
+
+func _align_root_to_ragdoll() -> void:
+	if not is_instance_valid(ragdoll): return
+	var visible_anchor := ragdoll.to_global(ragdoll.get_body_anchor_local())
+	var local_shift := ragdoll.rebase_to_body_anchor()
+	if local_shift.length_squared() <= 0.0001: return
+	global_position = visible_anchor
+	last_drag_position = global_position
+
 func apply_cleanup_tool(tool_name: String) -> bool:
 	if tool_name != "body_bag": return false
 	if bagged: return true
 	bag_progress = 1.0
 	if bag_progress >= 1.0:
+		# Preserve the visible landing position when replacing articulated limbs
+		# with the single sealed-bag silhouette.
+		_align_root_to_ragdoll()
 		bagged = true
 		velocity = Vector2.ZERO
 		spin = 0.0
@@ -271,8 +294,23 @@ func apply_cleanup_tool(tool_name: String) -> bool:
 		if is_instance_valid(ragdoll):
 			ragdoll.freeze_pose()
 			ragdoll.visible = false
+		_configure_body_bag_collision()
 	queue_redraw()
 	return true
+
+func _configure_body_bag_collision() -> void:
+	var bag_shape := RectangleShape2D.new()
+	# The collider stays one or two pixels inside the tapered visual silhouette,
+	# which keeps a long bag from snagging on every doorway corner while dragging.
+	bag_shape.size = Vector2(23, 7)
+	$CollisionShape2D.shape = bag_shape
+	var shadow := get_node_or_null("FakeShadow") as Polygon2D
+	if is_instance_valid(shadow):
+		shadow.polygon = PackedVector2Array([
+			Vector2(-12, -2), Vector2(-10, -4), Vector2(10, -4), Vector2(12, -2),
+			Vector2(13, 0), Vector2(12, 2), Vector2(10, 4), Vector2(-10, 4),
+			Vector2(-12, 2), Vector2(-13, 0),
+		])
 
 func is_bagged() -> bool:
 	return bagged
@@ -314,6 +352,7 @@ func enter_cleanup_stable_state() -> void:
 		set_physics_process(true)
 	else:
 		ragdoll.freeze_pose()
+		_align_root_to_ragdoll()
 
 func extract_bag() -> bool:
 	if not bagged: return false
@@ -400,6 +439,42 @@ func _draw_compact_pixel_corpse() -> void:
 	if dismemberment_state != "intact":
 		PIXEL_PAINTER.material_circle(self, (wound_offset * 0.45).round(), 1, blood, blood.lightened(0.16), blood.darkened(0.24), 107)
 
+func _draw_body_bag() -> void:
+	# A compact human-scale 26x9 px zippered bag. Every visible mark is a native one-pixel
+	# cell: the tapered ends prevent the former storage-box silhouette, while the
+	# zipper, compression straps and handles explain the object at a glance.
+	var ink := Color("0e1115")
+	var fabric := Color("242b31")
+	var highlight := Color("3b4650")
+	var shadow := Color("171c21")
+	# Main textile mass plus tapered head/foot sections.
+	PIXEL_PAINTER.material_rect(self, Rect2(-11, -3, 22, 7), fabric, highlight, shadow, 109, &"fabric")
+	PIXEL_PAINTER.material_rect(self, Rect2(-12, -2, 24, 5), fabric, highlight, shadow, 113, &"fabric")
+	PIXEL_PAINTER.line(self, Vector2(-10, -4), Vector2(10, -4), ink)
+	PIXEL_PAINTER.line(self, Vector2(-10, 4), Vector2(10, 4), ink)
+	PIXEL_PAINTER.line(self, Vector2(-12, -3), Vector2(-11, -3), ink)
+	PIXEL_PAINTER.line(self, Vector2(11, -3), Vector2(12, -3), ink)
+	PIXEL_PAINTER.line(self, Vector2(-12, 3), Vector2(-11, 3), ink)
+	PIXEL_PAINTER.line(self, Vector2(11, 3), Vector2(12, 3), ink)
+	PIXEL_PAINTER.line(self, Vector2(-12, -2), Vector2(-12, 2), ink)
+	PIXEL_PAINTER.line(self, Vector2(12, -2), Vector2(12, 2), ink)
+	PIXEL_PAINTER.pixel(self, Vector2(-13, 0), ink)
+	PIXEL_PAINTER.pixel(self, Vector2(13, 0), ink)
+	# Long central zipper with a bright pull tab toward the head end.
+	PIXEL_PAINTER.line(self, Vector2(-9, 0), Vector2(9, 0), Color("71808c"))
+	for x in range(-8, 10, 3): PIXEL_PAINTER.pixel(self, Vector2(x, 0), Color("a5b1b9"))
+	PIXEL_PAINTER.line(self, Vector2(9, -1), Vector2(10, -1), Color("d8e2df"))
+	# Two darker compression straps wrap across the body mass.
+	for strap_x in [-4, 4]:
+		PIXEL_PAINTER.line(self, Vector2(strap_x, -3), Vector2(strap_x, 3), Color("11161a"))
+		PIXEL_PAINTER.pixel(self, Vector2(strap_x + 1, 2), Color("75838b"))
+	# Four flat carrying handles sit outside the textile edge.
+	for handle_x in [-7, 5]:
+		PIXEL_PAINTER.line(self, Vector2(handle_x, -5), Vector2(handle_x + 2, -5), Color("171c21"))
+		PIXEL_PAINTER.line(self, Vector2(handle_x, 5), Vector2(handle_x + 2, 5), Color("171c21"))
+	# Small evidence tag; rectangular and tied to the zipper rather than a large dot.
+	PIXEL_PAINTER.material_rect(self, Rect2(7, 1, 3, 2), Color("d8d0c5"), Color("fff8e8"), Color("968f89"), 127, &"grain")
+
 func _draw() -> void:
 	# Corpse art shares the living actor's compact 16–20 px body core while
 	# retaining a 32 px effect canvas for limbs, wounds and bagging UI.
@@ -409,16 +484,12 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if is_instance_valid(ragdoll):
 		if bagged:
-			PIXEL_PAINTER.material_panel(self, Rect2(-12, -7, 24, 14), NeonPalette.INK, Color("242a31"), Color("39424b"), Color("14171c"), 109, &"fabric")
-			PIXEL_PAINTER.line(self, Vector2(-9, 0), Vector2(8, 0), Color("71808c"))
-			PIXEL_PAINTER.material_circle(self, Vector2(9, 0), 2, NeonPalette.PAPER, Color.WHITE, Color("a9a3a4"), 113)
+			_draw_body_bag()
 		elif bag_progress > 0.0:
 			PIXEL_PAINTER.arc(self, Vector2.ZERO, 15, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, NeonPalette.CYAN, 24)
 		return
 	if bagged:
-		PIXEL_PAINTER.material_panel(self, Rect2(-12, -7, 24, 14), NeonPalette.INK, Color("242a31"), Color("39424b"), Color("14171c"), 127, &"fabric")
-		PIXEL_PAINTER.line(self, Vector2(-9, 0), Vector2(8, 0), Color("71808c"))
-		PIXEL_PAINTER.material_circle(self, Vector2(9, 0), 2, NeonPalette.PAPER, Color.WHITE, Color("a9a3a4"), 131)
+		_draw_body_bag()
 		return
 	if bag_progress > 0.0:
 		PIXEL_PAINTER.arc(self, Vector2.ZERO, 15, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, NeonPalette.CYAN, 24)

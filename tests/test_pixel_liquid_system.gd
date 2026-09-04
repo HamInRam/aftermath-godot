@@ -26,6 +26,21 @@ func _ready() -> void:
 	for x in range(50, 71): liquids.add_liquid_pixel(Vector2(x, 40), &"water", 170)
 	_expect(liquids.has_conductive_connection(Vector2(50, 40), Vector2(70, 40), 28.0), "electricity must follow a connected wet-pixel path")
 	_expect(not liquids.has_conductive_connection(Vector2(50, 40), Vector2(82, 40), 38.0), "electricity must not jump across a dry floor gap")
+	liquids.set_electric_source(101, Vector2(50, 40), 28.0, true)
+	liquids._process(0.09)
+	_expect(liquids.get_debug_energized_pixel_count() >= 18, "a live electrical source should energize the connected water pixels for gold charge rendering")
+	var energized_sample := liquids.energized_cells.keys()[0] as Vector2i
+	var shows_gold_charge := false
+	for phase in range(23):
+		liquids.electric_visual_tick = phase
+		var charged_color: Color = liquids._apply_electric_tint(energized_sample, Color("48cce0"))
+		if charged_color.r > 0.9 and charged_color.g > 0.45:
+			shows_gold_charge = true
+			break
+	_expect(shows_gold_charge, "energized water should animate sparse gold and white charge pixels")
+	liquids.set_electric_source(101, Vector2(50, 40), 28.0, false)
+	liquids._process(0.09)
+	_expect(liquids.get_debug_energized_pixel_count() == 0, "isolating the electrical source should remove the gold charge overlay")
 
 	liquids.deposit_source(Vector2(92, 52), &"oil", 10.0, 1.0)
 	_expect(liquids.is_flammable_near(Vector2(92, 52), 12.0), "oil pixels must expose a flammable surface query")
@@ -38,9 +53,9 @@ func _ready() -> void:
 		for x in range(130, 135): blood.ground_canvas.add_blood_pixel(Vector2(x, y), 220)
 	var sprayed_blood_before := int(blood.ground_canvas.get_blood_amount(wash_target))
 	for burst in range(5): liquids.emit_pressure_stream(Vector2(104, 28), wash_target, 3.2, 9)
-	_expect(liquids.get_debug_jet_count() == 25, "the stock focused nozzle should emit five readable pixel-water packets per pulse")
-	_expect(float(liquids.jet_particles[0].radius) >= 1.9, "the stock focused jet should have a forgiving physical impact footprint")
-	_expect(liquids.get_debug_pressure_stability() >= 0.9 and int(liquids.jet_particles[-1].power) >= 12, "holding a steady target for roughly one fifth second should build a thirty-five-percent pressure bonus")
+	_expect(liquids.get_debug_jet_count() == 35, "the stock focused nozzle should emit a dense seven-packet high-pressure stream per pulse")
+	_expect(float(liquids.jet_particles[0].radius) >= 2.2 and float(liquids.jet_particles[0].speed) >= 235.0, "the stock jet should arrive quickly with a forgiving physical impact footprint")
+	_expect(liquids.get_debug_pressure_stability() >= 0.9 and int(liquids.jet_particles[-1].power) >= 13, "holding a steady target should build a strong hydraulic pressure bonus")
 	_expect(int(blood.ground_canvas.get_blood_amount(wash_target)) == sprayed_blood_before, "blood must remain unchanged until airborne water reaches it")
 	for tick in range(28): liquids._update_pressure_jets(1.0 / 60.0)
 	_expect(liquids.get_debug_jet_count() == 0, "pressure water pixels should settle rather than becoming permanent particle nodes")
@@ -51,11 +66,11 @@ func _ready() -> void:
 	liquids.jet_particles.clear()
 	liquids.reset_pressure_stream()
 	liquids.emit_pressure_stream(Vector2(104, 28), Vector2(132, 28), 3.2, 9, 1)
-	_expect(float(liquids.jet_particles[0].speed) >= 154.0 * 1.15, "washer level one should accelerate the physical water packets")
+	_expect(float(liquids.jet_particles[0].speed) >= 235.0 * 1.12, "washer level one should accelerate the physical water packets")
 	liquids.jet_particles.clear()
 	liquids.reset_pressure_stream()
 	liquids.emit_pressure_stream(Vector2(104, 28), Vector2(132, 28), 3.2, 9, 2)
-	_expect(float(liquids.jet_particles[0].radius) >= 2.4, "washer level two should enlarge the real near-impact radius")
+	_expect(float(liquids.jet_particles[0].radius) >= 2.7, "washer level two should enlarge the real near-impact radius")
 	liquids.jet_particles.clear()
 
 	var actor := Node2D.new()

@@ -38,6 +38,7 @@ func _run() -> void:
 	_expect(not pickups.is_empty(), "thrown gun should settle as a recoverable pickup")
 	if not pickups.is_empty():
 		_expect(pickups[0].weapon_id == "smg" and pickups[0].rounds == 7, "recovered pickup should retain remaining rounds")
+		_expect(pickups[0].has_visible_weapon_art(), "a settled weapon must render a gun silhouette even when its optional texture resource is empty")
 	if failures == 0: print("weapon throw regression: PASS")
 	for actor in [enemy, player]:
 		for audio_node in actor.find_children("*", "AudioStreamPlayer", true, false):

@@ -5,7 +5,7 @@
 level_title = "DEAD AIR"
 enemy_spawns = PackedVector2Array(44,52, 44,188, 132,92, 212,92, 260,132, 140,196, 236,196, 324,52, 348,116, 332,196)
 enemy_types = PackedStringArray("assault","gunner","heavy","assault","gunner","dog","assault","heavy","melee","gunner")
-fixed_sentry_indices = PackedInt32Array(2,7,10)
+fixed_sentry_indices = PackedInt32Array(2,7,9)
 mission_profile = ExtResource("2")
 visual_theme = "broadcast"
 ammo_pickup_positions = PackedVector2Array(60,116, 156,180, 276,76, 348,188)

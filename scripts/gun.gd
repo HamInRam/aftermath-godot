@@ -299,7 +299,11 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 			pellet_offset = deg_to_rad(pellet_t * pellet_spread_degrees + jitter)
 		fired.emit(origin, normalized_direction.rotated(pellet_offset), enemy_owned, projectile_damage, weapon_id)
 	var noise_multiplier := 1.0 if enemy_owned else maxf(0.45, (1.0 - Progression.get_specialization_level("ghost") * 0.08) * field_noise_multiplier)
-	Events.publish_combat_noise(origin, hearing_radius * noise_multiplier, "gunshot")
+	# Preserve weapon identity for room-based acoustic propagation. Enemy fire is
+	# tagged separately so an ongoing firefight does not recruit a fresh wave on
+	# every automatic round.
+	var noise_kind := ("enemy_gunshot_" if enemy_owned else "gunshot_") + weapon_id
+	Events.publish_combat_noise(origin, hearing_radius * noise_multiplier, noise_kind)
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	return true
 

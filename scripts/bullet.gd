@@ -30,12 +30,14 @@ var resolution_emitted := false
 var passed_overkill_target := false
 var source_actor: CollisionObject2D
 var combat_time_scale := 1.0
+var visual_tail_length := 8
 
 func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0, shooter: CollisionObject2D = null) -> void:
 	direction = dir.normalized()
 	enemy_owned = is_enemy_bullet
 	damage = hit_damage
 	weapon_id = source_weapon
+	visual_tail_length = 5 if weapon_id == "shotgun" else (7 if weapon_id == "smg" else (9 if weapon_id == "lmg" else 8))
 	spawn_position = origin
 	speed = projectile_speed
 	source_actor = shooter
@@ -45,6 +47,7 @@ func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 1, source_weapon :
 	collision_mask = ENEMY_PROJECTILE_MASK if enemy_owned else PLAYER_PROJECTILE_MASK
 	rotation = direction.angle()
 	velocity = direction * speed
+	queue_redraw()
 	if is_inside_tree(): _install_source_exception()
 
 func _ready() -> void:
@@ -114,6 +117,7 @@ func _physics_process(delta: float) -> void:
 
 func set_combat_time_scale(value: float) -> void:
 	combat_time_scale = clampf(value, 0.2, 1.0) if enemy_owned else 1.0
+	queue_redraw()
 
 func _resolve_shot(outcome: String, lethal: bool) -> void:
 	if resolution_emitted or enemy_owned or shot_id < 0: return
@@ -121,6 +125,16 @@ func _resolve_shot(outcome: String, lethal: bool) -> void:
 	shot_resolved.emit(shot_id, outcome, lethal, weapon_id)
 
 func _draw() -> void:
-	var color := Color("ffe48a") if not enemy_owned else Color("ff3868")
-	PIXEL_PAINTER.line(self, Vector2(-5, 0), Vector2(-1, 0), Color(color, 0.3))
-	PIXEL_PAINTER.pixel(self, Vector2.ZERO, color)
+	var core := Color("fff6c2")
+	var tracer := Color("ffc857")
+	var ink := Color(0.055, 0.025, 0.055, 0.92)
+	var tail_end := -float(visual_tail_length)
+	# The silhouette stays built from one-world-pixel cells. A dark separator
+	# prevents bright floors, blood and muzzle flashes from swallowing the round.
+	PIXEL_PAINTER.line(self, Vector2(tail_end - 1.0, 0), Vector2(2, 0), ink)
+	PIXEL_PAINTER.line(self, Vector2(-2, -1), Vector2(1, -1), ink)
+	PIXEL_PAINTER.line(self, Vector2(-2, 1), Vector2(1, 1), ink)
+	PIXEL_PAINTER.line(self, Vector2(tail_end, 0), Vector2(-4, 0), Color(tracer, 0.38))
+	PIXEL_PAINTER.line(self, Vector2(-4, 0), Vector2(-1, 0), Color(tracer, 0.82))
+	PIXEL_PAINTER.line(self, Vector2(-1, 0), Vector2(1, 0), core)
+	PIXEL_PAINTER.pixel(self, Vector2.ZERO, tracer)

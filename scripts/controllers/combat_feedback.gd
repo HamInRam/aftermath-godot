@@ -7,10 +7,24 @@ var hit_stop_deadline_msec := 0
 var hit_stop_active := false
 var flash_intensity := 1.0
 var base_time_scale := 1.0
+var focus_audio: AudioStreamPlayer
 
 func configure(flash_rect: ColorRect, intensity := 1.0) -> void:
 	flash = flash_rect
 	flash_intensity = clampf(intensity, 0.0, 1.0)
+	if not is_instance_valid(focus_audio):
+		focus_audio = AudioStreamPlayer.new()
+		focus_audio.name = "FocusEnterAudio"
+		focus_audio.bus = "SFX"
+		focus_audio.volume_db = -10.0
+		focus_audio.stream = ProceduralAudioLibrary.get_sfx("focus_enter")
+		add_child(focus_audio)
+
+func trigger_focus_enter() -> void:
+	# Focus is communicated by the persistent screen grade and HUD for its whole
+	# duration. Audio only marks the input acknowledgement; there is no one-frame
+	# flash that could be mistaken for the complete state feedback.
+	if is_instance_valid(focus_audio): focus_audio.play()
 
 func trigger_hit_stop(duration: float) -> void:
 	if duration <= 0.0: return
@@ -46,3 +60,4 @@ func reset() -> void:
 	hit_stop_deadline_msec = 0
 	base_time_scale = 1.0
 	Engine.time_scale = 1.0
+	if is_instance_valid(focus_audio): focus_audio.stop()

@@ -23,6 +23,7 @@ func _ready() -> void:
 	add_child(door)
 	_expect(not door.get_node("Frame/TopFrame").visible and not door.get_node("Door/Panel").visible, "legacy vector door art must remain disabled")
 	_expect(door.get_node("Frame").get_script() != null, "door frame must use the generated pixel renderer")
+	_expect((door.get_node("Door/PanelCollision").shape as RectangleShape2D).size == Vector2(4, 24), "doors should use a full three-tile human-scale leaf")
 
 	var prop := DestructibleProp.new()
 	add_child(prop)

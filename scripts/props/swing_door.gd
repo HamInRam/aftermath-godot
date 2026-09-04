@@ -3,6 +3,7 @@ extends RigidBody2D
 
 const SPLINTER_SCENE := preload("res://scenes/effects/door_splinters.tscn")
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
+const LEAF_LENGTH := 24.0
 
 enum DoorState { CLOSED, SLAM_OPENING, OPEN }
 
@@ -21,10 +22,14 @@ var current_open_speed := 8.0
 var door_pusher: Node2D
 var is_dangerous := false
 var dangerous_time_remaining := 0.0
+var passage_owner: WeakRef
+var passage_reservation_expires := 0
+var threshold_rotation := 0.0
 
 func _ready() -> void:
 	add_to_group("tactical_door")
 	freeze = true
+	threshold_rotation = global_rotation
 	simulated_rotation = rotation
 	$PanelCollision.disabled = false
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -33,22 +38,55 @@ func _ready() -> void:
 func _draw() -> void:
 	# The leaf and its shadow are built from individual snapped cells. The old
 	# Polygon2D presentation remains hidden in the scene only for compatibility.
-	PIXELS.stipple_rect(self, Rect2(0, 2, 4, 16), Color(0.035, 0.02, 0.05, 0.48), 29, 3)
-	PIXELS.material_panel(self, Rect2(-2, 0, 4, 16), Color("17131b"), Color("843f2b"), Color("c07340"), Color("4b251f"), 29, &"wood")
-	for y in range(2, 14, 4): PIXELS.pixel(self, Vector2(0, y), Color("c07340"))
-	PIXELS.pixel(self, Vector2(0, 13), Color("f2bf4c"))
+	PIXELS.stipple_rect(self, Rect2(0, 2, 4, LEAF_LENGTH), Color(0.035, 0.02, 0.05, 0.48), 29, 3)
+	PIXELS.material_panel(self, Rect2(-2, 0, 4, LEAF_LENGTH), Color("17131b"), Color("843f2b"), Color("c07340"), Color("4b251f"), 29, &"wood")
+	for y in range(3, 22, 5): PIXELS.pixel(self, Vector2(0, y), Color("c07340"))
+	PIXELS.pixel(self, Vector2(0, 21), Color("f2bf4c"))
 
 func get_tactical_door_id() -> String:
 	return "door:%d:%d" % [roundi(global_position.x / 8.0), roundi(global_position.y / 8.0)]
 
+func get_acoustic_center() -> Vector2:
+	# The acoustic/passage portal belongs to the frame, not the swinging leaf.
+	# Keeping this fixed also prevents an open door from moving its AI waypoint.
+	return global_position + Vector2(0.0, LEAF_LENGTH * 0.5).rotated(threshold_rotation)
+
+func is_acoustically_open() -> bool:
+	return current_state != DoorState.CLOSED
+
+func request_passage(actor: Node2D) -> bool:
+	var now := Time.get_ticks_msec()
+	var owner: Object = passage_owner.get_ref() if passage_owner != null else null
+	var center := get_acoustic_center()
+	if not is_instance_valid(owner) or now >= passage_reservation_expires or (owner as Node2D).global_position.distance_to(center) > 34.0:
+		passage_owner = null
+		owner = null
+	if owner == actor:
+		passage_reservation_expires = now + 900
+		return true
+	if is_instance_valid(owner): return false
+	passage_owner = weakref(actor)
+	passage_reservation_expires = now + 900
+	return true
+
 func get_safe_approach(actor_position: Vector2, lateral_sign := 0.0) -> Vector2:
 	# Keep responders on their current side of the closed/opening threshold and
 	# offset lateral roles away from the same center pixel.
-	var passage_normal := Vector2.RIGHT.rotated(global_rotation)
-	var side := signf((actor_position - global_position).dot(passage_normal))
+	var center := get_acoustic_center()
+	var passage_normal := Vector2.RIGHT.rotated(threshold_rotation)
+	var side := signf((actor_position - center).dot(passage_normal))
 	if is_zero_approx(side): side = 1.0
 	var tangent := passage_normal.orthogonal()
-	return global_position + passage_normal * side * 18.0 + tangent * lateral_sign * 11.0
+	return center + passage_normal * side * 22.0 + tangent * lateral_sign * 10.0
+
+func get_flank_entry(actor_position: Vector2, lateral_sign := 0.0) -> Vector2:
+	# Returns a point just beyond this alternate threshold so a sweeper actually
+	# enters from another route instead of merely clustering beside the kill door.
+	var center := get_acoustic_center()
+	var passage_normal := Vector2.RIGHT.rotated(threshold_rotation)
+	var actor_side := signf((actor_position - center).dot(passage_normal))
+	if is_zero_approx(actor_side): actor_side = 1.0
+	return center - passage_normal * actor_side * 20.0 + passage_normal.orthogonal() * lateral_sign * 7.0
 
 func _physics_process(delta: float) -> void:
 	if current_state != DoorState.SLAM_OPENING: return
@@ -87,7 +125,7 @@ func _physics_process(delta: float) -> void:
 		rotation = target_rotation
 		current_state = DoorState.OPEN
 		# Doors are one-way state machines and never close again. Re-enabling the
-		# full 16px panel here made the visually open leaf an invisible route
+		# full panel here made the visually open leaf an invisible route
 		# blocker in narrow authored rooms. The frame remains solid; the settled
 		# leaf becomes presentation-only so both actors can reliably traverse it.
 		$PanelCollision.set_deferred("disabled", true)
@@ -124,5 +162,5 @@ func _spawn_splinters(direction: Vector2) -> void:
 	if get_tree().current_scene == null: return
 	var splinters = SPLINTER_SCENE.instantiate()
 	if not RuntimeBudget.try_add("debris", splinters, get_tree().current_scene): return
-	splinters.global_position = global_position + Vector2(0, 14).rotated(global_rotation)
+	splinters.global_position = global_position + Vector2(0, LEAF_LENGTH - 2.0).rotated(global_rotation)
 	splinters.setup(direction)

@@ -120,6 +120,31 @@ func freeze_pose() -> void:
 	set_physics_process(false)
 	queue_redraw()
 
+func get_body_anchor_local() -> Vector2:
+	# Every joint is free to travel inside the corpse node, so the node origin is
+	# not necessarily where the visible body eventually lands. The torso midpoint
+	# is stable across human and hound rigs and is the useful cleanup interaction
+	# position (unlike an outstretched hand or detached extremity).
+	if points.is_empty(): return Vector2.ZERO
+	if points.has("pelvis") and points.has("chest"):
+		return ((points.pelvis.position as Vector2) + (points.chest.position as Vector2)) * 0.5
+	var total := Vector2.ZERO
+	for point in points.values(): total += point.position as Vector2
+	return total / float(points.size())
+
+func rebase_to_body_anchor() -> Vector2:
+	# Move the simulated pose around a new local origin without changing its
+	# world-space appearance. Corpse owns the matching root translation.
+	var anchor := get_body_anchor_local()
+	if anchor.length_squared() <= 0.0001: return Vector2.ZERO
+	for name in points:
+		var point: Dictionary = points[name]
+		point.position = (point.position as Vector2) - anchor
+		point.previous = (point.previous as Vector2) - anchor
+		points[name] = point
+	queue_redraw()
+	return anchor
+
 func _physics_process(delta: float) -> void:
 	if frozen or points.is_empty(): return
 	accumulated_time += minf(delta, 0.05)

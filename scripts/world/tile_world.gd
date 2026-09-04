@@ -2,6 +2,7 @@ class_name TileWorld
 extends Node2D
 
 const TILE_SIZE := Vector2i(8, 8)
+const DOOR_CELL_SPAN := 3
 const DEFAULT_MAP_SIZE := Vector2i(48, 28)
 const EXTERIOR_MARGIN := Vector2i(8, 7)
 const PIXEL_ENVIRONMENT_ATLAS := preload("res://utility/pixel_environment_atlas.gd")
@@ -26,6 +27,9 @@ var building_origin := EXTERIOR_MARGIN
 @onready var object_layer: TileMapLayer = $Objects
 var path_grid := AStarGrid2D.new()
 var destructible_cells: Array[Vector2i] = []
+var acoustic_sector_by_cell: Dictionary = {}
+var acoustic_portals: Array[Dictionary] = []
+var acoustic_sector_count := 0
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -43,6 +47,7 @@ func _ready() -> void:
 	_build_exterior()
 	_build_floor()
 	_build_walls()
+	_expand_authored_door_openings()
 	_build_wall_caps()
 	_build_wall_shadows()
 	_build_decorations()
@@ -53,6 +58,7 @@ func _ready() -> void:
 	_spawn_signature_props()
 	_build_object_shadows()
 	_build_path_grid()
+	_build_acoustic_topology()
 
 func _get_layout_family(variant: String) -> String:
 	if variant in ["harbor_exchange", "cold_storage", "slaughterhouse"]: return "sandwich_shop"
@@ -64,7 +70,7 @@ func _build_variant_dressing() -> void:
 	return
 
 func _clear_authored_door_approaches() -> void:
-	# A usable two-cell doorway also needs one collision-free approach cell on
+	# A usable three-cell doorway also needs one collision-free approach cell on
 	# either side. This prevents authored furniture from visually fitting near
 	# a door while invisibly sealing the route for a 10px-wide actor collider.
 	for spec: Dictionary in get_door_specs():
@@ -72,7 +78,8 @@ func _clear_authored_door_approaches() -> void:
 		var horizontal_leaf := absf(float(spec.rotation)) > 0.1
 		var leaf_step := Vector2i.RIGHT if horizontal_leaf else Vector2i.DOWN
 		var normal_step := Vector2i.UP if horizontal_leaf else Vector2i.RIGHT
-		for leaf_offset in [Vector2i.ZERO, leaf_step]:
+		for leaf_index in range(DOOR_CELL_SPAN):
+			var leaf_offset := leaf_step * leaf_index
 			for normal_offset in [-normal_step, Vector2i.ZERO, normal_step]:
 				var cell: Vector2i = opening_cell + leaf_offset + normal_offset
 				object_layer.erase_cell(cell)
@@ -186,8 +193,8 @@ func _build_custom_floor() -> void:
 
 func _build_boundary(edge_wall: Tile, top_windows: Array[int] = [], side_windows: Array[int] = []) -> void:
 	var entrance_x := _get_entrance_authored_x()
-	# The physical doorway uses a 16px leaf, but actors need one extra 8px jamb
-	# cell of clearance so the real collision capsule never scrapes the façade.
+	# A full human-scale leaf spans three native 8px cells. Keeping this opening
+	# identical to the physical panel length anchors both jambs to the façade.
 	var entrance_cells := [entrance_x - 2, entrance_x - 1, entrance_x]
 	for x in range(1, map_size.x - 1):
 		_set_tile(wall_layer, Vector2i(x, 1), Tile.WINDOW if x in top_windows else edge_wall)
@@ -274,6 +281,17 @@ func _build_custom_walls() -> void:
 			_wall_v(14, 2, 25, [7, 8, 19, 20], [11, 12])
 			_wall_v(36, 2, 25, [5, 6, 17, 18], [10, 11, 22, 23])
 			_wall_h(15, 15, 35, [24, 25], [18, 19, 31, 32])
+
+func _expand_authored_door_openings() -> void:
+	# Layouts were originally authored around 16px leaves. Expand each interior
+	# threshold by one wall cell before caps, shadows and navigation are built, so
+	# the 24px visual, collision and path opening remain one geometry.
+	for entry: Array in _get_authored_door_entries():
+		var opening_cell: Vector2i = entry[0] + building_origin
+		var horizontal_leaf := absf(float(entry[1])) > 0.1
+		var leaf_step := Vector2i.RIGHT if horizontal_leaf else Vector2i.DOWN
+		for leaf_index in range(DOOR_CELL_SPAN):
+			wall_layer.erase_cell(opening_cell + leaf_step * leaf_index)
 
 func _build_custom_decorations() -> void:
 	var accent_by_layout := {
@@ -702,7 +720,7 @@ func get_navigation_path(from_world: Vector2, to_world: Vector2) -> PackedVector
 		world_path.append(floor_layer.to_global(floor_layer.map_to_local(id_path[index])))
 	return world_path
 
-func get_door_specs() -> Array[Dictionary]:
+func _get_authored_door_entries() -> Array:
 	var authored := {
 		"nightclub": [[Vector2i(11, 7), 0.0], [Vector2i(20, 15), -PI * 0.5], [Vector2i(34, 18), 0.0]],
 		"sandwich_shop": [[Vector2i(8, 13), -PI * 0.5], [Vector2i(22, 7), 0.0], [Vector2i(30, 20), 0.0]],
@@ -717,22 +735,23 @@ func get_door_specs() -> Array[Dictionary]:
 		"broadcast_tower": [[Vector2i(11, 8), 0.0], [Vector2i(36, 18), 0.0], [Vector2i(22, 7), -PI * 0.5], [Vector2i(27, 21), -PI * 0.5]],
 		"last_call": [[Vector2i(14, 7), 0.0], [Vector2i(36, 17), 0.0], [Vector2i(24, 15), -PI * 0.5]],
 	}
+	return authored.get(layout_variant, []).duplicate(true)
+
+func get_door_specs() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	# Every venue has a public/service threshold connecting the outdoor approach
 	# to the interior. It is part of the same physical door system as room doors.
-	var entries: Array = authored.get(layout_variant, []).duplicate(true)
+	var entries: Array = _get_authored_door_entries()
 	var entrance_x := _get_entrance_authored_x()
-	entries.append([Vector2i(entrance_x - 1, map_size.y - 2), -PI * 0.5])
+	entries.append([Vector2i(entrance_x - 2, map_size.y - 2), -PI * 0.5])
 	for entry: Array in entries:
 		var opening_cell: Vector2i = entry[0] + building_origin
 		var door_rotation := float(entry[1])
 		var leaf_axis := Vector2.DOWN.rotated(door_rotation)
 		var first_cell_center := floor_layer.map_to_local(opening_cell)
-		# Openings span two 8px cells, while the door scene is hinged at the
-		# edge of its 16px leaf. The old centre placement shifted the leaf four
-		# pixels into the far wall, leaving an invisible blocker after opening.
+		# Openings span three 8px cells and the scene pivots at the exact jamb edge.
 		var hinge_position := first_cell_center - leaf_axis * (TILE_SIZE.y * 0.5)
-		var passage_center := first_cell_center + leaf_axis * (TILE_SIZE.y * 0.5)
+		var passage_center := first_cell_center + leaf_axis * float(TILE_SIZE.y)
 		if not _door_has_open_approaches(opening_cell, door_rotation):
 			continue
 		result.append({
@@ -747,11 +766,12 @@ func _door_has_open_approaches(opening_cell: Vector2i, door_rotation: float) -> 
 	var horizontal_leaf := absf(door_rotation) > 0.1
 	var leaf_step := Vector2i.RIGHT if horizontal_leaf else Vector2i.DOWN
 	var normal_step := Vector2i.UP if horizontal_leaf else Vector2i.RIGHT
-	if not _is_bare_floor_cell(opening_cell) or not _is_bare_floor_cell(opening_cell + leaf_step):
-		return false
+	for leaf_index in range(DOOR_CELL_SPAN):
+		if not _is_bare_floor_cell(opening_cell + leaf_step * leaf_index): return false
 	var negative_open := false
 	var positive_open := false
-	for leaf_offset in [Vector2i.ZERO, leaf_step]:
+	for leaf_index in range(DOOR_CELL_SPAN):
+		var leaf_offset := leaf_step * leaf_index
 		var negative_cell: Vector2i = opening_cell + leaf_offset - normal_step
 		var positive_cell: Vector2i = opening_cell + leaf_offset + normal_step
 		negative_open = negative_open or _is_bare_floor_cell(negative_cell)
@@ -869,6 +889,172 @@ func get_tactical_room_id(world_position: Vector2) -> String:
 	if cell.x >= 24: return "east"
 	return "center_north" if cell.y < 16 else "center_south"
 
+func _build_acoustic_topology() -> void:
+	# Sound uses the real floor plan rather than a radius through arbitrary walls.
+	# Door thresholds are temporarily treated as sealed while flood-filling; they
+	# are then reintroduced as portals whose cost follows the live door state.
+	acoustic_sector_by_cell.clear()
+	acoustic_portals.clear()
+	acoustic_sector_count = 0
+	var threshold_cells: Dictionary = {}
+	var door_specs: Array[Dictionary] = get_door_specs()
+	for spec: Dictionary in door_specs:
+		var opening_cell: Vector2i = spec.opening_cell
+		var leaf_step := Vector2i.RIGHT if absf(float(spec.rotation)) > 0.1 else Vector2i.DOWN
+		for leaf_index in range(DOOR_CELL_SPAN): threshold_cells[opening_cell + leaf_step * leaf_index] = true
+	for y in range(world_size.y):
+		for x in range(world_size.x):
+			var start := Vector2i(x, y)
+			if acoustic_sector_by_cell.has(start) or threshold_cells.has(start) or not _is_acoustic_floor_cell(start): continue
+			var sector_id := "acoustic_%s_%02d" % [layout_variant, acoustic_sector_count]
+			acoustic_sector_count += 1
+			var frontier: Array[Vector2i] = [start]
+			acoustic_sector_by_cell[start] = sector_id
+			var cursor := 0
+			while cursor < frontier.size():
+				var cell := frontier[cursor]
+				cursor += 1
+				for direction in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+					var neighbor: Vector2i = cell + direction
+					if acoustic_sector_by_cell.has(neighbor) or threshold_cells.has(neighbor) or not _is_acoustic_floor_cell(neighbor): continue
+					acoustic_sector_by_cell[neighbor] = sector_id
+					frontier.append(neighbor)
+	for spec: Dictionary in door_specs:
+		var opening_cell: Vector2i = spec.opening_cell
+		var horizontal_leaf := absf(float(spec.rotation)) > 0.1
+		var leaf_step := Vector2i.RIGHT if horizontal_leaf else Vector2i.DOWN
+		var normal_step := Vector2i.UP if horizontal_leaf else Vector2i.RIGHT
+		var side_a := _sector_along_threshold(opening_cell, leaf_step, -normal_step)
+		var side_b := _sector_along_threshold(opening_cell, leaf_step, normal_step)
+		_append_acoustic_portal(side_a, side_b, "door", spec.passage_center)
+	# Windows transmit sound and sight but remain physical movement barriers.
+	for cell: Vector2i in wall_layer.get_used_cells():
+		if wall_layer.get_cell_atlas_coords(cell).x != int(Tile.WINDOW): continue
+		var above := _sector_near_cell(cell + Vector2i.UP)
+		var below := _sector_near_cell(cell + Vector2i.DOWN)
+		var left := _sector_near_cell(cell + Vector2i.LEFT)
+		var right := _sector_near_cell(cell + Vector2i.RIGHT)
+		if not above.is_empty() and not below.is_empty() and above != below:
+			_append_acoustic_portal(above, below, "window", floor_layer.map_to_local(cell))
+		elif not left.is_empty() and not right.is_empty() and left != right:
+			_append_acoustic_portal(left, right, "window", floor_layer.map_to_local(cell))
+
+func _is_acoustic_floor_cell(cell: Vector2i) -> bool:
+	if cell.x < 0 or cell.y < 0 or cell.x >= world_size.x or cell.y >= world_size.y: return false
+	return floor_layer.get_cell_source_id(cell) >= 0 and wall_layer.get_cell_source_id(cell) < 0
+
+func _sector_along_threshold(opening_cell: Vector2i, leaf_step: Vector2i, side_step: Vector2i) -> String:
+	for leaf_index in range(DOOR_CELL_SPAN):
+		var sector := _sector_near_cell(opening_cell + leaf_step * leaf_index + side_step)
+		if not sector.is_empty(): return sector
+	return ""
+
+func _sector_near_cell(origin: Vector2i) -> String:
+	if acoustic_sector_by_cell.has(origin): return str(acoustic_sector_by_cell[origin])
+	for radius in range(1, 4):
+		for offset in [Vector2i(radius, 0), Vector2i(-radius, 0), Vector2i(0, radius), Vector2i(0, -radius)]:
+			var candidate: Vector2i = origin + Vector2i(offset)
+			if acoustic_sector_by_cell.has(candidate): return str(acoustic_sector_by_cell[candidate])
+	return ""
+
+func _append_acoustic_portal(side_a: String, side_b: String, kind: String, portal_position: Vector2) -> void:
+	if side_a.is_empty() or side_b.is_empty() or side_a == side_b: return
+	acoustic_portals.append({"a": side_a, "b": side_b, "kind": kind, "position": portal_position})
+
+func get_acoustic_sector_id(world_position: Vector2) -> String:
+	if acoustic_sector_by_cell.is_empty(): return ""
+	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
+	return _sector_near_cell(cell)
+
+func get_acoustic_profile() -> Dictionary:
+	# Each venue changes how a familiar combat system reads: loud public spaces
+	# mask sound, private rooms isolate it, and security sites coordinate harder.
+	var profiles := {
+		"nightclub": {"hearing_scale": 0.66, "closed_door_cost": 2.25, "open_door_cost": 0.70, "window_cost": 0.90, "max_pushers": 2, "max_sweepers": 1, "incident_memory": 4.5, "identity": "music_masking"},
+		"sandwich_shop": {"hearing_scale": 0.82, "closed_door_cost": 2.45, "open_door_cost": 0.62, "window_cost": 1.00, "max_pushers": 1, "max_sweepers": 1, "incident_memory": 5.0, "identity": "service_loop"},
+		"tactical_lab": {"hearing_scale": 0.92, "closed_door_cost": 2.05, "open_door_cost": 0.55, "window_cost": 0.78, "max_pushers": 2, "max_sweepers": 1, "incident_memory": 5.5, "identity": "trained_response"},
+		"harbor_exchange": {"hearing_scale": 1.02, "closed_door_cost": 2.10, "open_door_cost": 0.48, "window_cost": 0.75, "max_pushers": 2, "max_sweepers": 1, "incident_memory": 4.5, "identity": "open_air_echo"},
+		"motel_witness": {"hearing_scale": 0.72, "closed_door_cost": 2.85, "open_door_cost": 0.68, "window_cost": 0.92, "max_pushers": 1, "max_sweepers": 1, "incident_memory": 5.5, "identity": "isolated_rooms"},
+		"penthouse": {"hearing_scale": 0.88, "closed_door_cost": 2.30, "open_door_cost": 0.56, "window_cost": 0.52, "max_pushers": 2, "max_sweepers": 1, "incident_memory": 5.0, "identity": "glass_crossfire"},
+		"cold_storage": {"hearing_scale": 0.62, "closed_door_cost": 3.05, "open_door_cost": 0.72, "window_cost": 1.20, "max_pushers": 1, "max_sweepers": 1, "incident_memory": 5.0, "identity": "machine_masking"},
+		"casino_floor": {"hearing_scale": 0.68, "closed_door_cost": 2.35, "open_door_cost": 0.62, "window_cost": 0.76, "max_pushers": 2, "max_sweepers": 1, "incident_memory": 4.5, "identity": "crowd_masking"},
+		"police_archive": {"hearing_scale": 0.84, "closed_door_cost": 2.45, "open_door_cost": 0.58, "window_cost": 0.92, "max_pushers": 1, "max_sweepers": 2, "incident_memory": 6.0, "identity": "cautious_response"},
+		"slaughterhouse": {"hearing_scale": 0.60, "closed_door_cost": 2.70, "open_door_cost": 0.68, "window_cost": 1.05, "max_pushers": 2, "max_sweepers": 1, "incident_memory": 4.5, "identity": "industrial_masking"},
+		"broadcast_tower": {"hearing_scale": 0.90, "closed_door_cost": 2.65, "open_door_cost": 0.54, "window_cost": 0.82, "max_pushers": 1, "max_sweepers": 2, "incident_memory": 6.0, "identity": "studio_isolation"},
+		"last_call": {"hearing_scale": 0.92, "closed_door_cost": 2.20, "open_door_cost": 0.52, "window_cost": 0.70, "max_pushers": 2, "max_sweepers": 2, "incident_memory": 6.0, "identity": "finale_coordination"},
+	}
+	return (profiles.get(layout_variant, profiles["nightclub"]) as Dictionary).duplicate(true)
+
+func evaluate_acoustic_response(listener_position: Vector2, source_position: Vector2, radius: float, source_kind: String) -> Dictionary:
+	var direct_distance := listener_position.distance_to(source_position)
+	var profile := get_acoustic_profile()
+	var effective_radius := radius * float(profile.get("hearing_scale", 1.0))
+	if direct_distance > effective_radius: return {"eligible": false, "priority": INF, "occluded": false, "hops": 99}
+	var source_sector := get_acoustic_sector_id(source_position)
+	var listener_sector := get_acoustic_sector_id(listener_position)
+	if source_sector.is_empty() or listener_sector.is_empty():
+		return {"eligible": direct_distance <= effective_radius, "priority": direct_distance, "occluded": false, "hops": 0}
+	var route := _find_acoustic_route(source_sector, listener_sector, profile)
+	if route.is_empty(): return {"eligible": false, "priority": INF, "occluded": true, "hops": 99}
+	var maximum_hops := _maximum_acoustic_hops(source_kind)
+	var hops := int(route.get("hops", 0))
+	var transmission_cost := float(route.get("cost", 0.0))
+	var acoustic_distance := direct_distance + transmission_cost * 48.0
+	var eligible := hops <= maximum_hops and acoustic_distance <= effective_radius
+	return {
+		"eligible": eligible,
+		"priority": acoustic_distance,
+		"occluded": hops > 0,
+		"hops": hops,
+		"transmission_cost": transmission_cost,
+		"source_sector": source_sector,
+		"listener_sector": listener_sector,
+	}
+
+func _maximum_acoustic_hops(source_kind: String) -> int:
+	if source_kind in ["security_alarm", "security_camera"]: return 99
+	if source_kind.contains("shotgun"): return 3
+	if source_kind.contains("lmg") or source_kind.contains("smg"): return 2
+	if source_kind.contains("pistol") or source_kind.contains("gunshot"): return 1
+	if source_kind in ["door", "execution", "landmark_break", "corpse_disposal"]: return 1
+	if source_kind.contains("radio") or source_kind == "corpse": return 2
+	if source_kind in ["environment_lure", "thrown_weapon"]: return 2
+	return 0
+
+func _find_acoustic_route(source_sector: String, listener_sector: String, profile: Dictionary) -> Dictionary:
+	if source_sector == listener_sector: return {"cost": 0.0, "hops": 0}
+	var frontier: Array[Dictionary] = [{"sector": source_sector, "cost": 0.0, "hops": 0}]
+	var best_cost := {source_sector: 0.0}
+	while not frontier.is_empty():
+		frontier.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.cost) < float(b.cost))
+		var current: Dictionary = frontier.pop_front()
+		var current_sector := str(current.sector)
+		var current_cost := float(current.cost)
+		if current_sector == listener_sector: return {"cost": current_cost, "hops": int(current.hops)}
+		if current_cost > float(best_cost.get(current_sector, INF)) + 0.001: continue
+		for portal: Dictionary in acoustic_portals:
+			var next_sector := ""
+			if str(portal.a) == current_sector: next_sector = str(portal.b)
+			elif str(portal.b) == current_sector: next_sector = str(portal.a)
+			if next_sector.is_empty(): continue
+			var next_cost := current_cost + _acoustic_portal_cost(portal, profile)
+			if next_cost >= float(best_cost.get(next_sector, INF)): continue
+			best_cost[next_sector] = next_cost
+			frontier.append({"sector": next_sector, "cost": next_cost, "hops": int(current.hops) + 1})
+	return {}
+
+func _acoustic_portal_cost(portal: Dictionary, profile: Dictionary) -> float:
+	if str(portal.kind) == "window": return float(profile.get("window_cost", 0.9))
+	var portal_position: Vector2 = portal.position
+	for candidate in get_tree().get_nodes_in_group("tactical_door"):
+		if not candidate is Node2D or not is_instance_valid(candidate): continue
+		var door := candidate as Node2D
+		var center: Vector2 = door.get_acoustic_center() if door.has_method("get_acoustic_center") else door.global_position
+		if center.distance_to(portal_position) > 18.0: continue
+		if door.has_method("is_acoustically_open") and door.is_acoustically_open(): return float(profile.get("open_door_cost", 0.6))
+		return float(profile.get("closed_door_cost", 2.4))
+	return float(profile.get("closed_door_cost", 2.4))
+
 func get_blood_surface_profile(world_position: Vector2) -> Dictionary:
 	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))
 	var tile_id := floor_layer.get_cell_atlas_coords(cell).x
@@ -907,7 +1093,12 @@ func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
 				found = true
 				break
 		if not found: return false
-	wall_layer.erase_cell(cell)
+	# Windows are duplicated into WallCaps to create the pseudo-3D top edge.
+	# Removing only the collision tile leaves that duplicate looking like an
+	# intact pane even though shards have spawned and the opening is passable.
+	# Clear every presentation layer together so visual and physical state can
+	# never disagree.
+	_erase_glass_cell(cell)
 	path_grid.set_point_solid(cell, false)
 	var shards = GLASS_SHARDS_SCENE.instantiate()
 	var effect_parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
@@ -916,3 +1107,10 @@ func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
 		shards.setup(flight_direction)
 	Events.glass_shattered.emit(hit_position)
 	return true
+
+func _erase_glass_cell(cell: Vector2i) -> void:
+	wall_layer.erase_cell(cell)
+	wall_cap_layer.erase_cell(cell)
+	# Windows are currently excluded from this layer, but clearing it here is
+	# deliberately defensive if the wall-shadow presentation changes later.
+	wall_shadow_layer.erase_cell(cell)

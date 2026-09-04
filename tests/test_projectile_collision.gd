@@ -9,6 +9,7 @@ func _ready() -> void:
 	var player_bullet := BULLET_SCENE.instantiate()
 	player_bullet.setup(Vector2.RIGHT, false, 1, "pistol", Vector2.ZERO, 180.0, player_source)
 	add_child(player_bullet)
+	_expect(player_bullet.z_index >= 5 and player_bullet.visual_tail_length >= 5, "projectiles should render above world clutter with a readable pixel tracer")
 	_expect(player_bullet.collision_mask == 46, "player projectiles should query enemies, world, glass and fresh corpses only")
 	_expect(player_bullet.get_collision_exceptions().has(player_source), "a projectile must explicitly exclude its shooter")
 
@@ -16,6 +17,8 @@ func _ready() -> void:
 	var enemy_bullet := BULLET_SCENE.instantiate()
 	enemy_bullet.setup(Vector2.RIGHT, true, 1, "smg", Vector2.ZERO, 180.0, enemy_source)
 	add_child(enemy_bullet)
+	enemy_bullet.set_combat_time_scale(0.42)
+	_expect(is_equal_approx(enemy_bullet.combat_time_scale, 0.42), "Focus should preserve a distinct slowed-hostile projectile presentation")
 	_expect(enemy_bullet.collision_mask == 13, "enemy projectiles should not collide with allies or corpse/debris evidence")
 	_expect(enemy_bullet.get_collision_exceptions().has(enemy_source), "enemy projectiles must explicitly exclude their shooter")
 
