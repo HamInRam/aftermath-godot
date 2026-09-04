@@ -2,6 +2,7 @@ class_name ThrownWeapon
 extends CharacterBody2D
 
 const PICKUP_SCENE := preload("res://scenes/props/weapon_pickup.tscn")
+const WEAPON_ART := preload("res://utility/weapon_pixel_art.gd")
 
 var weapon_id := "pistol"
 var rounds := 0
@@ -12,9 +13,13 @@ func setup(direction: Vector2, new_weapon_id: String, remaining_rounds: int) -> 
 	weapon_id = new_weapon_id
 	rounds = maxi(0, remaining_rounds)
 	velocity = direction.normalized() * 245.0
-	var data := AttackCatalog.get_gun_data(weapon_id)
-	$WeaponSprite.texture = data.weapon_texture
+	$WeaponSprite.texture = null
+	$WeaponSprite.visible = false
 	rotation = direction.angle()
+	queue_redraw()
+
+func _draw() -> void:
+	WEAPON_ART.draw_weapon(self, weapon_id, Vector2.ZERO, Vector2.RIGHT, true)
 
 func _physics_process(delta: float) -> void:
 	if settled: return

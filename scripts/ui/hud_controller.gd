@@ -21,6 +21,9 @@ var reticle: CombatReticle
 var banner_label: Label
 var ammo_meter
 var focus_meter
+var focus_backplate: ColorRect
+var focus_icon: TextureRect
+var focus_count_label: Label
 var context_backplate: ColorRect
 var tactical_backplate: ColorRect
 var status_backplate: ColorRect
@@ -56,6 +59,7 @@ var _detail_message_time := 0.0
 var _last_alarm_count := -1
 var _last_cleanup_urgent := false
 var _last_cleanup_tool_signature: Array = []
+var _last_focus_charges := -1
 
 func _init() -> void:
 	layer = 30
@@ -82,6 +86,11 @@ func _ready() -> void:
 	camera_count_label = _make_label(Vector2(39, 5), 5, Color("fff1f7"))
 	alarm_count_icon = _make_icon(Vector2(55, 6), "alert", Color("ffd166"))
 	alarm_count_label = _make_label(Vector2(64, 5), 5, Color("fff1f7"))
+	focus_backplate = _make_pixel_card(Rect2(3, 18, 68, 8), Color("82d8ff"))
+	focus_icon = _make_icon(Vector2(5, 18), "focus", Color("82d8ff"))
+	focus_count_label = _make_label(Vector2(14, 18), 5, Color("e8ffff"))
+	focus_count_label.size = Vector2(14, 7)
+	focus_count_label.text = "x3"
 	cleanup_meter = COMPACT_PROGRESS.new()
 	# Cleanup progress is deliberately a small peripheral gauge. The lower
 	# center is reserved for immediate context actions and must stay clear.
@@ -140,14 +149,14 @@ func _ready() -> void:
 	ammo_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(ammo_meter)
 	focus_meter = COMPACT_PROGRESS.new()
-	focus_meter.position = Vector2(244, 173)
-	focus_meter.size = Vector2(26, 1)
+	focus_meter.position = Vector2(29, 23)
+	focus_meter.size = Vector2(39, 1)
 	focus_meter.max_value = 1.0
 	focus_meter.value = 1.0
 	focus_meter.show_percentage = false
 	focus_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	focus_meter.modulate = Color("82d8ff")
-	focus_meter.visible = false
+	focus_meter.visible = true
 	add_child(focus_meter)
 	combo_label = _make_label(Vector2(273, 6), 6, Color("ff3d78"))
 	combo_label.size = Vector2(43, 8)
@@ -261,12 +270,20 @@ func set_weapon_aim_feedback(state: Dictionary, enabled: bool) -> void:
 	reticle.position = cursor_position - reticle.size * 0.5
 	reticle.set_aim_feedback(state, enabled)
 
-func set_combat_focus(value: float, active: bool) -> void:
+func set_combat_focus(value: float, active: bool, charges := 0, max_charges := 3, recharge_progress := 0.0) -> void:
 	if not is_instance_valid(focus_meter): return
 	var normalized := clampf(value, 0.0, 1.0)
 	focus_meter.value = normalized
-	focus_meter.visible = not _cleanup_mode and (active or normalized < 0.995)
+	focus_meter.visible = not _cleanup_mode
 	focus_meter.modulate = Color("d995ff") if active else Color("82d8ff")
+	focus_count_label.text = "x%d" % clampi(charges, 0, max_charges)
+	focus_count_label.modulate = Color("d995ff") if active else (Color("e8ffff") if charges > 0 else Color("8b7180"))
+	focus_icon.texture = PIXEL_ICONS.make("focus", Color("d995ff") if active else Color("82d8ff"))
+	_set_card_accent(focus_backplate, Color("d995ff") if active else Color("82d8ff"))
+	if charges != _last_focus_charges:
+		_pulse(focus_icon, 1.14)
+		_last_focus_charges = charges
+	if is_instance_valid(reticle): reticle.set_focus_active(active)
 
 func show_banner(text: String, color := Color("73f7e4")) -> void:
 	if not is_instance_valid(banner_label): return
@@ -303,6 +320,10 @@ func set_phase(value: String) -> void:
 	ammo_label.visible = not cleaning
 	ammo_meter.visible = not cleaning
 	focus_meter.visible = false if cleaning else focus_meter.value < 0.995
+	focus_backplate.visible = not cleaning
+	focus_icon.visible = not cleaning
+	focus_count_label.visible = not cleaning
+	focus_meter.visible = not cleaning
 	if not cleaning:
 		status_icon.visible = true
 		status_label.visible = true

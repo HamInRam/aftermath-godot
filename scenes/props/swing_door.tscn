@@ -4,13 +4,13 @@
 [ext_resource path="res://scripts/props/pixel_door_frame.gd" type="Script" id="2_frame"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_panel"]
-size = Vector2(4, 16)
+size = Vector2(4, 24)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_frame"]
 size = Vector2(6, 3)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_hit"]
-size = Vector2(6, 18)
+size = Vector2(6, 26)
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_door"]
 friction = 0.65
@@ -32,7 +32,7 @@ position = Vector2(0, -2)
 shape = SubResource("RectangleShape_frame")
 
 [node name="BottomCollision" type="CollisionShape2D" parent="Frame"]
-position = Vector2(0, 18)
+position = Vector2(0, 26)
 shape = SubResource("RectangleShape_frame")
 
 [node name="TopFrame" type="Polygon2D" parent="Frame"]
@@ -42,7 +42,7 @@ color = Color(0.18, 0.13, 0.2, 1)
 
 [node name="BottomFrame" type="Polygon2D" parent="Frame"]
 visible = false
-polygon = PackedVector2Array(-3, 16, 3, 16, 3, 19, -3, 19)
+polygon = PackedVector2Array(-3, 24, 3, 24, 3, 27, -3, 27)
 color = Color(0.18, 0.13, 0.2, 1)
 
 [node name="Door" type="RigidBody2D" parent="." groups=["swing_door"]]
@@ -58,7 +58,7 @@ angular_damp = 2.6
 script = ExtResource("1_door")
 
 [node name="PanelCollision" type="CollisionShape2D" parent="Door"]
-position = Vector2(0, 8)
+position = Vector2(0, 12)
 shape = SubResource("RectangleShape_panel")
 
 [node name="HitArea" type="Area2D" parent="Door"]
@@ -67,29 +67,29 @@ collision_mask = 6
 monitorable = false
 
 [node name="HitCollision" type="CollisionShape2D" parent="Door/HitArea"]
-position = Vector2(0, 8)
+position = Vector2(0, 12)
 shape = SubResource("RectangleShape_hit")
 
 [node name="FakeShadow" type="Polygon2D" parent="Door"]
 visible = false
 z_index = -1
-polygon = PackedVector2Array(-2, 0, 2, 0, 2, 16, -2, 16)
+polygon = PackedVector2Array(-2, 0, 2, 0, 2, 24, -2, 24)
 color = Color(0.035, 0.02, 0.05, 0.54)
 
 [node name="Panel" type="Polygon2D" parent="Door"]
 visible = false
-polygon = PackedVector2Array(-2, 0, 2, 0, 2, 16, -2, 16)
+polygon = PackedVector2Array(-2, 0, 2, 0, 2, 24, -2, 24)
 color = Color(0.52, 0.25, 0.17, 1)
 
 [node name="Edge" type="Line2D" parent="Door"]
 visible = false
-points = PackedVector2Array(1, 1, 1, 15)
+points = PackedVector2Array(1, 1, 1, 23)
 width = 1.0
 default_color = Color(0.82, 0.48, 0.27, 1)
 
 [node name="Handle" type="Polygon2D" parent="Door"]
 visible = false
-polygon = PackedVector2Array(-1, 13, 1, 13, 1, 15, -1, 15)
+polygon = PackedVector2Array(-1, 21, 1, 21, 1, 23, -1, 23)
 color = Color(0.95, 0.75, 0.3, 1)
 
 [node name="Hinge" type="PinJoint2D" parent="."]

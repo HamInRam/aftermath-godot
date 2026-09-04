@@ -18,6 +18,7 @@ var failures := 0
 
 func _ready() -> void:
 	var signatures := {}
+	var acoustic_identities := {}
 	for mission_id: String in MISSIONS:
 		var packed := load(MISSIONS[mission_id]) as PackedScene
 		_expect(packed != null, "%s should load" % mission_id)
@@ -28,12 +29,25 @@ func _ready() -> void:
 		await get_tree().process_frame
 		var world := level.get_node("TileMap") as TileWorld
 		_expect(world.layout_variant == mission_id, "%s must use its own authored topology" % mission_id)
+		var acoustic_profile: Dictionary = world.get_acoustic_profile()
+		var acoustic_identity := str(acoustic_profile.get("identity", ""))
+		_expect(not acoustic_identity.is_empty(), "%s needs an authored acoustic identity" % mission_id)
+		_expect(not acoustic_identities.has(acoustic_identity), "%s should not reuse another mission's acoustic identity" % mission_id)
+		acoustic_identities[acoustic_identity] = mission_id
+		_expect(world.acoustic_sector_count >= 2, "%s needs room-scale acoustic sectors rather than one global hearing space" % mission_id)
+		_expect(world.acoustic_portals.size() >= 1, "%s needs at least one authored sound portal" % mission_id)
+		var first_portal: Dictionary = world.acoustic_portals[0]
+		var acoustic_route: Dictionary = world._find_acoustic_route(str(first_portal.a), str(first_portal.b), acoustic_profile)
+		_expect(int(acoustic_route.get("hops", 0)) >= 1 and float(acoustic_route.get("cost", 0.0)) > 0.0, "%s acoustic portals must attenuate sound between room sectors" % mission_id)
 		var building_rect := world.get_building_world_rect()
 		_expect(not building_rect.has_point(level.player.global_position), "%s should begin on a readable exterior approach by default" % mission_id)
 		_expect(world.get_tactical_room_id(level.player.global_position) == "exterior_approach", "%s exterior spawn needs an explicit tactical room identity" % mission_id)
 		var visible_world: Vector2 = Vector2(320.0, 180.0) / Vector2(level.trauma_camera.zoom)
 		_expect(visible_world.x < building_rect.size.x and visible_world.y < building_rect.size.y, "%s camera should reveal a local room cluster, not the complete building" % mission_id)
 		_expect(level.started_enemy_count >= 7 and level.started_enemy_count <= 11, "%s should use a readable 7-11 enemy encounter budget instead of crowding rooms (%d)" % [mission_id, level.started_enemy_count])
+		_expect(not level.fixed_sentry_indices.is_empty(), "%s needs at least one fixed room defender to resist full-map baiting" % mission_id)
+		for sentry_index: int in level.fixed_sentry_indices:
+			_expect(sentry_index >= 0 and sentry_index < level.started_enemy_count, "%s fixed sentry index %d must address a real enemy" % [mission_id, sentry_index])
 		var authored_archetypes: Dictionary = {}
 		for enemy_type in level.enemy_types: authored_archetypes[str(enemy_type)] = true
 		_expect(authored_archetypes.size() >= 3, "%s should create difficulty through mixed enemy roles rather than raw headcount" % mission_id)
@@ -69,17 +83,40 @@ func _ready() -> void:
 		_expect(not signatures.has(signature), "%s must not reuse another mission's wall topology" % mission_id)
 		signatures[signature] = mission_id
 		_expect(world.is_navigation_position_walkable(level.player.global_position), "%s player spawn must resolve to walkable floor" % mission_id)
+		var door_specs: Array[Dictionary] = world.get_door_specs()
+		var exterior_passage: Vector2 = door_specs[-1].passage_center if not door_specs.is_empty() else Vector2.INF
 		for enemy in level.get_node("Enemies").get_children():
 			_expect(world.is_navigation_position_walkable(enemy.global_position), "%s enemy spawn must resolve to walkable floor" % mission_id)
 			var route := world.get_navigation_path(level.player.global_position, enemy.global_position)
 			_expect(not route.is_empty() or level.player.global_position.distance_to(enemy.global_position) < 8.0, "%s must connect every enemy room to the player route" % mission_id)
+			var to_player: Vector2 = level.player.global_position - enemy.global_position
+			_expect(not enemy._can_see_player(to_player.length(), to_player), "%s must not give an enemy direct sight of the motionless exterior spawn" % mission_id)
+			for waypoint: Vector2 in enemy.patrol_waypoints:
+				_expect(waypoint.distance_to(exterior_passage) >= 20.0, "%s patrol routes must not automatically open or camp the exterior threshold" % mission_id)
+			if enemy.patrol_waypoints.size() >= 2:
+				var initial_heading: float = enemy.patrol_waypoints[0].direction_to(enemy.patrol_waypoints[1]).angle()
+				_expect(absf(angle_difference(enemy.rotation, initial_heading)) < 0.01, "%s patrol actors must initially face their authored route" % mission_id)
 		for spec: Dictionary in world.get_door_specs():
 			var passage_center: Vector2 = spec.passage_center
 			var opening_cell: Vector2i = spec.opening_cell
 			var leaf_step := Vector2i(0, 1) if absf(float(spec.rotation)) < 0.1 else Vector2i(1, 0)
 			_expect(world.is_navigation_position_walkable(passage_center), "%s door centre must remain on navigable floor" % mission_id)
-			_expect(not world.path_grid.is_point_solid(opening_cell), "%s door hinge-side cell must be open" % mission_id)
-			_expect(not world.path_grid.is_point_solid(opening_cell + leaf_step), "%s door far-side cell must be open" % mission_id)
+			for leaf_index in range(TileWorld.DOOR_CELL_SPAN):
+				_expect(not world.path_grid.is_point_solid(opening_cell + leaf_step * leaf_index), "%s door cell %d must be open" % [mission_id, leaf_index])
+			_expect(world.wall_layer.get_cell_source_id(opening_cell - leaf_step) >= 0, "%s door hinge must terminate against a wall instead of floating" % mission_id)
+			_expect(world.wall_layer.get_cell_source_id(opening_cell + leaf_step * TileWorld.DOOR_CELL_SPAN) >= 0, "%s door latch side must terminate against a wall instead of floating" % mission_id)
+		if mission_id == "sandwich_shop":
+			var hounds := level.get_node("Enemies").get_children().filter(func(enemy: Node) -> bool: return str(enemy.actor_type) == "dog")
+			_expect(hounds.size() == 1, "sandwich_shop should retain one authored hound encounter")
+			for hound in hounds:
+				for waypoint: Vector2 in hound.patrol_waypoints:
+					_expect(world.get_tactical_room_id(waypoint) == "kitchen", "sandwich_shop hound patrol must remain inside the kitchen")
+			# Exercise real AI/physics time: a player who provides no input and makes
+			# no noise must receive a genuine arrival/read phase before breaching.
+			for frame in 150: await get_tree().physics_frame
+			for enemy in level.get_node("Enemies").get_children():
+				_expect(enemy.state not in [enemy.State.CHASE, enemy.State.ATTACK], "sandwich_shop enemies must not acquire a motionless exterior arrival")
+			_expect(not level.player.is_dead, "sandwich_shop exterior arrival must survive without player input")
 		_expect(world.get_door_specs().size() >= 4 and world.get_door_specs().size() <= 7, "%s should combine one exterior threshold with a legible interior doorway budget" % mission_id)
 		_expect(world.get_children().filter(func(child: Node) -> bool: return child is DestructibleProp and child.prop_kind == "sink").size() >= 1, "%s needs a reachable cleanup rinse point" % mission_id)
 		if level.mission_profile != null and level.mission_profile.required_security_shutdowns > 0:
@@ -88,6 +125,7 @@ func _ready() -> void:
 		level.queue_free()
 		await get_tree().process_frame
 	_expect(signatures.size() == MISSIONS.size(), "all redesigned campaign maps need unique topology signatures")
+	_expect(acoustic_identities.size() == MISSIONS.size(), "all campaign maps need distinct acoustic gameplay identities")
 	if failures == 0: print("campaign map identity regression: PASS")
 	get_tree().quit(failures)
 

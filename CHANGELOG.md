@@ -1,5 +1,21 @@
 # Changelog
 
+## [v1.2.9] - Tactical Sites & Unified Pixel Feedback
+
+- Relocated the Sandwich Shop hound from the exterior-wall staging strip into the kitchen and reversed its patrol away from the public entrance.
+- Initialized every moving patrol actor from its first authored route heading, removing the one-frame east-facing pose that could accidentally expose a new arrival.
+- Extended campaign-map regression coverage to reject direct hostile sight on a stationary exterior spawn, patrol waypoints within the exterior threshold buffer and mismatched initial headings.
+- Rebuilt firearm hearing around room-scale acoustic sectors connected by live doors and windows. Weapon-specific sound now attenuates through architecture instead of alerting an entire map by radius alone.
+- Added incident coalescing, limited push/sweep responders, passive orientation, authored fixed sentries and delayed corpse radio reports so repeated shots no longer recruit the whole floor or reveal an exact player position.
+- Added first-casualty fatal-funnel memory, alternate-door flanking, containment behavior and one-actor doorway reservations to prevent enemies from feeding through a single camped threshold.
+- Gave all twelve campaign sites distinct acoustic identities and corrected every fixed-sentry index so music, machinery, glass, exterior echo and security coordination change encounter flow by venue.
+- Stabilized the enlarged 24-pixel physical doors around a fixed frame-space portal, preserving sound, navigation and AI staging coordinates after the leaf rotates open.
+- Unified live and dropped weapons through compact one-pixel procedural silhouettes, improved golden projectile readability and retained per-weapon aim, recoil, spread and impact feedback.
+- Refined full-life actor and corpse physics with restrained weapon-scaled impulses, clearer body loss, wall-safe settling and consistent top-down pixel presentation for players, enemies and hounds.
+- Expanded sparse pixel blood and environmental-liquid behavior while preserving runtime budgets, physical pressure-washer packets, dilution, electrical surface feedback and continuous mop strokes.
+- Tightened corpse bagging, dropped-weapon visibility, destructible glass state, restoration interactions, compact HUD feedback and accessibility/menu layout behavior.
+- Expanded regression coverage across acoustics, tactical roles, doorway traffic, campaign identities, projectiles, ragdolls, blood, liquids, cleanup, destruction and UI; all 43 project test scenes pass.
+
 ## [v1.2.8] - Responsive Hostile-Local Focus
 
 - Replaced global `Engine.time_scale` Focus with local hostile simulation scaling, keeping player movement, aiming, reticle feedback, camera interpolation and UI at full responsiveness.

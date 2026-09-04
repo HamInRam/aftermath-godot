@@ -38,6 +38,16 @@ func _verify_mission_doors(mission_id: String, scene_path: String) -> void:
 	var specs: Array[Dictionary] = level.get_node("TileMap").get_door_specs()
 	var doors := level.get_node("Doors").get_children().filter(func(door: Node) -> bool: return is_instance_valid(door) and not door.is_queued_for_deletion())
 	_expect(doors.size() == specs.size(), "%s must instantiate every authored door" % mission_id)
+	if not doors.is_empty() and level.get_node("Enemies").get_child_count() > 0:
+		var traffic_door := (doors[0] as Node2D).get_node("Door") as SwingDoor
+		var traffic_actor := level.get_node("Enemies").get_child(0) as Node2D
+		var traffic_center := traffic_door.get_acoustic_center()
+		player.global_position = traffic_center + Vector2(10.0, 0.0)
+		traffic_actor.global_position = traffic_center + Vector2(-10.0, 0.0)
+		_expect(traffic_door.request_passage(player), "%s first doorway entrant should reserve the threshold" % mission_id)
+		_expect(not traffic_door.request_passage(traffic_actor), "%s doorway should reject a second simultaneous entrant" % mission_id)
+		player.global_position = traffic_center + Vector2(48.0, 0.0)
+		_expect(traffic_door.request_passage(traffic_actor), "%s doorway reservation should release after its owner clears the threshold" % mission_id)
 	for index in range(mini(doors.size(), specs.size())):
 		var root := doors[index] as Node2D
 		var panel := root.get_node("Door") as SwingDoor
@@ -56,7 +66,9 @@ func _verify_mission_doors(mission_id: String, scene_path: String) -> void:
 			var collision := player.move_and_collide(normal * (80.0 / 60.0))
 			if collision != null:
 				var collider = collision.get_collider()
-				last_blocker = "%s:%s" % [collider.name, collider.get_class()]
+				last_blocker = "%s:%s:%s" % [collider.name, collider.get_class(), collider.get_path()]
+				if collider is Node2D:
+					last_blocker += "@%s" % str((collider as Node2D).global_position)
 		var crossed := (player.global_position - passage_center).dot(normal)
 		_expect(crossed > 7.0, "%s door %d must allow the real player collider through after opening (%.1fpx, blocker %s)" % [mission_id, index, crossed, last_blocker])
 	level.queue_free()

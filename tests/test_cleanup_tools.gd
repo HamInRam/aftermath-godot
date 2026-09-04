@@ -25,6 +25,10 @@ func _run() -> void:
 	var corpse = CORPSE_SCENE.instantiate()
 	add_child(corpse)
 	corpse.global_position = Vector2(10, 0)
+	_expect(player.get_nearby_draggable_corpse() == corpse, "nearby corpse should be discoverable for packaging")
+	corpse.global_position = Vector2(28, 0)
+	_expect(player.get_nearby_draggable_corpse() == corpse, "corpse interaction must include hand reach when a wall or fixture prevents touching its root pivot")
+	corpse.global_position = Vector2(10, 0)
 	_expect(player.select_cleanup_tool("mop") and player.get_cleanup_efficiency("blood_pool") >= 4, "mop should clear ordinary blood in a few deliberate passes")
 	player.rotation = 0.0
 	var near_mop_contact: Vector2 = player.get_cleanup_contact_position(Vector2(18, 0))
@@ -56,14 +60,14 @@ func _run() -> void:
 	var base_washer_efficiency: int = int(player.get_cleanup_efficiency("blood_pool"))
 	_expect(str(focused_washer_profile.mode) == "NARROW" and str(wide_washer_profile.mode) == "WIDE", "washer aim distance should switch between readable narrow and wide modes")
 	_expect(float(focused_washer_profile.radius) < float(wide_washer_profile.radius) and float(focused_washer_profile.power) > float(wide_washer_profile.power), "near washer spray should be narrow and strong while far spray is broad and weaker")
-	_expect(base_washer_efficiency >= 12, "the stock pressure washer must feel decisive before any upgrade")
+	_expect(base_washer_efficiency >= 15, "the stock pressure washer must feel decisive before any upgrade")
 	_expect(player.get_cleanup_efficiency("gore") == 0, "pressure water must not replace the mop for solid biological matter")
 	Progression.data.upgrades["pressure_washer"] = 1
 	_expect(player.get_cleanup_efficiency("blood_pool") == base_washer_efficiency + 3, "washer level one should add meaningful pump pressure")
 	Progression.data.upgrades["pressure_washer"] = 2
 	_expect(float(player.get_cleanup_stroke_profile(36.0).radius) >= float(wide_washer_profile.radius) * 1.19, "washer level two should widen the broad nozzle by twenty percent")
 	Progression.data.upgrades["pressure_washer"] = 3
-	_expect(player.get_cleanup_efficiency("blood_pool") == base_washer_efficiency + 9, "washer level three should reach its intended power twenty-one baseline")
+	_expect(player.get_cleanup_efficiency("blood_pool") == base_washer_efficiency + 9, "washer level three should preserve the full nine-point upgrade gain")
 	Progression.data.upgrades["pressure_washer"] = previous_washer_upgrade
 	_expect(is_zero_approx(player.get_cleanup_flow_ratio()), "switching away from the mop should reset its FLOW chain")
 	_expect(player.select_cleanup_tool("evidence_bag") and player.get_cleanup_efficiency("shell") == 3, "evidence bag should collect small evidence efficiently")
@@ -94,6 +98,9 @@ func _run() -> void:
 	await get_tree().process_frame
 	_expect(player.visual_mop_saturation < dirty_visual_before_rinse, "rinsing should animate the mop back toward its clean color")
 	_expect(corpse.apply_cleanup_tool("body_bag") and corpse.is_bagged(), "one deliberate body-bag action should seal the corpse without redundant confirmation presses")
+	var sealed_shape := corpse.get_node("CollisionShape2D").shape as RectangleShape2D
+	_expect(sealed_shape.size.is_equal_approx(Vector2(23, 7)), "a sealed body bag should use a compact human-length inset collider instead of an oversized evidence box")
+	_expect((corpse.get_node("FakeShadow") as Polygon2D).polygon.size() >= 8, "the bag shadow should follow its tapered silhouette rather than remain a short rectangle")
 	_expect(not player.select_cleanup_tool("invalid"), "unknown cleanup tools should be rejected")
 	_expect(player.attempt_corpse_drag(), "nearby corpse should be draggable during cleanup")
 	_expect(corpse.is_being_dragged() and player.dragged_corpse == corpse, "drag state should be shared by player and corpse")

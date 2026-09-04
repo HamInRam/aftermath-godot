@@ -28,7 +28,7 @@ static func get_sfx(effect_id: String) -> AudioStreamWAV:
 	return stream
 
 static func _build_sfx(effect_id: String) -> AudioStreamWAV:
-	var duration := 0.48 if effect_id == "shotgun_shot" else (0.32 if effect_id == "area_clean" else (0.22 if effect_id.begins_with("impact_") else 0.34))
+	var duration := 0.48 if effect_id == "shotgun_shot" else (0.32 if effect_id == "area_clean" else (0.18 if effect_id == "focus_enter" else (0.22 if effect_id.begins_with("impact_") else 0.34)))
 	var sample_count := roundi(MIX_RATE * duration)
 	var bytes := PackedByteArray()
 	bytes.resize(sample_count * 2)
@@ -45,6 +45,10 @@ static func _build_sfx(effect_id: String) -> AudioStreamWAV:
 			var body := sin(TAU * (72.0 - progress * 34.0) * time) * exp(-progress * 10.0)
 			var crack := rng.randf_range(-1.0, 1.0) * exp(-progress * 24.0)
 			sample = blast * 0.68 + body * 0.5 + crack * 0.34
+		elif effect_id == "focus_enter":
+			var envelope := sin(clampf(progress, 0.0, 1.0) * PI) * (1.0 - progress * 0.35)
+			var sweep := lerpf(260.0, 720.0, progress)
+			sample = (sin(TAU * sweep * time) * 0.28 + sin(TAU * sweep * 0.5 * time) * 0.16) * envelope
 		elif effect_id == "area_clean":
 			var note := 440.0 if progress < 0.48 else 659.25
 			var local_phase := progress / 0.48 if progress < 0.48 else (progress - 0.48) / 0.52

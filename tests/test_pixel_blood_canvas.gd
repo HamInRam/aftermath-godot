@@ -32,6 +32,17 @@ func _ready() -> void:
 	_expect(int(canvas.get_blood_amount(Vector2(36, 40))) < before_middle, "continuous brush must clean between cursor samples")
 	_expect(int(canvas.get_blood_amount(Vector2(52, 40))) < before_end, "continuous brush must clean its ending pixel")
 	_expect(int(canvas.get_wetness(Vector2(36, 40))) > 0, "cleaned pixels should retain a temporary wet trail")
+	var mop_comparison := Vector2(62, 40)
+	var washer_comparison := Vector2(66, 40)
+	canvas.add_blood_pixel(mop_comparison, 220)
+	canvas.add_blood_pixel(washer_comparison, 220)
+	var mop_before := int(canvas.get_blood_amount(mop_comparison))
+	var washer_before := int(canvas.get_blood_amount(washer_comparison))
+	canvas.clean_stroke(mop_comparison, mop_comparison, 0.4, 4, "mop")
+	canvas.pressure_wash_at(washer_comparison, 0.4, 18, Vector2.RIGHT, 0)
+	var mop_removed := mop_before - int(canvas.get_blood_amount(mop_comparison))
+	var washer_removed := washer_before - int(canvas.get_blood_amount(washer_comparison))
+	_expect(washer_removed > mop_removed, "a stock focused pressure impact should remove more liquid blood than one ordinary mop sample")
 	# Repeated mopping removes visible blood but leaves a faint UV-only forensic
 	# channel. The washer can then clear that residue without spawning new blood.
 	for pass_index in range(6): canvas.clean_stroke(Vector2(20, 40), Vector2(52, 40), 2.0, 8, "mop")

@@ -28,6 +28,7 @@ func _run() -> void:
 	_expect(enemies[1].search_points[0] != enemies[2].search_points[0], "left and right responders need distinct search points")
 	_expect(enemies[1].search_points[0] != Vector2.ZERO and enemies[2].search_points[0] != Vector2.ZERO, "responders must not stack on the corpse")
 	_expect(enemies[1].alert_level == enemies[1].AlertLevel.ALERT, "corpse response should raise full alert")
+	_expect(enemies[4].alert_level == enemies[4].AlertLevel.SUSPICIOUS, "passive observers should become suspicious without receiving exact combat knowledge")
 	var patrol := PackedVector2Array([Vector2(80, 20), Vector2(120, 20)])
 	enemies[1].configure_patrol(patrol)
 	enemies[1]._finish_search()
@@ -36,12 +37,12 @@ func _run() -> void:
 	enemies[1].global_position = enemies[1].return_target
 	enemies[1]._update_return_to_patrol(0.1)
 	_expect(enemies[1].state == enemies[1].State.IDLE, "arriving at the route should resume patrol")
-	enemies[4].alert_memory_time = 0.0
-	enemies[4]._update_alert_memory(0.1)
-	_expect(enemies[4].alert_level == enemies[4].AlertLevel.SUSPICIOUS, "expired full alert should decay to suspicious")
-	enemies[4].alert_memory_time = 0.0
-	enemies[4]._update_alert_memory(0.1)
-	_expect(enemies[4].alert_level == enemies[4].AlertLevel.NORMAL, "suspicion should eventually return to normal")
+	enemies[1].alert_memory_time = 0.0
+	enemies[1]._update_alert_memory(0.1)
+	_expect(enemies[1].alert_level == enemies[1].AlertLevel.SUSPICIOUS, "expired full alert should decay to suspicious")
+	enemies[1].alert_memory_time = 0.0
+	enemies[1]._update_alert_memory(0.1)
+	_expect(enemies[1].alert_level == enemies[1].AlertLevel.NORMAL, "suspicion should eventually return to normal")
 	CombatDirector.reset_kill_zones()
 	_expect(CombatDirector.request_fire_token(enemies[1]), "first ready gunner should receive a firing token")
 	_expect(not CombatDirector.request_fire_token(enemies[2]), "same-frame gunners should be staggered instead of forming an instant firing squad")

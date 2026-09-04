@@ -115,6 +115,8 @@ var tactical_player_anchor := Vector2.ZERO
 var tactical_decision_cooldown := 0.0
 var weapon_pickup_target: Node2D
 var weapon_pickup_scan_time := 0.0
+var pending_incident_report_position := Vector2.INF
+var pending_incident_report_direction := Vector2.RIGHT
 var archetype_id := "gunner"
 var default_weapon_id := ""
 var attack_windup_multiplier := 1.0
@@ -184,7 +186,7 @@ func _physics_process(delta: float) -> void:
 		previous_visual_state = state
 		queue_redraw()
 	_update_alert_memory(delta)
-	if tactical_role == "guard" and guard_alert_time <= 0.0: tactical_role = "none"
+	if tactical_role in ["guard", "orient", "observe"] and guard_alert_time <= 0.0: tactical_role = "none"
 	# The root only draws static compatibility/debug marks. State changes and
 	# explicit hit events request redraws; ordinary AI ticks do not need one.
 	if is_dead or not is_instance_valid(player) or player.is_dead:
@@ -332,6 +334,29 @@ func _physics_process(delta: float) -> void:
 		while not path_points.is_empty() and global_position.distance_to(path_points[0]) < 5.0:
 			path_points.remove_at(0)
 		if not path_points.is_empty(): direction = global_position.direction_to(path_points[0])
+	# Doorways are tactical resources, not infinitely wide path nodes. One actor
+	# owns a threshold at a time; followers stage beside it, and a doorway where a
+	# casualty was just reported becomes a containment line instead of a queue.
+	var passage: Dictionary = CombatDirector.get_door_passage_directive(self, direction)
+	if not bool(passage.get("allowed", true)):
+		var staging: Vector2 = passage.get("staging", global_position)
+		var to_staging := staging - global_position
+		if to_staging.length() > 3.0:
+			velocity = to_staging.normalized() * move_speed * 0.58
+		else:
+			velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
+		var facing_target := player.global_position if has_visual_contact else target_position
+		rotation = lerp_angle(rotation, global_position.direction_to(facing_target).angle(), 1.0 - exp(-8.0 * delta))
+		var staged_velocity := velocity
+		move_and_slide()
+		push_contact_bodies(staged_velocity)
+		_update_movement_progress(delta, to_staging.length() > 3.0)
+		if str(passage.get("reason", "")) == "fatal_funnel":
+			tactical_role = "guard"
+			guard_alert_time = maxf(guard_alert_time, 4.0)
+			if state == State.CHASE and has_visual_contact and enemy_type == "gunner" and distance <= shoot_range and _has_clear_shot():
+				_begin_attack()
+		return
 	if state == State.CHASE:
 		var holds_position := is_fixed_sentry or tactical_role == "guard" or tactical_move_mode == "at_peek"
 		var tactical_distance := distance if has_visual_contact else target_distance
@@ -365,7 +390,7 @@ func _physics_process(delta: float) -> void:
 			_begin_attack()
 
 func _update_patrol(delta: float) -> void:
-	if tactical_role == "guard" and guard_alert_time > 0.0:
+	if tactical_role in ["guard", "orient", "observe"] and guard_alert_time > 0.0:
 		velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
 		move_and_slide()
 		rotation = lerp_angle(rotation, guard_facing, 1.0 - exp(-8.0 * delta))
@@ -421,7 +446,16 @@ func configure_patrol(points: PackedVector2Array) -> void:
 	path_points.clear()
 	path_refresh = 0.0
 	_reset_movement_progress()
-	if not points.is_empty(): home_position = points[0]
+	if not points.is_empty():
+		home_position = points[0]
+	# Patrol routes are authored as encounter-facing information. Initializing
+	# every actor at rotation zero made guards briefly face east regardless of
+	# their route, which could expose an exterior spawn before the first movement
+	# update. Face the first real leg immediately and use it as the sentry base.
+	if points.size() >= 2 and points[0].distance_squared_to(points[1]) > 0.01:
+		rotation = points[0].direction_to(points[1]).angle()
+		sentry_base_rotation = rotation
+		sentry_target_rotation = rotation
 
 func configure_combat(type_name: String) -> void:
 	var profile := EnemyCatalog.get_profile(type_name)
@@ -666,7 +700,10 @@ func _scan_for_corpses(delta: float) -> void:
 		claimed_corpse = corpse_node
 		_raise_alert(AlertLevel.ALERT, alert_memory_duration)
 		_begin_investigation(corpse_node.global_position, 0.78, true)
-		Events.publish_tactical_alert(corpse_node.global_position, Vector2.RIGHT.rotated(corpse_node.rotation), "corpse", self)
+		# This guard reacts immediately, but the rest of the building only learns
+		# about the casualty after the body has actually been reached and verified.
+		pending_incident_report_position = corpse_node.global_position
+		pending_incident_report_direction = Vector2.RIGHT.rotated(corpse_node.rotation)
 		return
 	_scan_for_blood_clue()
 
@@ -847,18 +884,26 @@ func _update_return_to_patrol(delta: float) -> void:
 func _complete_corpse_investigation() -> void:
 	if not is_instance_valid(claimed_corpse):
 		claimed_corpse = null
+		pending_incident_report_position = Vector2.INF
 		return
+	var report_position := pending_incident_report_position
+	var report_direction := pending_incident_report_direction
 	if claimed_corpse.has_method("complete_investigation"):
 		claimed_corpse.complete_investigation(self)
 	claimed_corpse = null
+	if report_position != Vector2.INF:
+		Events.publish_tactical_alert(report_position, report_direction, "radio_corpse", self)
+	pending_incident_report_position = Vector2.INF
 
 func _release_corpse_claim() -> void:
 	if not is_instance_valid(claimed_corpse):
 		claimed_corpse = null
+		pending_incident_report_position = Vector2.INF
 		return
 	if claimed_corpse.has_method("release_investigation"):
 		claimed_corpse.release_investigation(self)
 	claimed_corpse = null
+	pending_incident_report_position = Vector2.INF
 
 func _reset_movement_progress() -> void:
 	progress_anchor = global_position
@@ -912,42 +957,56 @@ func get_noise_response_priority(world_position: Vector2, radius: float) -> floa
 	var response := evaluate_noise_response(world_position, radius)
 	return float(response.priority) if bool(response.eligible) else INF
 
-func evaluate_noise_response(world_position: Vector2, radius: float) -> Dictionary:
+func evaluate_noise_response(world_position: Vector2, radius: float, source_kind := "generic") -> Dictionary:
 	if is_dead or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
 		return {"eligible": false, "priority": INF, "occluded": false}
+	if is_instance_valid(tile_world) and tile_world.has_method("evaluate_acoustic_response"):
+		return tile_world.evaluate_acoustic_response(global_position, world_position, radius, source_kind)
 	return EnemyPerception.evaluate_noise(self, world_position, radius, 32)
 
 func receive_combat_noise(world_position: Vector2, radius: float, _source_kind: String, role: String) -> bool:
-	return receive_combat_noise_result(world_position, radius, _source_kind, role, evaluate_noise_response(world_position, radius))
+	return receive_combat_noise_result(world_position, radius, _source_kind, role, evaluate_noise_response(world_position, radius, _source_kind))
 
 func receive_combat_noise_result(world_position: Vector2, radius: float, _source_kind: String, role: String, response: Dictionary) -> bool:
 	if not bool(response.get("eligible", false)): return false
 	var effective_distance := float(response.priority)
 	tactical_role = role
-	_raise_alert(AlertLevel.ALERT if _source_kind == "gunshot" else AlertLevel.SUSPICIOUS, alert_memory_duration if _source_kind == "gunshot" else suspicious_memory_duration)
-	if role == "guard":
-		guard_alert_time = 3.5
+	# A heard weapon is evidence, not an exact player reveal. Visual contact or a
+	# verified radio report is required before full combat alert begins.
+	_raise_alert(AlertLevel.SUSPICIOUS, suspicious_memory_duration + (1.5 if _is_gunshot_source(_source_kind) else 0.0))
+	if role in ["guard", "orient", "observe"]:
+		guard_alert_time = 4.0 if role == "guard" else (1.65 if role == "orient" else 2.4)
 		guard_facing = global_position.direction_to(world_position).angle()
-		alertness = maxf(alertness, 0.48)
+		alertness = maxf(alertness, 0.52 if role == "guard" else 0.38)
+		if state not in [State.CHASE, State.ATTACK]:
+			state = State.IDLE
+			path_points.clear()
 		queue_redraw()
 		return true
 	var occluded := bool(response.get("occluded", false))
 	var distance_ratio := clampf(effective_distance / maxf(radius, 1.0), 0.0, 1.0)
 	var uncertainty := lerpf(2.0, 15.0, distance_ratio) + (9.0 if occluded else 0.0)
 	var perceived_position := world_position + Vector2.RIGHT.rotated(randf_range(0.0, TAU)) * randf_range(0.0, uncertainty)
-	if role == "sweep":
+	if role in ["sweep", "sweep_left", "sweep_right"]:
 		var approach := global_position.direction_to(world_position)
-		perceived_position += approach.rotated(PI * 0.5 * strafe_sign) * search_radius * 1.4
+		var sweep_sign := -1.0 if role == "sweep_left" else (1.0 if role == "sweep_right" else strafe_sign)
+		perceived_position += approach.rotated(PI * 0.5 * sweep_sign) * search_radius * 1.4
 	if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable"):
 		if not tile_world.is_navigation_position_walkable(perceived_position): perceived_position = world_position
 	_begin_investigation(perceived_position, 0.55)
-	var urgency := 0.65 if _source_kind == "gunshot" else 1.0
+	var urgency := 0.65 if _is_gunshot_source(_source_kind) else 1.0
 	noise_reaction_delay = (0.04 + distance_ratio * 0.20 + (0.12 if occluded else 0.0)) * urgency
 	return true
 
-func evaluate_tactical_assignment(world_position: Vector2) -> Dictionary:
+func evaluate_tactical_assignment(world_position: Vector2, source_kind := "generic") -> Dictionary:
 	if is_dead or is_instance_valid(claimed_corpse) or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
 		return {"eligible": false, "priority": INF}
+	if source_kind not in ["security_alarm", "security_camera"] and is_instance_valid(tile_world) and tile_world.has_method("evaluate_acoustic_response"):
+		var tactical_radius := 220.0 if source_kind in ["ambush", "radio_corpse", "corpse"] else 150.0
+		var propagation_kind := "radio_corpse" if source_kind in ["ambush", "corpse"] else source_kind
+		var response: Dictionary = tile_world.evaluate_acoustic_response(global_position, world_position, tactical_radius, propagation_kind)
+		if not bool(response.get("eligible", false)): return {"eligible": false, "priority": INF}
+		return response
 	return {"eligible": true, "priority": global_position.distance_to(world_position)}
 
 func get_tactical_room_id() -> String:
@@ -956,10 +1015,13 @@ func get_tactical_room_id() -> String:
 	return "open_floor"
 
 func receive_tactical_assignment(world_position: Vector2, likely_direction: Vector2, _source_kind: String, role: String) -> bool:
-	var response := evaluate_tactical_assignment(world_position)
+	var response := evaluate_tactical_assignment(world_position, _source_kind)
 	if not bool(response.get("eligible", false)): return false
-	_raise_alert(AlertLevel.ALERT, alert_memory_duration)
 	tactical_role = role
+	if role in ["guard", "observe", "orient"]:
+		_raise_alert(AlertLevel.SUSPICIOUS, suspicious_memory_duration + 2.0)
+	else:
+		_raise_alert(AlertLevel.ALERT, alert_memory_duration)
 	if _source_kind == "ambush" and role in ["sweep_left", "sweep_right"]:
 		var safe_approach := CombatDirector.get_safe_ambush_approach(world_position, global_position, role)
 		if safe_approach != Vector2.INF:
@@ -977,10 +1039,17 @@ func receive_tactical_assignment(world_position: Vector2, likely_direction: Vect
 			state = State.IDLE
 			path_points.clear()
 		"observe":
+			guard_alert_time = 3.0
 			if state == State.IDLE:
 				guard_facing = global_position.direction_to(world_position).angle()
+		"orient":
+			guard_alert_time = 1.8
+			guard_facing = global_position.direction_to(world_position).angle()
 	queue_redraw()
 	return true
+
+func _is_gunshot_source(source_kind: String) -> bool:
+	return source_kind.contains("gunshot")
 
 func _raise_alert(level: AlertLevel, duration: float) -> void:
 	var previous_level := alert_level

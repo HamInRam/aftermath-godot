@@ -1,6 +1,9 @@
 class_name PixelBloodCanvas
 extends Node2D
 
+const PRESSURE_WASH_REMOVAL_SCALE := 4.8
+const PRESSURE_WASH_LEVEL_BONUS := 0.35
+
 signal cleaning_layer_changed(world_position: Vector2, layer: String, progress: float)
 signal cleaning_region_completed(world_position: Vector2)
 
@@ -478,8 +481,13 @@ func pressure_wash_at(world_position: Vector2, brush_radius: float, power: int, 
 			var edge_loss := 0.40 if washer_level >= 2 else 0.58
 			var falloff := 1.0 - clampf(distance / maxf(1.0, brush_radius), 0.0, 1.0) * edge_loss
 			var residue_bonus := 1.5 if washer_level >= 3 and int(touched_chunks[chunk_id].before) <= 2 else 1.0
-			var lifted := chunk.apply_external_water(local, clampi(roundi(42.0 * falloff), 15, 42))
-			var washed := chunk.clean_local_pixel(local, maxi(1, roundi(float(power) * 1.05 * falloff * residue_bonus)), "pressure_washer")
+			var lifted := chunk.apply_external_water(local, clampi(roundi(56.0 * falloff), 20, 56))
+			# Pressure packets arrive less often than a continuous mop capsule. Each
+			# physical impact therefore needs enough hydraulic removal to make the
+			# stock washer decisively stronger on liquid stains, while its wide nozzle
+			# still trades focused power for coverage.
+			var hydraulic_scale := PRESSURE_WASH_REMOVAL_SCALE + float(washer_level) * PRESSURE_WASH_LEVEL_BONUS
+			var washed := chunk.clean_local_pixel(local, maxi(1, roundi(float(power) * hydraulic_scale * falloff * residue_bonus)), "pressure_washer")
 			lifted_total += lifted
 			cleaned = cleaned or lifted > 0 or washed > 0
 	if evidence_layer == "ground" and lifted_total > 0:

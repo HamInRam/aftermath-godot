@@ -44,5 +44,5 @@ muzzle_flash_size = 28.0
 muzzle_flash_duration = 0.045
 bullet_speed = 650.0
 knockback = 26.0
-hearing_radius = 190.0
+hearing_radius = 155.0
 hit_stop = 0.035

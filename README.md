@@ -2,6 +2,18 @@
 
 An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
 
+## v1.2.9 tactical sites and unified pixel feedback
+
+- Moved the Sandwich Shop hound and its patrol deeper into the kitchen so a motionless player is not attacked from the exterior arrival point.
+- Patrol actors now face the first authored route leg immediately instead of briefly inheriting an arbitrary east-facing orientation.
+- Campaign regressions now reject direct hostile sight on an exterior spawn, patrol points that camp the exterior threshold and incorrect initial patrol headings.
+- Gunfire now travels through authored room sectors, doors and windows with venue-specific attenuation instead of waking an entire level through one global radius.
+- A small response team investigates while fixed sentries and passive guards retain room control; repeated shots merge into one incident and enemy fire cannot recursively summon another wave.
+- The first doorway casualty marks a temporary fatal funnel. Responders contain, stage, reserve narrow thresholds or use another entrance instead of walking into the same ambush one by one.
+- All twelve sites now carry a distinct acoustic/response profile, from nightclub music masking and cold-storage machinery to penthouse glass transmission and coordinated police/broadcast searches.
+- Enlarged doors keep a fixed portal coordinate after opening, while compact procedural weapons, readable bullets, top-down ragdolls, sparse blood/liquids, pressure washing and restoration feedback share the same one-pixel visual language.
+- The current build is protected by 43 Godot regression scenes covering the complete combat-to-cleanup loop, campaign geometry, AI, UI and performance-sensitive effects.
+
 ## v1.2.8 responsive hostile-local Focus
 
 - Combat Focus no longer changes the global engine clock: player movement, mouse aim, reticle, camera and HUD remain fully real-time.

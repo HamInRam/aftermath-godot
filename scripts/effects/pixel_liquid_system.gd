@@ -7,7 +7,7 @@ extends Node2D
 
 const CHUNK_SIZE := 32
 const PIXELS_PER_CHUNK := CHUNK_SIZE * CHUNK_SIZE
-const MAX_JET_PARTICLES := 112
+const MAX_JET_PARTICLES := 128
 const JET_FIXED_STEP := 1.0 / 60.0
 const LIQUID_KINDS := [&"water", &"oil", &"spill", &"cleaner"]
 const PROFILE := {
@@ -31,6 +31,9 @@ class PixelLiquidChunk extends Node2D:
 		system = owner_system
 		chunk_coordinate = coordinate
 		position = Vector2(coordinate * PixelLiquidSystem.CHUNK_SIZE)
+		# The system root renders airborne water above world clutter. Surface chunks
+		# offset back down to the floor plane and therefore never cover actors.
+		z_index = -5
 		for kind in PixelLiquidSystem.LIQUID_KINDS:
 			var data := PackedByteArray()
 			data.resize(PixelLiquidSystem.PIXELS_PER_CHUNK)
@@ -115,21 +118,24 @@ class PixelLiquidChunk extends Node2D:
 		if dominant_amount <= 0: return Color.TRANSPARENT
 		var density := float(dominant_amount) / 255.0
 		var checker := posmod(x + y + chunk_coordinate.x * 3 + chunk_coordinate.y * 5, 7)
+		var base_color := Color.TRANSPARENT
 		match dominant:
 			&"water":
 				var water := Color("48cce0") if checker > 0 else Color("d8fbff")
 				water.a = 0.16 + density * (0.32 if checker > 0 else 0.46)
-				return water
+				base_color = water
 			&"oil":
 				var oil := Color("18101e") if checker > 1 else (Color("9b3fb5") if checker == 0 else Color("2a8791"))
 				oil.a = 0.44 + density * 0.42
-				return oil
+				base_color = oil
 			&"cleaner":
-				return Color(0.58, 0.96, 1.0, 0.18 + density * 0.34) if checker > 1 else Color(0.92, 1.0, 1.0, 0.62)
+				base_color = Color(0.58, 0.96, 1.0, 0.18 + density * 0.34) if checker > 1 else Color(0.92, 1.0, 1.0, 0.62)
 			_:
 				var chemical := Color("72dc73") if checker > 0 else Color("d9ff75")
 				chemical.a = 0.24 + density * 0.46
-				return chemical
+				base_color = chemical
+		var world_cell := chunk_coordinate * PixelLiquidSystem.CHUNK_SIZE + Vector2i(x, y)
+		return system._apply_electric_tint(world_cell, base_color) if is_instance_valid(system) else base_color
 
 var chunks: Dictionary = {}
 var texture_accumulator := 0.0
@@ -143,11 +149,16 @@ var pressure_target := Vector2.INF
 var pressure_sustain := 0.0
 var pressure_emit_gap := 1.0
 var pressure_stability := 0.0
+var electric_sources: Dictionary = {}
+var energized_cells: Dictionary = {}
+var electric_visual_accumulator := 0.0
+var electric_visual_tick := 0
+var electric_topology_dirty := false
 
 func _ready() -> void:
 	add_to_group("pixel_liquid_system")
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	z_index = -1
+	z_index = 4
 	set_process(true)
 
 static func get_or_create(tree: SceneTree) -> Node2D:
@@ -164,6 +175,8 @@ func _process(delta: float) -> void:
 	surface_accumulator += delta
 	contact_accumulator += delta
 	pressure_emit_gap += delta
+	electric_visual_accumulator += delta
+	_update_electric_sources(delta)
 	if pressure_emit_gap > 0.18:
 		pressure_sustain = move_toward(pressure_sustain, 0.0, delta * 2.8)
 		pressure_stability = move_toward(pressure_stability, 0.0, delta * 4.8)
@@ -179,6 +192,7 @@ func _process(delta: float) -> void:
 		surface_accumulator = fmod(surface_accumulator, 1.0)
 		for chunk in chunks.values():
 			if is_instance_valid(chunk) and not (chunk as PixelLiquidChunk).evaporate(): (chunk as PixelLiquidChunk).queue_free()
+		if not electric_sources.is_empty(): electric_topology_dirty = true
 	if contact_accumulator >= 0.12:
 		contact_accumulator = 0.0
 		_update_actor_contacts()
@@ -196,15 +210,15 @@ func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float,
 	var forward := segment.normalized()
 	var distance := minf(segment.length(), 40.0)
 	var width_ratio := clampf((brush_radius - 3.2) / 4.8, 0.0, 1.0)
-	var particle_count := clampi(roundi(lerpf(5.0, 8.0, width_ratio)), 5, 8)
-	var stable_power := maxi(1, roundi(float(power) * lerpf(1.0, 1.35, pressure_stability)))
+	var particle_count := clampi(roundi(lerpf(7.0, 10.0, width_ratio)), 7, 10)
+	var stable_power := maxi(1, roundi(float(power) * lerpf(1.0, 1.45, pressure_stability)))
 	for index in particle_count:
 		if jet_particles.size() >= MAX_JET_PARTICLES: jet_particles.pop_front()
 		jet_sequence += 1
 		var lateral := randf_range(-brush_radius * 0.64, brush_radius * 0.64) * width_ratio
 		var endpoint := target + forward.orthogonal() * lateral + forward * randf_range(-1.5, 1.5)
 		var ray := origin.direction_to(endpoint)
-		var speed := randf_range(154.0, 205.0) * (1.15 if washer_level >= 1 else 1.0)
+		var speed := randf_range(235.0, 305.0) * (1.12 if washer_level >= 1 else 1.0)
 		jet_particles.append({
 			"position": origin + ray * float(index % 3),
 			"previous": origin,
@@ -212,8 +226,8 @@ func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float,
 			"speed": speed,
 			"remaining": minf(origin.distance_to(endpoint), distance + 3.0),
 			"power": stable_power,
-			"radius": maxf(2.4 if washer_level >= 2 else 1.9, brush_radius * lerpf(0.31, 0.46, width_ratio)),
-			"amount": clampi(roundi(44.0 + float(power) * 2.4), 42, 76),
+			"radius": maxf(2.7 if washer_level >= 2 else 2.2, brush_radius * lerpf(0.34, 0.48, width_ratio)),
+			"amount": clampi(roundi(58.0 + float(power) * 2.5), 54, 92),
 			"sequence": jet_sequence,
 			"washer_level": washer_level,
 			"stability": pressure_stability,
@@ -253,11 +267,11 @@ func _pressure_impact(particle: Dictionary, surface_normal: Vector2) -> void:
 	clean_stroke(position, position, radius, int(particle.power), "pressure_washer")
 	_add_liquid_pixel_raw(position, &"water", amount)
 	var side := (surface_normal.normalized() if surface_normal.length_squared() > 0.01 else direction.orthogonal()).orthogonal()
-	var splash_count := clampi(roundi(radius * 1.45), 2, 6)
+	var splash_count := clampi(roundi(radius * 2.1), 4, 9)
 	for index in splash_count:
 		var sign_value := -1.0 if index % 2 == 0 else 1.0
 		var offset := side * sign_value * float(1 + index / 2)
-		if index >= 3: offset += -direction * float(index % 3)
+		if index >= 3: offset += -direction * float(1 + index % 4)
 		_add_liquid_pixel_raw(position + offset, &"water", maxi(12, amount - index * 7))
 	var blood_system := get_tree().get_first_node_in_group("blood_system")
 	if is_instance_valid(blood_system) and blood_system.has_method("pressure_wash_pixel_water"):
@@ -271,7 +285,7 @@ func _draw() -> void:
 		var previous := to_local(particle.previous as Vector2)
 		var current := to_local(particle.position as Vector2)
 		var length := previous.distance_to(current)
-		var steps := clampi(ceili(length), 1, 4)
+		var steps := clampi(ceili(length), 1, 6)
 		for step in range(steps + 1):
 			var point := previous.lerp(current, float(step) / float(steps)).floor()
 			var bright := posmod(int(particle.sequence) + step, 4) == 0 or (float(particle.stability) >= 0.75 and step % 2 == 0)
@@ -332,6 +346,7 @@ func _add_liquid_pixel_raw(world_position: Vector2, kind: StringName, amount: in
 	var cell := Vector2i(floori(world_position.x), floori(world_position.y))
 	var chunk := _get_or_create_chunk(_chunk_coordinate(cell))
 	chunk.add_local(_local_cell(cell), kind, amount)
+	if not electric_sources.is_empty() and bool((PROFILE[kind] as Dictionary).conductive): electric_topology_dirty = true
 
 func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float, power: int, tool_name: String) -> bool:
 	var segment := world_end - world_start
@@ -351,6 +366,7 @@ func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float,
 				for kind in LIQUID_KINDS:
 					var removal := _tool_removal(kind, tool_name, power)
 					if chunk.remove_local(local, kind, removal) > 0: cleaned = true
+	if cleaned and not electric_sources.is_empty(): electric_topology_dirty = true
 	return cleaned
 
 func stamp_cleaning_stroke(world_start: Vector2, world_end: Vector2, tool_name: String) -> void:
@@ -370,6 +386,7 @@ func remove_near(world_position: Vector2, radius: float, kind: StringName, amoun
 			if Vector2(cell).distance_squared_to(world_position) > radius * radius: continue
 			var chunk := _find_chunk_for_cell(cell)
 			if is_instance_valid(chunk): removed += chunk.remove_local(_local_cell(cell), kind, amount)
+	if removed > 0 and not electric_sources.is_empty() and bool((PROFILE[kind] as Dictionary).conductive): electric_topology_dirty = true
 	return removed
 
 func amount_near(world_position: Vector2, radius: float, kind: StringName = &"") -> int:
@@ -407,6 +424,81 @@ func has_conductive_connection(source_position: Vector2, target_position: Vector
 			visited[next] = true
 			frontier.append(next)
 	return false
+
+func set_electric_source(source_id: int, source_position: Vector2, maximum_distance: float, active := true) -> void:
+	if not active:
+		if electric_sources.erase(source_id): electric_topology_dirty = true
+		return
+	var previous: Dictionary = electric_sources.get(source_id, {})
+	if previous.is_empty() or (previous.position as Vector2).distance_squared_to(source_position) > 0.25 or not is_equal_approx(float(previous.radius), maximum_distance):
+		electric_topology_dirty = true
+	electric_sources[source_id] = {"position": source_position, "radius": maxf(8.0, maximum_distance), "ttl": 0.28}
+
+func _update_electric_sources(delta: float) -> void:
+	for source_id in electric_sources.keys():
+		var source: Dictionary = electric_sources[source_id]
+		source.ttl = float(source.ttl) - delta
+		if float(source.ttl) <= 0.0:
+			electric_sources.erase(source_id)
+			electric_topology_dirty = true
+		else:
+			electric_sources[source_id] = source
+	if electric_visual_accumulator < 0.075: return
+	electric_visual_accumulator = fmod(electric_visual_accumulator, 0.075)
+	electric_visual_tick += 1
+	if electric_topology_dirty: _rebuild_energized_cells()
+	_mark_energized_chunks_dirty(energized_cells.keys())
+
+func _rebuild_energized_cells() -> void:
+	var previously_energized := energized_cells.keys()
+	energized_cells.clear()
+	for source in electric_sources.values():
+		var source_position: Vector2 = source.position
+		var maximum_distance := float(source.radius)
+		var start := _nearest_conductive_cell(source_position, mini(9, ceili(maximum_distance)))
+		if start == Vector2i(2147483647, 2147483647): continue
+		var frontier: Array[Vector2i] = [start]
+		var visited := {start: true}
+		var cursor := 0
+		var remaining_budget := 900
+		while cursor < frontier.size() and remaining_budget > 0:
+			remaining_budget -= 1
+			var cell := frontier[cursor]
+			cursor += 1
+			if Vector2(cell).distance_to(source_position) > maximum_distance: continue
+			if _conductive_amount(cell) < 20: continue
+			energized_cells[cell] = true
+			for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN, Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]:
+				var next: Vector2i = cell + offset
+				if visited.has(next): continue
+				visited[next] = true
+				frontier.append(next)
+	electric_topology_dirty = false
+	_mark_energized_chunks_dirty(previously_energized)
+	_mark_energized_chunks_dirty(energized_cells.keys())
+
+func _mark_energized_chunks_dirty(cells: Array) -> void:
+	var touched_chunks: Dictionary = {}
+	for cell_value in cells:
+		var coordinate := _chunk_coordinate(cell_value as Vector2i)
+		if touched_chunks.has(coordinate): continue
+		touched_chunks[coordinate] = true
+		var chunk := chunks.get(coordinate) as PixelLiquidChunk
+		if is_instance_valid(chunk): chunk.dirty = true
+
+func _apply_electric_tint(cell: Vector2i, base_color: Color) -> Color:
+	if not energized_cells.has(cell): return base_color
+	# Integer hashing plus a moving time phase creates charge packets that race
+	# across the connected wet pixels. Only a sparse subset turns gold per frame,
+	# preserving the underlying water silhouette instead of recoloring the puddle.
+	var phase := posmod(cell.x * 17 + cell.y * 31 + electric_visual_tick * 5, 23)
+	if phase == 0: return Color(1.0, 0.96, 0.63, 0.96)
+	if phase <= 3: return Color(1.0, 0.72, 0.16, 0.88)
+	if phase <= 5: return base_color.lerp(Color(0.95, 0.48, 0.06, maxf(base_color.a, 0.72)), 0.72)
+	return base_color
+
+func get_debug_energized_pixel_count() -> int:
+	return energized_cells.size()
 
 func is_flammable_near(world_position: Vector2, radius: float) -> bool:
 	return amount_near(world_position, radius, &"oil") > 48

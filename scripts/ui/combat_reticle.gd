@@ -6,6 +6,7 @@ const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 var spread_ratio := 0.0
 var combat_visible := true
 var aim_state: Dictionary = {}
+var focus_active := false
 var _draw_signature: Array = []
 
 func _ready() -> void:
@@ -40,6 +41,7 @@ func set_aim_feedback(state: Dictionary, enabled: bool) -> void:
 		bool(state.get("targeted", false)),
 		bool(state.get("precision_primed", false)),
 		Settings.reticle_hud_enabled,
+		focus_active,
 	]
 	combat_visible = enabled
 	visible = enabled
@@ -47,6 +49,12 @@ func set_aim_feedback(state: Dictionary, enabled: bool) -> void:
 	_draw_signature = signature
 	aim_state = state.duplicate()
 	aim_state["actual_offset"] = actual_offset
+	queue_redraw()
+
+func set_focus_active(active: bool) -> void:
+	if focus_active == active: return
+	focus_active = active
+	_draw_signature = []
 	queue_redraw()
 
 func _draw() -> void:
@@ -67,6 +75,7 @@ func _draw() -> void:
 	if primed: color = Color("ff68c8")
 	if empty: color = Color("b99aa8")
 	if blocked: color = Color("ff536e")
+	if focus_active and not blocked: color = Color("82e9ff")
 	# The tiny center point is player intent. The four ticks are the weapon's
 	# actual ballistic solution and visibly catch up after a fast flick.
 	PIXEL_PAINTER.pixel(self, center, Color("e8ffff"))
@@ -90,3 +99,8 @@ func _draw() -> void:
 	if primed:
 		PIXEL_PAINTER.line(self, actual_center + Vector2(-2, -10), actual_center + Vector2(0, -12), color)
 		PIXEL_PAINTER.line(self, actual_center + Vector2(0, -12), actual_center + Vector2(2, -10), color)
+	if focus_active:
+		# Four restrained pixel corners communicate the altered combat state
+		# without obscuring the target or adding a full-screen aiming overlay.
+		for corner in [Vector2(-10, -10), Vector2(10, -10), Vector2(-10, 10), Vector2(10, 10)]:
+			PIXEL_PAINTER.pixel(self, actual_center + corner, Color("d995ff"))

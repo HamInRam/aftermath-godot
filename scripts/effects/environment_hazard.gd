@@ -56,6 +56,10 @@ func _physics_process(delta: float) -> void:
 				liquid_system.deposit_source(global_position, StringName(hazard_kind), radius, 0.8, flow_direction)
 			peak_liquid_load = maxi(peak_liquid_load, liquid_system.amount_near(global_position, target_radius * 1.45, StringName(hazard_kind)))
 	elif hazard_kind == "electric" and source_active:
+		if not is_instance_valid(liquid_system):
+			liquid_system = get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
+		if is_instance_valid(liquid_system) and liquid_system.has_method("set_electric_source"):
+			liquid_system.set_electric_source(get_instance_id(), global_position, target_radius * 1.65, true)
 		_apply_electric_damage()
 	queue_redraw()
 
@@ -76,7 +80,13 @@ func _apply_electric_damage() -> void:
 
 func set_source_active(active: bool) -> void:
 	source_active = active
+	if not active and is_instance_valid(liquid_system) and liquid_system.has_method("set_electric_source"):
+		liquid_system.set_electric_source(get_instance_id(), global_position, target_radius * 1.65, false)
 	queue_redraw()
+
+func _exit_tree() -> void:
+	if is_instance_valid(liquid_system) and liquid_system.has_method("set_electric_source"):
+		liquid_system.set_electric_source(get_instance_id(), global_position, target_radius * 1.65, false)
 
 func get_cleanup_type() -> String: return "debris" if hazard_kind == "glass" else "spill"
 func get_cleanup_cost() -> int: return 3 if hazard_kind == "glass" else 5

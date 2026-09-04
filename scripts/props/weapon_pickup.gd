@@ -2,6 +2,7 @@ class_name WeaponPickup
 extends Area2D
 
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
+const WEAPON_ART := preload("res://utility/weapon_pixel_art.gd")
 
 var weapon_id := "pistol"
 var rounds := 1
@@ -51,12 +52,20 @@ func get_cleanup_cost() -> int:
 	return 3
 
 func _apply_visual() -> void:
-	var data := AttackCatalog.get_gun_data(weapon_id)
-	weapon_sprite.texture = data.weapon_texture
+	# World pickups always use the authored one-pixel silhouette. Optional resource
+	# textures are menu metadata and previously turned some drops into solid boxes.
+	weapon_sprite.texture = null
+	weapon_sprite.visible = false
 	queue_redraw()
 
+func has_visible_weapon_art() -> bool:
+	# The live project deliberately uses procedural one-pixel weapons. Resource
+	# textures are optional metadata, never a prerequisite for a visible pickup.
+	return weapon_sprite.texture != null or WEAPON_ART.visual_length(weapon_id) > 0
+
 func _draw() -> void:
-	for y in range(-6, 7):
-		for x in range(-6, 7):
-			if x * x + y * y <= 36 and ((x + y) & 3) == 0: PIXELS.pixel(self, Vector2(x, y), Color(0.15, 0.95, 0.88, 0.18))
-	PIXELS.circle(self, Vector2.ZERO, 7, Color(0.35, 1.0, 0.9, 0.62), true)
+	# A dropped gun must read as a gun before it reads as an interaction target.
+	# Keep only four quiet cyan locator pixels instead of the old dominant ring.
+	for marker in [Vector2(-8, -5), Vector2(8, -5), Vector2(-8, 5), Vector2(8, 5)]:
+		PIXELS.pixel(self, marker, Color(0.35, 1.0, 0.9, 0.34))
+	WEAPON_ART.draw_weapon(self, weapon_id, Vector2.ZERO, Vector2.RIGHT, true)

@@ -514,9 +514,9 @@ func get_cleanup_stroke_profile(cursor_distance: float, quality := 1.0) -> Dicti
 		var washer_level := clampi(Progression.get_upgrade_level("pressure_washer"), 0, 3)
 		var coverage_scale := lerpf(1.0, 1.2, distance_ratio) if washer_level >= 2 else 1.0
 		return {
-			"radius": lerpf(3.2, 8.0, distance_ratio) * coverage_scale,
-			"power": lerpf(1.48, 0.82, distance_ratio),
-			"strength": lerpf(1.28, 0.92, distance_ratio),
+			"radius": lerpf(3.5, 8.5, distance_ratio) * coverage_scale,
+			"power": lerpf(1.65, 0.95, distance_ratio),
+			"strength": lerpf(1.42, 1.0, distance_ratio),
 			"mode": "NARROW" if distance_ratio < 0.48 else "WIDE",
 			"focus": 1.0 - distance_ratio,
 		}
@@ -617,21 +617,42 @@ func get_cleanup_efficiency(cleanup_type: String) -> int:
 	if current_cleanup_tool == "mop" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"]:
 		var base_efficiency := 4 + Progression.get_upgrade_level("mop") + Progression.get_specialization_level("cleaner")
 		return maxi(1, roundi(base_efficiency * lerpf(1.0, 0.6, get_mop_saturation_ratio())))
-	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "spill"]: return 12 + Progression.get_upgrade_level("pressure_washer") * 3 + Progression.get_specialization_level("cleaner")
+	if current_cleanup_tool == "pressure_washer" and cleanup_type in ["blood", "blood_pool", "blood_footprint", "spill"]: return 15 + Progression.get_upgrade_level("pressure_washer") * 3 + Progression.get_specialization_level("cleaner")
 	if current_cleanup_tool == "evidence_bag" and cleanup_type in ["shell", "dropped_weapon", "debris"]: return 3
 	if current_cleanup_tool == "body_bag" and cleanup_type == "corpse": return 1
 	return 0
 
 func get_nearby_draggable_corpse() -> Node2D:
 	var nearest: Node2D
-	var nearest_distance := 20.0 * 20.0
+	# Measure to the body's usable silhouette rather than demanding that the
+	# player reach its root pivot. This leaves a hand-reach margin when the body
+	# settles against a wall, sink, counter or other solid prop.
+	var nearest_distance := 30.0 * 30.0
 	for node in get_tree().get_nodes_in_group("corpse"):
 		if not node is Node2D or not node.has_method("begin_drag"): continue
-		var distance := global_position.distance_squared_to(node.global_position)
-		if distance <= nearest_distance:
+		var interaction_position := _corpse_interaction_position(node)
+		var distance := global_position.distance_squared_to(interaction_position)
+		if distance <= nearest_distance and _corpse_interaction_reachable(node):
 			nearest = node
 			nearest_distance = distance
 	return nearest
+
+func _corpse_interaction_reachable(corpse: Node2D) -> bool:
+	var query := PhysicsRayQueryParameters2D.create(global_position, _corpse_interaction_position(corpse), 4)
+	query.exclude = [get_rid()]
+	query.collide_with_areas = false
+	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	if hit.is_empty(): return true
+	var blocker = hit.get("collider")
+	# Furniture may physically prevent feet reaching the corpse pivot, but does
+	# not stop the player leaning over it to bag the body. Structural walls and
+	# closed doors still block interaction across rooms.
+	return blocker is Node and blocker.is_in_group("destructible_prop")
+
+func _corpse_interaction_position(corpse: Node2D) -> Vector2:
+	if corpse.has_method("get_interaction_position"):
+		return corpse.get_interaction_position()
+	return corpse.global_position
 
 func attempt_corpse_drag() -> bool:
 	if not cleanup_mode or is_dead: return false

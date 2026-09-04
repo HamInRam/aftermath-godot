@@ -125,10 +125,16 @@ var cleanup_layer_feedback_cooldown := 0.0
 var world_context_marker: WorldContextMarker
 var combat_focus_energy := 1.0
 var combat_focus_active := false
+var combat_focus_charges := 3
+var combat_focus_time_remaining := 0.0
+var combat_focus_recharge_progress := 0.0
+var combat_focus_visual_amount := 0.0
+var combat_focus_input_was_down := false
 var hostile_combat_time_scale := 1.0
 var frame_real_delta := 0.0
 const COMBAT_FOCUS_TIME_SCALE := 0.42
-const COMBAT_FOCUS_DRAIN_PER_SECOND := 1.0 / 3.0
+const COMBAT_FOCUS_MAX_CHARGES := 3
+const COMBAT_FOCUS_DURATION := 2.2
 @onready var blood_system = $BloodSystem
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
@@ -388,12 +394,12 @@ func _update_interaction_prompt() -> void:
 		if is_instance_valid(player.dragged_restoration_prop): interaction_label.text = "[ E ] DROP OBJECT // ALIGN WITH CYAN OUTLINE"
 		elif is_instance_valid(player.dragged_corpse) and is_instance_valid(_get_nearby_disposal()): interaction_label.text = _get_nearby_disposal().get_interaction_prompt()
 		elif is_instance_valid(player.dragged_corpse): interaction_label.text = "[ E ] DROP BODY"
-		elif is_instance_valid(extraction_zone) and extraction_zone.contains_position(player.global_position): interaction_label.text = "[ E ] LEAVE SCENE // RISK %d" % CleanupRegistry.get_remaining_value()
-		elif _is_player_near_sink(): interaction_label.text = "[ E ] RINSE MOP // DIRTY %d%%" % roundi(player.get_mop_saturation_ratio() * 100.0)
-		elif is_instance_valid(player.get_nearby_restoration_prop()): interaction_label.text = player.get_nearby_restoration_prop().get_interaction_prompt()
 		elif is_instance_valid(player.get_nearby_draggable_corpse()):
 			var corpse: Node2D = player.get_nearby_draggable_corpse()
 			interaction_label.text = "[ E ] DRAG BAG" if corpse.is_bagged() else "[ E ] BAG BODY // %d%%" % roundi(corpse.get_cleanup_progress() * 100.0)
+		elif is_instance_valid(extraction_zone) and extraction_zone.contains_position(player.global_position): interaction_label.text = "[ E ] LEAVE SCENE // RISK %d" % CleanupRegistry.get_remaining_value()
+		elif _is_player_near_sink(): interaction_label.text = "[ E ] RINSE MOP // DIRTY %d%%" % roundi(player.get_mop_saturation_ratio() * 100.0)
+		elif is_instance_valid(player.get_nearby_restoration_prop()): interaction_label.text = player.get_nearby_restoration_prop().get_interaction_prompt()
 		elif is_instance_valid(_get_nearby_loose_evidence()):
 			var batch_count := CleanupRegistry.get_targets_in_radius(player.global_position, 30.0, 12, PackedStringArray(["shell", "dropped_weapon", "debris"])).size()
 			interaction_label.text = "[ E ] SECURE NEARBY EVIDENCE x%d" % batch_count
@@ -619,6 +625,15 @@ func _on_precision_reward(weapon_id: String, streak: int) -> void:
 func _start_run() -> void:
 	CleanupRegistry.reset()
 	CorpseIncidentRegistry.reset()
+	combat_focus_active = false
+	combat_focus_charges = COMBAT_FOCUS_MAX_CHARGES
+	combat_focus_time_remaining = 0.0
+	combat_focus_recharge_progress = 0.0
+	combat_focus_energy = 1.0
+	combat_focus_visual_amount = 0.0
+	combat_focus_input_was_down = Input.is_action_pressed("combat_focus")
+	_set_hostile_combat_time_scale(1.0)
+	_update_focus_screen_effect()
 	player_shot_records.clear()
 	precision_reward_bonus = 0
 	scene_certified_announced = false
@@ -908,14 +923,9 @@ func _on_world_interaction_requested() -> void:
 				return
 			player.attempt_corpse_drag()
 			return
-		if _is_player_near_sink():
-			if player.rinse_mop(): detail_label.text = "MOP RINSED // CLEAN WATER"
-			else: detail_label.text = "MOP ALREADY CLEAN"
-			return
-		var displaced_prop: Node2D = player.get_nearby_restoration_prop()
-		if is_instance_valid(displaced_prop) and player.attempt_restoration_prop_drag():
-			detail_label.text = "OBJECT SECURED // RETURN IT TO THE CYAN OUTLINE"
-			return
+		# Body handling is the primary E interaction. In particular it must win
+		# over a nearby sink/counter; otherwise a corpse beside architecture can
+		# never receive the packaging action.
 		var corpse: Node2D = player.get_nearby_draggable_corpse()
 		if is_instance_valid(corpse):
 			if corpse.is_bagged():
@@ -927,6 +937,14 @@ func _on_world_interaction_requested() -> void:
 					if corpse.is_bagged(): break
 					corpse.apply_cleanup_tool("body_bag")
 				detail_label.text = "BODY BAGGED" if corpse.is_bagged() else "PACKAGING BODY // PRESS E AGAIN"
+			return
+		if _is_player_near_sink():
+			if player.rinse_mop(): detail_label.text = "MOP RINSED // CLEAN WATER"
+			else: detail_label.text = "MOP ALREADY CLEAN"
+			return
+		var displaced_prop: Node2D = player.get_nearby_restoration_prop()
+		if is_instance_valid(displaced_prop) and player.attempt_restoration_prop_drag():
+			detail_label.text = "OBJECT SECURED // RETURN IT TO THE CYAN OUTLINE"
 			return
 		var loose_evidence := _get_nearby_loose_evidence()
 		if is_instance_valid(loose_evidence):
@@ -1022,7 +1040,10 @@ func _spawn_level_landmarks(world: Node) -> void:
 		"nightclub": ["dj_booth", Vector2(200, 78), Color("ff2a8a")],
 		"sandwich_shop": ["diner_counter", Vector2(260, 76), Color("ff8748")],
 		"tactical_lab": ["training_target", Vector2(260, 100), Color("50d9ff")],
-		"harbor_exchange": ["cargo_crane", Vector2(212, 104), Color("ff8738")],
+		# Keep the crane clear of the widened three-cell service doorway.  Its old
+		# footprint grazed the passage and could stop a full-size actor after the
+		# door itself had opened.
+		"harbor_exchange": ["cargo_crane", Vector2(228, 104), Color("ff8738")],
 		"motel_witness": ["motel_sign", Vector2(194, 108), Color("ff3ca6")],
 		"penthouse": ["city_window", Vector2(334, 80), Color("ffd05a")],
 		"cold_storage": ["freezer_fans", Vector2(192, 104), Color("72e9ff")],
@@ -1146,13 +1167,32 @@ func _update_combat_focus(delta: float) -> void:
 	# so: mouse aim, player motion, camera interpolation and UI stay responsive.
 	var real_delta := minf(delta / maxf(Engine.time_scale, 0.05), 0.05)
 	frame_real_delta = real_delta
-	var wants_focus := phase == "combat" and not run_over and not transitioning_cleanup and combat_focus_energy > 0.001 and Input.is_action_pressed("combat_focus")
-	combat_focus_active = wants_focus
+	var focus_input_down := Input.is_action_pressed("combat_focus")
+	var focus_just_pressed := focus_input_down and not combat_focus_input_was_down
+	combat_focus_input_was_down = focus_input_down
+	var focus_allowed := phase == "combat" and not run_over and not transitioning_cleanup
+	if not focus_allowed:
+		combat_focus_active = false
+		combat_focus_time_remaining = 0.0
+	elif not combat_focus_active and focus_just_pressed and combat_focus_charges > 0:
+		combat_focus_charges -= 1
+		combat_focus_time_remaining = COMBAT_FOCUS_DURATION
+		combat_focus_active = true
+		combat_feedback.trigger_focus_enter()
 	if combat_focus_active:
-		combat_focus_energy = maxf(0.0, combat_focus_energy - COMBAT_FOCUS_DRAIN_PER_SECOND * real_delta)
-		if combat_focus_energy <= 0.001: combat_focus_active = false
+		combat_focus_time_remaining = maxf(0.0, combat_focus_time_remaining - real_delta)
+		if combat_focus_time_remaining <= 0.001: combat_focus_active = false
+	combat_focus_energy = clampf(combat_focus_time_remaining / COMBAT_FOCUS_DURATION, 0.0, 1.0) if combat_focus_active else combat_focus_recharge_progress
+	combat_focus_visual_amount = move_toward(combat_focus_visual_amount, 1.0 if combat_focus_active else 0.0, real_delta * (7.0 if combat_focus_active else 4.0))
 	_set_hostile_combat_time_scale(COMBAT_FOCUS_TIME_SCALE if combat_focus_active else 1.0)
-	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active)
+	_update_focus_screen_effect()
+	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active, combat_focus_charges, COMBAT_FOCUS_MAX_CHARGES, combat_focus_recharge_progress)
+
+func _update_focus_screen_effect() -> void:
+	var overlay := get_node_or_null("RetroTreatment/Scanlines") as ColorRect
+	if not is_instance_valid(overlay) or overlay.material is not ShaderMaterial: return
+	var screen_material := overlay.material as ShaderMaterial
+	screen_material.set_shader_parameter("focus_amount", combat_focus_visual_amount)
 
 func _set_hostile_combat_time_scale(value: float) -> void:
 	var next_scale := clampf(value, 0.2, 1.0)
@@ -1164,12 +1204,21 @@ func _set_hostile_combat_time_scale(value: float) -> void:
 		if is_instance_valid(bullet) and bool(bullet.get("enemy_owned")) and bullet.has_method("set_combat_time_scale"): bullet.set_combat_time_scale(next_scale)
 
 func _reward_combat_focus(attack_id: String, hit_zone: String, current_combo: int) -> void:
+	if combat_focus_charges >= COMBAT_FOCUS_MAX_CHARGES:
+		combat_focus_recharge_progress = 0.0
+		return
 	var reward := 0.10
 	if attack_id in ["fist", "knife", "bat", "door", "execution_fist", "execution_knife", "execution_bat"]: reward += 0.06
 	if hit_zone == "head": reward += 0.04
 	if current_combo >= 3: reward += 0.03
-	combat_focus_energy = minf(1.0, combat_focus_energy + reward)
-	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active)
+	combat_focus_recharge_progress += reward
+	while combat_focus_recharge_progress >= 1.0 and combat_focus_charges < COMBAT_FOCUS_MAX_CHARGES:
+		combat_focus_recharge_progress -= 1.0
+		combat_focus_charges += 1
+		if is_instance_valid(hud): hud.show_banner("FOCUS CHARGE RESTORED", Color("82d8ff"))
+	if combat_focus_charges >= COMBAT_FOCUS_MAX_CHARGES: combat_focus_recharge_progress = 0.0
+	combat_focus_energy = clampf(combat_focus_time_remaining / COMBAT_FOCUS_DURATION, 0.0, 1.0) if combat_focus_active else combat_focus_recharge_progress
+	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active, combat_focus_charges, COMBAT_FOCUS_MAX_CHARGES, combat_focus_recharge_progress)
 
 func _on_player_died(source_position := Vector2.ZERO) -> void:
 	if is_instance_valid(playtest_telemetry):
@@ -1278,6 +1327,7 @@ func _exit_tree() -> void:
 func _enter_cleanup_phase() -> void:
 	phase = "cleanup"
 	combat_focus_active = false
+	combat_focus_time_remaining = 0.0
 	_set_hostile_combat_time_scale(1.0)
 	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if blood_system.has_method("settle_pixel_blood_for_cleanup"): blood_system.settle_pixel_blood_for_cleanup()
@@ -1642,6 +1692,7 @@ func _finish_run(left_evidence: bool) -> void:
 	if run_over: return
 	run_over = true
 	combat_focus_active = false
+	combat_focus_time_remaining = 0.0
 	_set_hostile_combat_time_scale(1.0)
 	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
 	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
