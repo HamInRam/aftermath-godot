@@ -32,9 +32,12 @@ func _run() -> void:
 	_expect(RuntimeBudget.get_count("gore") <= int(RuntimeBudget.limits.gore), "lethal effects must not exceed gore budget")
 	_expect(RuntimeBudget.get_count("blood_pool") == 0, "pixel death pools must not allocate legacy pool nodes")
 	_expect(RuntimeBudget.get_dropped("shell") > 0 and RuntimeBudget.get_dropped("gore") > 0, "stress scene should prove that remaining node hard caps activate")
-	_expect(level.blood_system.ground_canvas.chunks.size() < 64, "dense blood should remain inside a bounded sparse-chunk set (got %d)" % level.blood_system.ground_canvas.chunks.size())
+	# Wider authored paint covers proportionally more surface. Keep the old
+	# per-area density budgets and the unchanged CPU/node budgets below.
+	var coverage_area: float = pow(level.blood_system.ground_canvas.splash_coverage, 2.0)
+	_expect(level.blood_system.ground_canvas.chunks.size() < ceili(64 * coverage_area), "dense blood should remain inside its area-scaled sparse-chunk budget (got %d)" % level.blood_system.ground_canvas.chunks.size())
 	var pixel_count := int(level.blood_system.ground_canvas.get_debug_pixel_count())
-	_expect(pixel_count < 20000, "dense blood should remain below the room-scale pixel occupancy budget (got %d, seed 5901)" % pixel_count)
+	_expect(pixel_count < ceili(20000 * coverage_area), "dense blood should remain below its area-scaled pixel occupancy budget (got %d, seed 5901)" % pixel_count)
 	_expect(generation_ms < 5000.0, "stress generation should complete within a broad CI-safe five-second budget")
 	for frame in range(12): await get_tree().process_frame
 	var report := PerformanceMonitor.get_report()

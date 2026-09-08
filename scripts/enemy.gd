@@ -1365,7 +1365,7 @@ func _update_active_wound(delta: float) -> void:
 	var drop_spacing := lerpf(5.5, 2.5, clampf(active_bleed_rate / 1.72, 0.0, 1.0))
 	var moved_distance := 0.0 if last_bleed_position == Vector2.INF else global_position.distance_to(last_bleed_position)
 	var should_drop := bleed_drop_accumulator >= drop_interval and (moved_distance >= drop_spacing or bleed_stationary_accumulator >= drop_interval * 2.4)
-	if should_drop and active_bleed_emits_blood:
+	if should_drop and active_bleed_emits_blood and not get_meta("polluter", false):
 		var blood_system := get_tree().get_first_node_in_group("blood_system")
 		if is_instance_valid(blood_system) and blood_system.has_method("spawn_wound_drop"):
 			var movement_direction := last_bleed_position.direction_to(global_position) if moved_distance > 0.01 else last_wound_direction
@@ -1392,6 +1392,11 @@ func apply_lifecycle_impact(direction: Vector2, power: float, hit_zone := "torso
 	if is_instance_valid(lifecycle_rig): lifecycle_rig.apply_hit(direction, power, hit_zone)
 
 func _draw() -> void:
+	if not is_dead and get_meta("polluter", false):
+		# Grayscale twin canisters identify the contamination carrier.
+		for side in [-1, 1]:
+			draw_rect(Rect2(-7, side * 5 - 2, 6, 4), Color("eeeeee"))
+			draw_rect(Rect2(-6, side * 5 - 1, 4, 2), Color("222222"))
 	# Tiny authored role badges survive blood and debris without becoming large
 	# floating HUD markers: cyan gunner, pink rusher, orange assault, violet heavy.
 	if not is_dead:

@@ -37,7 +37,7 @@ func _ready() -> void:
 
 func emit_mist(world_position: Vector2, spray_direction: Vector2, intensity: float, _color: Color, cone: float, deposit_count: int) -> void:
 	var direction := spray_direction.normalized() if spray_direction.length_squared() > 0.01 else Vector2.RIGHT
-	var count := clampi(roundi(18.0 + intensity * 16.0), 18, 76)
+	var count := clampi(roundi(26.0 + intensity * 24.0), 26, 112)
 	var available := MAX_ACTIVE_PARTICLES - particles.size()
 	if available <= 0: return
 	count = mini(count, available)
@@ -52,7 +52,7 @@ func emit_mist(world_position: Vector2, spray_direction: Vector2, intensity: flo
 	for index in count:
 		var angle := direction.angle() + randf_range(-cone, cone)
 		var particle_direction := Vector2.RIGHT.rotated(angle)
-		var speed := randf_range(32.0, 78.0) * clampf(intensity, 0.65, 3.5)
+		var speed := randf_range(46.0, 106.0) * clampf(intensity, 0.65, 3.5)
 		var velocity := particle_direction * speed + Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
 		var life := randf_range(0.18, 0.34)
 		var travel_distance := velocity.length() * (1.0 - exp(-DRAG * life)) / DRAG

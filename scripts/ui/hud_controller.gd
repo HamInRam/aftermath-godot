@@ -38,6 +38,7 @@ var context_backplate: ColorRect
 var tactical_backplate: ColorRect
 var status_backplate: ColorRect
 var resource_backplate: ColorRect
+var ammo_caption: Label
 var tutorial_label: Label
 var keycap_label: Label
 var enemy_count_label: Label
@@ -78,7 +79,8 @@ func _ready() -> void:
 	ammo_label = _make_label(Vector2(22, 7), 7, Color.WHITE)
 	ammo_label.size = Vector2(47, 12)
 	ammo_meter = _make_meter(Vector2(22, 25), Vector2(26, 1), Color.WHITE)
-	_make_label(Vector2(51, 22), 4, Color("a8a8a8")).text = "AMMO"
+	ammo_caption = _make_label(Vector2(51, 22), 4, Color("a8a8a8"))
+	ammo_caption.text = "AMMO"
 
 	enemy_count_icon = _make_icon(Vector2(255, 7), "enemy", Color.WHITE)
 	enemy_count_label = _make_label(Vector2(264, 7), 5, Color.WHITE)
@@ -276,7 +278,12 @@ func set_combat_focus(value: float, active: bool, charges := 0, max_charges := 3
 func set_roguelike_mode(enabled: bool) -> void:
 	if not enabled: return
 	_roguelike_mode = true
-	tutorial_label.text = "LMB FIRE  RMB BLOOD  Q/E/R  B HEAL"
+	tutorial_label.text = "LMB BLOOD FIRE  RMB SIPHON  SPACE ROLL"
+	resource_backplate.visible = false
+	ammo_caption.visible = false
+	ammo_icon.visible = false
+	ammo_label.visible = false
+	ammo_meter.visible = false
 	focus_backplate.visible = true
 	blood_backplate.visible = true
 	blood_icon.visible = true
@@ -340,7 +347,7 @@ func show_banner(text: String, color := Color("f4f4f4")) -> void:
 func set_phase(value: String) -> void:
 	if value != "combat": return
 	tactical_backplate.visible = true
-	resource_backplate.visible = true
+	resource_backplate.visible = not _roguelike_mode
 	vitality_backplate.visible = true
 	health_icon.visible = true
 	health_label.visible = true
@@ -355,9 +362,9 @@ func set_phase(value: String) -> void:
 	alarm_count_label.visible = true
 	objective_icon.visible = false
 	objective_label.visible = false
-	ammo_icon.visible = true
-	ammo_label.visible = true
-	ammo_meter.visible = true
+	ammo_icon.visible = not _roguelike_mode
+	ammo_label.visible = not _roguelike_mode
+	ammo_meter.visible = not _roguelike_mode
 	focus_backplate.visible = true
 	focus_icon.visible = true
 	focus_count_label.visible = true

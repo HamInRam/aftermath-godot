@@ -18,6 +18,7 @@ func _ready() -> void:
 	ground_canvas = PIXEL_BLOOD_CANVAS.new() as Node2D
 	ground_canvas.name = "GroundPixelBlood"
 	ground_canvas.configure("ground", -2)
+	ground_canvas.splash_coverage = 1.8
 	add_child(ground_canvas)
 	wall_canvas = PIXEL_BLOOD_CANVAS.new() as Node2D
 	wall_canvas.name = "WallPixelBlood"
@@ -53,6 +54,10 @@ func emit_context(context: DamageContext) -> void:
 		intensity = clampf(wound_damage_scale * float(profile.blood_power) * distance_force * lethal_force * zone_force * maxf(0.75, context.energy) * violence_scale * Settings.blood_density * GROUND_BLOOD_PRESENTATION_SCALE, 0.7, 6.0)
 	var pattern: String = profile.pattern
 	var cone: float = profile.cone
+	var weapon_class := AttackCatalog.get_gun_data(weapon_id).weapon_class if AttackCatalog.GUNS.has(weapon_id) else ""
+	if weapon_class in ["smg", "pdw"]:
+		pattern = "dots"
+		cone = 0.85
 	# A compact dark entry puff is followed by the brighter, faster exit cone.
 	# Firearms use the resolved wound channel directly. The older presentation
 	# profile remains the fallback for melee/executions, where penetration has no
@@ -66,6 +71,10 @@ func emit_context(context: DamageContext) -> void:
 	var ground_budget := context.blood_budget_raw
 	var impact_budget := floori(float(ground_budget) * (0.75 if lethal else 1.0)) if ground_budget >= 0 else -1
 	var ground_spent := 0
+	# A thin, opaque coating makes a route without multiplying its resource mass.
+	# Shotgun fan only on a kill; sniper route only on an actual exiting wound.
+	if (weapon_class == "shotgun" and lethal) or (weapon_class == "sniper" and context.projectile_exited):
+		ground_spent += ground_canvas.stamp_weapon_footprint(hit_position, direction, weapon_class, impact_budget)
 	var mist_deposits := 0 if context.blood_enhanced else int(violence.get("drops", 8))
 	_spawn_mist(hit_position - direction * 0.8, -direction, intensity * 0.22 * entry_scale, cone * 0.35, 0 if context.blood_enhanced else maxi(2, mist_deposits / 3))
 	ground_spent += _spawn_ground_splatter(hit_position - direction, -direction, intensity * 0.22 * entry_scale, "line", cone * 0.22, str(violence.get("wound", "puncture")), impact_budget - ground_spent if impact_budget >= 0 else -1)
@@ -91,7 +100,7 @@ func emit_context(context: DamageContext) -> void:
 
 func _spawn_mist(hit_position: Vector2, direction: Vector2, intensity: float, cone: float, deposit_count := 10) -> void:
 	if is_instance_valid(mist_batch):
-		mist_batch.emit_mist(hit_position, direction, intensity * AIRBORNE_BLOOD_PRESENTATION_SCALE, NeonPalette.BLOOD_FRESH, cone, deposit_count)
+		mist_batch.emit_mist(hit_position, direction, intensity * AIRBORNE_BLOOD_PRESENTATION_SCALE, NeonPalette.BLOOD_FRESH, cone * 1.2, deposit_count)
 
 func spawn_micro_drop(world_position: Vector2, strength := 0.5, direction := Vector2.RIGHT) -> void:
 	var surface_profile := {}
@@ -166,6 +175,27 @@ func absorb_pixel_blood(world_position: Vector2, radius: float, power: int, maxi
 func absorb_pixel_blood_cone(world_position: Vector2, direction: Vector2, reach: float, half_angle: float, power: int, maximum_samples := 48, maximum_total := 255) -> Dictionary:
 	if not is_instance_valid(ground_canvas): return {"amount": 0, "positions": PackedVector2Array()}
 	return ground_canvas.absorb_cone(world_position, direction, reach, half_angle, power, maximum_samples, maximum_total)
+
+func absorb_siphon_sector(origin: Vector2, direction: Vector2, reach: float, half_angle: float, proximity: float, raw_budget: int) -> Dictionary:
+	var occlusion := PackedFloat32Array()
+	for index in range(96):
+		var ray_direction := Vector2.RIGHT.rotated(TAU * float(index) / 96.0)
+		var query := PhysicsRayQueryParameters2D.create(origin, origin + ray_direction * reach, 36)
+		query.collide_with_areas = false
+		var hit := get_world_2d().direct_space_state.intersect_ray(query)
+		occlusion.append(origin.distance_to(hit.position) + 0.6 if not hit.is_empty() else reach)
+	var total := 0
+	var positions := PackedVector2Array()
+	# Reserve a small share for wall stains; unused share returns to the floor.
+	if is_instance_valid(wall_canvas):
+		var result: Dictionary = wall_canvas.absorb_sector(origin, direction, reach, half_angle, proximity, occlusion, raw_budget / 8)
+		total += int(result.amount)
+		positions.append_array(result.positions)
+	if is_instance_valid(ground_canvas):
+		var result: Dictionary = ground_canvas.absorb_sector(origin, direction, reach, half_angle, proximity, occlusion, raw_budget - total)
+		total += int(result.amount)
+		positions.append_array(result.positions)
+	return {"amount": total, "positions": positions}
 
 func _spawn_gore_chunks(hit_position: Vector2, direction: Vector2, intensity: float, attack_id: String, profile_count := 3) -> void:
 	var count := clampi(roundi(profile_count * clampf(intensity / 1.5, 0.7, 1.5)), 2, 20)

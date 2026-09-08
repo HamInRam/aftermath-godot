@@ -10,6 +10,7 @@ const PRESENTATION := preload("res://utility/weapon_presentation_profile.gd")
 
 @export var gun_data: Resource
 @export var enemy_owned := false
+var blood_fire_payment: Callable
 var automatic := false
 
 var fire_interval := 0.1
@@ -313,7 +314,7 @@ func _draw() -> void:
 func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 	if gun_data == null or is_reloading or direction.length_squared() < 0.001: return false
 	if cooldown > 0.0: return false
-	if ammo <= 0:
+	if ammo <= 0 and not blood_fire_payment.is_valid():
 		play_dry_fire()
 		return false
 	var requested_angle := direction.angle()
@@ -326,10 +327,15 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 		mechanical_audio.pitch_scale = 0.72
 		mechanical_audio.play()
 		return false
+	# Pay exactly once per successful trigger, never once per shotgun pellet.
+	if blood_fire_payment.is_valid() and not blood_fire_payment.call(gun_data):
+		cooldown = 0.15
+		play_dry_fire()
+		return false
 	# Preserve overshoot from the previous frame so a 750 RPM weapon does not
 	# quantize down to 600 RPM at 60 Hz. Idle time cannot bank catch-up bullets.
 	cooldown = maxf(0.001, maxf(0.035, fire_interval + randf_range(-fire_interval_variance, fire_interval_variance)) + minf(0.0, cooldown))
-	ammo -= 1
+	if not blood_fire_payment.is_valid(): ammo -= 1
 	ammo_by_weapon[weapon_id] = ammo
 	recoil = 2.0
 	shot_age = 0.0
@@ -491,6 +497,7 @@ func is_muzzle_blocked() -> bool:
 	return _is_muzzle_obstructed()
 
 func reload() -> void:
+	if blood_fire_payment.is_valid(): return
 	if gun_data == null or is_reloading or ammo >= max_ammo or reserve_ammo == 0: return
 	if not enemy_owned and ammo <= 0 and precision_primed:
 		_start_perfect_reload()

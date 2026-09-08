@@ -7,6 +7,13 @@ var spread_ratio := 0.0
 var combat_visible := true
 var aim_state: Dictionary = {}
 var focus_active := false
+var siphon_strength := 0.0
+
+func set_siphon_strength(value: float) -> void:
+	var next := snappedf(clampf(value, 0.0, 1.0), 0.125)
+	if next == siphon_strength: return
+	siphon_strength = next
+	queue_redraw()
 var _draw_signature: Array = []
 var hit_marker_start_msec := 0
 var hit_marker_deadline_msec := 0
@@ -82,6 +89,13 @@ func set_focus_active(active: bool) -> void:
 func _draw() -> void:
 	if not combat_visible: return
 	var center := (size * 0.5).round()
+	if siphon_strength > 0.0:
+		# A small hard-pixel halo leaves the aim center and hit marker unobscured.
+		var glow := Color(NeonPalette.BLOOD_CRIMSON, siphon_strength)
+		for index in range(32):
+			var angle := TAU * float(index) / 32.0
+			var point := center + Vector2.RIGHT.rotated(angle) * 15.0
+			PIXEL_PAINTER.pixel(self, point.round(), glow)
 	var actual_offset: Vector2 = aim_state.get("actual_offset", Vector2.ZERO)
 	var actual_center := (center + actual_offset.limit_length(8.0)).round()
 	var spread_pixels := clampf(float(aim_state.get("spread_pixels", spread_ratio * 6.0)), 0.0, 9.0)

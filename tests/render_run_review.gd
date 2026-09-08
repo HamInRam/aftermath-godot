@@ -62,6 +62,18 @@ func _run() -> void:
 		if killed >= 2: break
 	await get_tree().create_timer(2.1).timeout
 	await _capture("battle_aftermath")
+	# Readability fixture: striped non-siphonable terrain and red overpaint.
+	var terrain_origin: Vector2 = level.player.global_position + Vector2(28, 0)
+	level.blood_system.ground_canvas.stamp_pollution(terrain_origin, 23.0)
+	level.blood_system.ground_canvas.stamp_weapon_footprint(terrain_origin - Vector2(18, 0), Vector2.RIGHT, "shotgun")
+	await _capture("blood_terrain")
+	level.player.using_controller_aim = true
+	level.player.last_controller_aim = Vector2.RIGHT
+	level.player.aim_target_world = level.player.global_position + Vector2(160, 0)
+	level.blood_resource.reserve = 0.0
+	level.blood_resource.set_stance_active(true)
+	await _capture("siphon_sector")
+	level.blood_resource.set_stance_active(false)
 	level._on_rogue_run_cleared(4)
 	await _capture("floor_clear")
 	level.queue_free()
@@ -71,7 +83,19 @@ func _run() -> void:
 
 func _capture(id: String) -> void:
 	for frame in range(25): await get_tree().process_frame
+	var cursor_preview: CanvasLayer
+	if id == "siphon_sector":
+		# Isolated preview: production hides the real cursor while fixture player
+		# controls are disabled. Do not mistake this for an input playthrough.
+		cursor_preview = CanvasLayer.new()
+		cursor_preview.layer = 120
+		add_child(cursor_preview)
+		var cursor := CombatReticle.new()
+		cursor_preview.add_child(cursor)
+		cursor.position = get_viewport().get_visible_rect().size * 0.5 - Vector2(24, 24)
+		cursor.set_siphon_strength(1.0)
 	await RenderingServer.frame_post_draw
 	var output := get_viewport().get_texture().get_image()
 	var error := output.save_png(review_dir.path_join(id + ".png"))
+	if is_instance_valid(cursor_preview): cursor_preview.queue_free()
 	if error != OK: push_error("Could not save render " + id)

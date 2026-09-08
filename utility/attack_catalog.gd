@@ -38,8 +38,8 @@ static func get_blood_profile(attack_id: String) -> Dictionary:
 			"blood_power": data.blood_power,
 			"range": data.blood_range,
 			"wall_reach": data.blood_wall_reach,
-			"pattern": data.blood_pattern,
-			"cone": data.blood_cone,
+			"pattern": "dots" if data.weapon_class in ["smg", "pdw"] else data.blood_pattern,
+			"cone": 0.85 if data.weapon_class in ["smg", "pdw"] else data.blood_cone,
 		}
 	return (MELEE.get(attack_id, MELEE.fist) as Dictionary).duplicate()
 

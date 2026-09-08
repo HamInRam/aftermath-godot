@@ -67,6 +67,36 @@ var blood_stance_active := false
 var blood_stance_movement_multiplier := 1.0
 var blood_guard_points := 0
 var blood_siphon_visual_amount := 0.0
+var blood_action_mode := false
+var blood_terrain_canvas: Node2D
+var blood_terrain_multiplier := 1.0
+
+func refresh_blood_terrain() -> void:
+	blood_terrain_multiplier = 1.0
+	if blood_action_mode and is_instance_valid(blood_terrain_canvas):
+		var terrain: int = blood_terrain_canvas.terrain_at(global_position)
+		blood_terrain_multiplier = 0.6 if terrain < 0 else (1.3 if terrain > 0 else 1.0)
+var roll_time := 0.0
+var roll_cooldown := 0.0
+var roll_direction := Vector2.RIGHT
+const ROLL_DURATION := 0.28
+const ROLL_IFRAMES := 0.18
+
+func start_roll(direction: Vector2) -> bool:
+	refresh_blood_terrain()
+	if blood_terrain_multiplier < 1.0: return false
+	if not blood_action_mode or is_dead or is_executing or not controls_enabled or predeployment_mode or roll_cooldown > 0.0: return false
+	roll_direction = direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT.rotated(actual_aim_angle)
+	roll_time = ROLL_DURATION
+	roll_cooldown = 0.7
+	return true
+
+func is_roll_invulnerable() -> bool:
+	return roll_time > ROLL_DURATION - ROLL_IFRAMES
+
+func apply_ballistic_hit(result: Dictionary, source_position := Vector2.ZERO) -> void:
+	if is_roll_invulnerable(): return
+	super.apply_ballistic_hit(result, source_position)
 var fire_input_buffer := 0.0
 var reload_input_buffer := 0.0
 var throw_input_buffer := 0.0
@@ -139,8 +169,10 @@ func _physics_process(delta: float) -> void:
 	if predeployment_mode:
 		_handle_predeployment_movement(delta)
 		return
+	roll_time = maxf(0.0, roll_time - delta)
+	roll_cooldown = maxf(0.0, roll_cooldown - delta)
 	_update_targeting_mode()
-	if execution_query_cooldown <= 0.0 and not is_executing and not is_dead:
+	if not blood_action_mode and execution_query_cooldown <= 0.0 and not is_executing and not is_dead:
 		execution_query_cooldown = 0.12
 		cached_execution_target = _query_execution_target()
 	if execution_pulse > 0.0: queue_redraw()
@@ -153,22 +185,27 @@ func _physics_process(delta: float) -> void:
 	if is_executing:
 		velocity = Vector2.ZERO
 		return
-	if Input.is_action_just_pressed("execute"): execution_input_buffer = INPUT_BUFFER_DURATION
+	if Input.is_action_just_pressed("execute"):
+		if blood_action_mode: start_roll(Input.get_vector("move_left", "move_right", "move_up", "move_down"))
+		else: execution_input_buffer = INPUT_BUFFER_DURATION
 	if execution_input_buffer > 0.0:
 		if attempt_ground_execution(): execution_input_buffer = 0.0
 		if is_executing: return
 	if Input.is_action_just_pressed("interact") and not blood_stance_active:
 		if not attempt_weapon_pickup(): world_interaction_requested.emit()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	refresh_blood_terrain()
 	var executioner_mobility := 1.0 + Progression.get_specialization_level("executioner") * 0.03
-	velocity = input_direction * move_speed * get_equipped_movement_multiplier() * executioner_mobility * field_movement_multiplier * blood_stance_movement_multiplier
+	velocity = input_direction * move_speed * get_equipped_movement_multiplier() * executioner_mobility * field_movement_multiplier * blood_stance_movement_multiplier * blood_terrain_multiplier
+	if roll_time > 0.0: velocity = roll_direction * move_speed * 2.6
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
 	_handle_weapon_selection()
 	_update_aim_solution(delta)
 	_update_procedural_motion(delta)
-	if equipped_mode != "gun" and Input.is_action_just_pressed("targeting_mode"):
+	if roll_time > 0.0: return
+	if not blood_action_mode and equipped_mode != "gun" and Input.is_action_just_pressed("targeting_mode"):
 		_start_kick_attack()
 	_handle_primary_input(Input.is_action_just_pressed("shoot"), Input.is_action_pressed("shoot"))
 	if blood_stance_active:
@@ -196,7 +233,7 @@ func _handle_primary_input(just_pressed: bool, held: bool) -> void:
 	if gun.gun_data == null: return
 	# Empty-magazine actions only consume a fresh trigger pull. Holding an
 	# automatic through its last round must not reload, click repeatedly or throw.
-	if gun.ammo <= 0:
+	if gun.ammo <= 0 and not gun.blood_fire_payment.is_valid():
 		fire_input_buffer = 0.0
 		if just_pressed and not gun.is_reloading:
 			if gun.reserve_ammo != 0: gun.reload()
@@ -299,6 +336,7 @@ func set_blood_siphon_visual(value: float) -> void:
 	var pulse := 0.72 + sin(Time.get_ticks_msec() * 0.026) * 0.28
 	var strength := blood_siphon_visual_amount * pulse
 	var tint := Color(1.0 + strength * 0.35, 1.0 - strength * 0.82, 1.0 - strength * 0.82, 1.0)
+	if is_roll_invulnerable(): tint = Color(1.6, 1.6, 1.6, 1.0)
 	if is_instance_valid(lifecycle_rig): lifecycle_rig.modulate = tint
 
 func perform_blood_dash(distance: float) -> void:
@@ -312,6 +350,7 @@ func grant_blood_guard(points: int) -> void:
 	queue_redraw()
 
 func take_damage(amount: int, source_position := Vector2.ZERO) -> void:
+	if is_roll_invulnerable(): return
 	if blood_guard_points > 0 and amount > 0:
 		var absorbed := mini(amount, blood_guard_points)
 		blood_guard_points -= absorbed
@@ -419,6 +458,8 @@ func _update_procedural_motion(delta: float) -> void:
 	# offset is forwarded. Passing the container transform again would apply bob
 	# and attack rotation twice.
 	lifecycle_rig.update_lifecycle(delta, velocity.rotated(-rotation), move_speed, body_sprite.position, body_sprite.rotation, lifecycle_action, lifecycle_amount)
+	var roll_pose := sin((1.0 - roll_time / ROLL_DURATION) * PI) if roll_time > 0.0 else 0.0
+	lifecycle_rig.scale = Vector2(1.0 - roll_pose * 0.15, 1.0 - roll_pose * 0.4)
 	# Only the weapon changes depth when aiming north. UpperBody itself must stay
 	# above Legs; moving the whole container behind would let the feet cover the
 	# head and torso now that the lifecycle rig is a real UpperBody child.

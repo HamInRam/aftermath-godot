@@ -8,8 +8,8 @@ const BLOOD_RED := NeonPalette.BLOOD_CRIMSON
 const BLOOD_HOT := NeonPalette.BLOOD_CRIMSON
 const ABSORB_INTERVAL := 0.04
 const RAW_TO_RESOURCE := 0.00055
-const SIPHON_PARTICLE_LIFETIME := 0.34
-const MAX_SIPHON_MOTES := 18
+const SIPHON_PARTICLE_LIFETIME := 0.22
+const MAX_SIPHON_MOTES := 96
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 var capacity := 100.0
@@ -28,7 +28,7 @@ func set_build(id: String) -> void:
 	if id not in ["balanced", "harvester", "heavy", "mobile"]: return
 	build_id = id
 	capacity = 70.0 if id == "harvester" else 100.0
-	absorption_rate_per_second = 32.0 if id == "harvester" else 24.0
+	absorption_rate_per_second = (75.0 if id == "harvester" else 60.0) if blood_ammo_mode else (32.0 if id == "harvester" else 24.0)
 	stance_move_multiplier = 0.94 if id == "mobile" else 0.80
 	enhanced_round_cost = 5.0 if id == "heavy" else 3.5
 	enhanced_damage_multiplier = 2.1 if id == "heavy" else (1.35 if id == "mobile" else 1.65)
@@ -57,6 +57,18 @@ var enhanced_shot_cache := {"enhanced": false, "damage_multiplier": 1.0, "penetr
 var siphon_target_position := Vector2.ZERO
 var siphon_direction := Vector2.RIGHT
 var siphon_visual_amount := 0.0
+var mote_serial := 0
+var blood_ammo_mode := false
+const SIPHON_REACH := 224.0
+const SIPHON_PROXIMITY := 48.0
+
+func pay_for_shot(data: GunData) -> bool:
+	var costs := {"handgun": 2.0, "pdw": 0.8, "smg": 1.0, "shotgun": 5.0, "carbine": 1.5, "dmr": 3.5, "sniper": 6.0, "lmg": 1.3}
+	var cost := float(costs.get(data.weapon_class, 2.0))
+	if reserve + 0.0001 < cost: return false
+	reserve = maxf(0.0, reserve - cost)
+	_emit_if_changed()
+	return true
 
 func _ready() -> void:
 	z_index = 12
@@ -72,38 +84,57 @@ func update_system(delta: float, player: Node2D, blood_system: Node) -> void:
 	if is_instance_valid(player): siphon_target_position = player.global_position
 	_update_particles(delta, player)
 	if not stance_active or absorption_lockout > 0.0 or not is_instance_valid(player) or not is_instance_valid(blood_system):
+		absorption_clock = 0.0
 		_emit_if_changed()
 		return
 	absorption_clock += delta
 	while absorption_clock >= ABSORB_INTERVAL:
 		absorption_clock -= ABSORB_INTERVAL
-		if reserve >= capacity - 0.001: break
+		if reserve >= capacity - 0.001:
+			absorption_clock = 0.0
+			break
 		var resource_budget := minf(absorption_rate_per_second * ABSORB_INTERVAL, capacity - reserve)
 		var raw_budget := maxi(1, ceili(ground_drain_raw_per_second * ABSORB_INTERVAL))
 		siphon_direction = _resolve_siphon_direction(player)
-		var result: Dictionary = blood_system.absorb_pixel_blood(player.global_position, absorption_radius, absorption_power, 40, raw_budget)
+		var result: Dictionary
+		if blood_ammo_mode:
+			result = blood_system.absorb_siphon_sector(player.global_position, siphon_direction, SIPHON_REACH, absorption_half_angle, SIPHON_PROXIMITY, raw_budget)
+		else:
+			result = blood_system.absorb_pixel_blood(player.global_position, absorption_radius, absorption_power, 40, raw_budget)
 		var raw_amount := int(result.get("amount", 0))
-		if raw_amount <= 0: break
+		if raw_amount <= 0:
+			absorption_clock = 0.0
+			break
 		perks.on_siphon()
 		var resource_gain := minf(resource_budget, float(raw_amount) * RAW_TO_RESOURCE * absorption_efficiency)
 		reserve = minf(capacity, reserve + resource_gain)
 		siphon_visual_amount = 1.0
 		var sources: PackedVector2Array = result.get("positions", PackedVector2Array())
-		# Several staggered one-pixel droplets peel from the stain. They travel as
-		# short curved packets; no ray is ever drawn straight into the actor.
-		if not sources.is_empty():
-			var spawn_count := mini(5, mini(sources.size(), MAX_SIPHON_MOTES - particles.size()))
-			for source_index in range(spawn_count):
-				var source: Vector2 = sources[posmod(source_index * 3 + particles.size(), sources.size())]
-				particles.append({
-					"origin": source,
-					"position": source,
-					"previous": source,
-					"age": -float(source_index) * 0.018,
-					"life": SIPHON_PARTICLE_LIFETIME + float(source_index) * 0.018,
-					"curve": (-1.0 if (source_index + particles.size()) % 2 == 0 else 1.0) * randf_range(1.5, 4.0),
-				})
+		_spawn_siphon_motes(sources)
 	_emit_if_changed()
+
+func _spawn_siphon_motes(sources: PackedVector2Array) -> void:
+	# Only real removed pixels may become visual motes. No new resources or nodes.
+	var count := mini(16, mini(sources.size(), MAX_SIPHON_MOTES - particles.size()))
+	for index in range(count):
+		var source := sources[index * sources.size() / count]
+		var delay := float(index % 4) * 0.006
+		var curve := (4.0 + float(mote_serial % 6)) * (-1.0 if mote_serial % 2 == 0 else 1.0)
+		var duration := siphon_duration(source.distance_to(siphon_target_position)) if blood_ammo_mode else SIPHON_PARTICLE_LIFETIME
+		particles.append({"origin": source, "position": source, "age": -delay,
+			"life": duration + delay, "duration": duration, "curve": curve})
+		mote_serial += 1
+	if count > 0: queue_redraw()
+
+static func siphon_path(origin: Vector2, target: Vector2, progress: float, curve: float) -> Vector2:
+	var t := clampf(progress, 0.0, 1.0)
+	var travel := target - origin
+	var side := travel.normalized().orthogonal() if travel.length_squared() > 0.01 else Vector2.UP
+	# Accelerating pull with an outward bow; both endpoints are exact.
+	return origin.lerp(target, t * t) + side * sin(t * PI) * minf(absf(curve), travel.length() * 0.4) * signf(curve)
+
+static func siphon_duration(distance: float) -> float:
+	return lerpf(0.075, 0.48, pow(clampf(distance / SIPHON_REACH, 0.0, 1.0), 1.35))
 
 func set_stance_active(active: bool) -> void:
 	if stance_active == active: return
@@ -163,6 +194,7 @@ func get_cooldown_ratios() -> Dictionary:
 	return result
 
 func get_movement_multiplier() -> float:
+	if blood_ammo_mode: return 1.0
 	if perks.harvest_time > 0.0: return 1.0
 	return stance_move_multiplier if stance_active else 1.0
 
@@ -204,6 +236,10 @@ func apply_upgrade(upgrade_id: String) -> void:
 
 func _update_particles(delta: float, player: Node2D) -> void:
 	if particles.is_empty(): return
+	if not is_instance_valid(player):
+		particles.clear()
+		queue_redraw()
+		return
 	var survivors: Array[Dictionary] = []
 	for particle in particles:
 		particle.age = float(particle.age) + delta
@@ -212,12 +248,8 @@ func _update_particles(delta: float, player: Node2D) -> void:
 		if float(particle.age) >= 0.0 and is_instance_valid(player):
 			var origin: Vector2 = particle.origin
 			var target := player.global_position
-			var progress := clampf(float(particle.age) / SIPHON_PARTICLE_LIFETIME, 0.0, 1.0)
-			var eased := progress * progress * (3.0 - 2.0 * progress)
-			var travel := target - origin
-			var side := travel.normalized().orthogonal() if travel.length_squared() > 0.01 else Vector2.UP
-			particle.previous = particle.position
-			particle.position = origin.lerp(target, eased) + side * sin(progress * PI) * float(particle.curve)
+			var progress := clampf(float(particle.age) / float(particle.get("duration", SIPHON_PARTICLE_LIFETIME)), 0.0, 1.0)
+			particle.position = siphon_path(origin, target, progress, float(particle.curve))
 		survivors.append(particle)
 	particles = survivors
 	queue_redraw()
@@ -230,11 +262,10 @@ func _emit_if_changed() -> void:
 func _draw() -> void:
 	for particle in particles:
 		if float(particle.age) < 0.0: continue
-		var life := clampf(float(particle.life) / SIPHON_PARTICLE_LIFETIME, 0.0, 1.0)
-		var point: Vector2 = to_local(particle.position)
-		var previous: Vector2 = to_local(particle.previous)
-		# Draw only the mote's last one-pixel motion segment. Drawing to the target
-		# produced the old rigid needle/laser appearance.
-		if previous.distance_to(point) <= 4.0: PIXELS.line(self, previous, point, Color(BLOOD_RED, 0.32 + life * 0.46))
-		else: PIXELS.pixel(self, previous, Color(BLOOD_RED, life * 0.48))
-		PIXELS.pixel(self, point, Color(BLOOD_HOT, 0.65 + life * 0.35))
+		var progress := clampf(float(particle.age) / float(particle.get("duration", SIPHON_PARTICLE_LIFETIME)), 0.0, 1.0)
+		# Sample a short curved tail independent of frame delta. Opaque crimson
+		# stays readable over gray floors; never draw a source-to-player beam.
+		for tail_index in range(3):
+			var t := maxf(0.0, progress - float(tail_index) * 0.035)
+			var point := siphon_path(particle.origin, siphon_target_position, t, float(particle.curve))
+			PIXELS.pixel(self, to_local(point).round(), BLOOD_RED)

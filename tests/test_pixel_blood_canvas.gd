@@ -5,6 +5,21 @@ const CANVAS_SCRIPT := preload("res://scripts/effects/pixel_blood_canvas.gd")
 var failures := 0
 
 func _ready() -> void:
+	var compact = CANVAS_SCRIPT.new()
+	var broad = CANVAS_SCRIPT.new()
+	add_child(compact)
+	add_child(broad)
+	broad.splash_coverage = 1.8
+	seed(8401)
+	var compact_mass: int = compact.stamp_splatter(Vector2.ZERO, Vector2.RIGHT, 3.0, "fan", 0.9)
+	seed(8401)
+	var broad_mass: int = broad.stamp_splatter(Vector2.ZERO, Vector2.RIGHT, 3.0, "fan", 0.9)
+	_expect(broad.get_debug_pixel_count() > compact.get_debug_pixel_count() * 2, "paint wave needs visibly greater native-pixel coverage")
+	_expect(broad_mass <= compact_mass * 1.3, "greater coverage must not multiply recoverable blood mass")
+	var spent: int = broad.stamp_splatter(Vector2(400,400), Vector2.RIGHT, 6.0, "fan", 1.0, "blast", 700)
+	_expect(spent <= 700, "wide splashes must still obey explicit blood budgets")
+	compact.queue_free()
+	broad.queue_free()
 	var canvas = CANVAS_SCRIPT.new()
 	add_child(canvas)
 	canvas.configure("ground", -2)

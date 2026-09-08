@@ -143,6 +143,8 @@ func _ready() -> void:
 	if roguelike_mode:
 		blood_resource = BLOOD_RESOURCE_CONTROLLER.new() as Node2D
 		blood_resource.name = "BloodResource"
+		blood_resource.blood_ammo_mode = true
+		blood_resource.absorption_rate_per_second = 60.0
 		add_child(blood_resource)
 		blood_resource.resource_changed.connect(_on_blood_resource_changed)
 		blood_resource.skill_triggered.connect(_on_blood_skill_triggered)
@@ -307,6 +309,7 @@ func _process(delta: float) -> void:
 			blood_resource.update_system(delta, player, blood_system)
 			player.set_blood_stance_movement_multiplier(blood_resource.get_movement_multiplier())
 			player.set_blood_siphon_visual(blood_resource.get_siphon_visual_amount())
+			if is_instance_valid(hud.reticle): hud.reticle.set_siphon_strength(blood_resource.get_siphon_visual_amount())
 		if roguelike_mode and is_instance_valid(room_run): room_run.update_room(player)
 		if route_anchor == Vector2.ZERO: route_anchor = player.global_position
 		var route_step := player.global_position.distance_to(route_anchor)
@@ -705,6 +708,10 @@ func _start_run() -> void:
 		player.blood_skill_requested.connect(_on_blood_skill_requested)
 		player.blood_heal_requested.connect(_on_blood_heal_requested)
 	add_child(player)
+	if roguelike_mode:
+		player.blood_action_mode = true
+		player.blood_terrain_canvas = blood_system.ground_canvas
+		player.gun.blood_fire_payment = blood_resource.pay_for_shot
 	player.health_changed.connect(hud.set_player_health)
 	player.armor_changed.connect(hud.set_player_armor)
 	player.configure_field_kit(LoadoutCatalog.get_kit(Progression.get_current_kit_id()))
@@ -869,6 +876,11 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	if str(active_modifier.get("id", "standard")) == "armed_response" and patrol_index >= 0 and patrol_index % 3 == 1:
 		configured_type = "heavy" if patrol_index % 2 == 1 else "assault"
 	enemy.configure_combat(configured_type)
+	# A deterministic minority gives room decks an overpainting threat without
+	# changing gunner AI or spawning surprise reinforcements.
+	if roguelike_mode and patrol_index >= 0 and patrol_index % 8 == 5 and enemy.actor_type != "dog":
+		enemy.set_meta("polluter", true)
+		enemy.queue_redraw()
 	if enemy.has_method("set_combat_time_scale"): enemy.set_combat_time_scale(hostile_combat_time_scale)
 	if enemy.enemy_type == "gunner":
 		var enemy_weapon_ids := ["glock_17_gen5_mos", "hk_mp5a5", "fn_m249_para"]
@@ -981,7 +993,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	var resolved_penetration := data.penetration_power
 	var blood_round := false
 	var blood_budget_per_projectile := 0
-	if roguelike_mode and not enemy_owned and is_instance_valid(blood_resource):
+	if roguelike_mode and not enemy_owned and is_instance_valid(blood_resource) and not blood_resource.blood_ammo_mode:
 		var shot_id: int = int(player.gun.current_shot_id) if is_instance_valid(player) and is_instance_valid(player.gun) else -1
 		var enhancement: Dictionary = blood_resource.consume_enhanced_round(shot_id, is_instance_valid(player.gun) and player.gun.ammo == 0)
 		blood_round = bool(enhancement.enhanced)
@@ -1039,7 +1051,9 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	RuntimeBudget.add_persistent("corpse", corpse, self)
 	_show_scene_consequence("BODY +25 // BIOLOGICAL LOAD %s" % ("EXTREME" if pending_death_blood_power >= 1.7 else ("HIGH" if pending_death_blood_power >= 1.2 else "STANDARD")))
 	var pool_offset := pending_death_hit_position - pos if pending_death_hit_position != Vector2.ZERO else Vector2.ZERO
-	if pending_death_blood_enhanced:
+	if is_instance_valid(defeated_enemy) and defeated_enemy.get_meta("polluter", false):
+		blood_system.ground_canvas.stamp_pollution(pos, 23.0)
+	elif pending_death_blood_enhanced:
 		blood_system.spawn_death_burst_budgeted(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id, pending_death_blood_budget_raw)
 	else:
 		blood_system.spawn_death_burst(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id)
@@ -1342,7 +1356,15 @@ func _on_damage_impact(context: DamageContext) -> void:
 	# player death and corpse overkill retain impact feedback without creating a
 	# self-recycling blood source under the player.
 	if is_instance_valid(context.target) and context.target.is_in_group("enemy"):
-		blood_system.emit_context(context)
+		if context.target.get_meta("polluter", false):
+			# Lethal patch is stamped once in _on_enemy_died. Limit repeated
+			# nonlethal pellet hits to one surface upload burst per 150 ms.
+			var now := Time.get_ticks_msec()
+			if not context.lethal and now >= int(context.target.get_meta("next_pollution_ms", 0)):
+				context.target.set_meta("next_pollution_ms", now + 150)
+				blood_system.ground_canvas.stamp_pollution(context.hit_position, 12.0)
+		else:
+			blood_system.emit_context(context)
 	var hit_position := context.hit_position
 	var direction := context.direction
 	var weapon_id := context.weapon_id

@@ -63,6 +63,23 @@ func _ready() -> void:
 	full_resource.set_stance_active(true)
 	full_resource.update_system(0.08, siphon_player, overflow_blood)
 	_expect(overflow_blood.removed_raw == 0 and is_equal_approx(full_resource.reserve, full_resource.capacity), "a full reservoir must preserve ground blood")
+	var visual = BLOOD_RESOURCE.new()
+	add_child(visual)
+	var sources := PackedVector2Array()
+	for index in range(40): sources.append(Vector2(12 + index % 10, index / 10))
+	var before_visual: float = visual.reserve
+	visual._spawn_siphon_motes(sources)
+	_expect(visual.particles.size() == 16, "dense absorption needs a readable packet of sixteen motes")
+	for mote: Dictionary in visual.particles:
+		_expect(sources.has(mote.origin), "every mote must start at an actually removed blood pixel")
+	var origin := Vector2(24, 0)
+	_expect(BLOOD_RESOURCE.siphon_path(origin, Vector2.ZERO, 0.0, 8.0) == origin, "arc starts exactly on blood")
+	_expect(BLOOD_RESOURCE.siphon_path(origin, Vector2.ZERO, 1.0, 8.0).length() < 0.001, "arc ends inside player")
+	_expect(absf(BLOOD_RESOURCE.siphon_path(origin, Vector2.ZERO, 0.5, 8.0).y) > 4.0, "pull must visibly bow rather than form a rigid beam")
+	for index in range(30): visual._spawn_siphon_motes(sources)
+	_expect(visual.particles.size() <= visual.MAX_SIPHON_MOTES, "effect density must remain bounded")
+	visual._update_particles(1.0, siphon_player)
+	_expect(visual.particles.is_empty() and visual.reserve == before_visual, "visual arrival must expire without crediting extra blood")
 	if failures == 0: print("roguelike blood loop regression: PASS")
 	get_tree().quit(failures)
 
