@@ -33,12 +33,14 @@ class FeedbackMain:
 		if context.lethal:
 			terminal = blood_system.spawn_death_burst_budgeted(context.hit_position,
 				pending_death_blood_power, Vector2.ZERO, context.direction,
-				context.weapon_id, pending_death_blood_budget_raw)
+				context.weapon_id, pending_death_blood_budget_raw, pending_death_stain_radius)
 		terminal_spent += terminal
 		impacts.append({"stage": context.target.get_meta("stage"), "lane": context.target.get_meta("lane"),
 			"incoming": incoming, "remaining": context.blood_budget_raw,
 			"impact": context.blood_budget_spent_raw, "terminal": terminal,
-			"damage": context.damage, "lethal": context.lethal})
+			"damage": context.damage, "lethal": context.lethal, "radius": context.blood_stain_radius,
+			"terminal_radius": pending_death_stain_radius,
+			"source_radius": context.weapon_source.blood_stain_radius if context.weapon_source != null else -1.0})
 		var mist: BloodMistBatch = blood_system.mist_batch
 		peak_mist = maxi(peak_mist, mist.particles.size())
 		var mesh: MultiMesh = mist.particle_batch.multimesh
@@ -64,7 +66,8 @@ func _run() -> void:
 	Settings.update_values({"gore_enabled": true, "ragdoll_enabled": true, "blood_density": 1.0}, false)
 	RuntimeBudget.override_limits_for_test({"gore": 0})
 	seed(5901)
-	var data := AttackCatalog.get_gun_data(WEAPON)
+	var data := AttackCatalog.get_gun_data(WEAPON).duplicate() as GunData
+	data.blood_stain_radius = 13.0
 	_expect(data.pellet_count == 9 and data.damage == 30, "arcade Mossberg must emit nine 30-damage pellets")
 	_test_resolver_shape(data)
 	var harness := FeedbackMain.new()
@@ -112,7 +115,8 @@ func _run() -> void:
 	await get_tree().physics_frame
 	var initial_reserve := reserve.reserve
 	for lane in data.pellet_count:
-		harness._on_projectile_requested(Vector2(0,lane*40),Vector2.RIGHT,false,data.damage,WEAPON)
+		harness._on_projectile_requested(Vector2(0,lane*40),Vector2.RIGHT,false,data.damage,WEAPON,shooter)
+	data.blood_stain_radius = 88.0 # In-flight rounds must retain the original 13.
 	var paid := initial_reserve - reserve.reserve
 	var shot_budget := int(reserve.enhanced_shot_cache.raw_blood_budget)
 	var per_pellet := floori(float(shot_budget)/data.pellet_count)
@@ -131,6 +135,8 @@ func _run() -> void:
 	for impact: Dictionary in harness.impacts:
 		declared_spent += int(impact.impact) + int(impact.terminal)
 		_expect(impact.lethal, "penetration fixture must exercise the lethal budget transfer")
+		_expect(float(impact.radius) == 13.0 and float(impact.terminal_radius) == 13.0, "runtime radius snapshot reaches every impact and terminal burst")
+		_expect(float(impact.source_radius) == 13.0, "detached GunData survives live weapon mutation and penetration")
 		_expect(int(impact.remaining) == 0, "production Main must transfer lethal remainder away from the continuing projectile")
 		if int(impact.stage) == 0:
 			first_hits += 1

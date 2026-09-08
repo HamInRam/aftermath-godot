@@ -38,6 +38,8 @@ var damage_falloff_end := 170.0
 var minimum_damage_ratio := 0.62
 var blood_enhanced := false
 var blood_budget_raw := 0
+var blood_stain_radius := -1.0
+var weapon_source: GunData
 var blood_gore_multiplier := 1.0
 
 func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 43, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0, shooter: CollisionObject2D = null, source_penetration := 0.8, source_property_damage := 0.8, falloff_start := 65.0, falloff_end := 170.0, minimum_ratio := 0.62) -> void:
@@ -45,6 +47,7 @@ func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 43, source_weapon 
 	enemy_owned = is_enemy_bullet
 	damage = hit_damage
 	weapon_id = source_weapon
+	blood_stain_radius = AttackCatalog.get_gun_data(weapon_id).blood_stain_radius
 	var weapon_class := AttackCatalog.get_gun_data(weapon_id).weapon_class
 	visual_tail_length = 5 if weapon_class == "shotgun" else (7 if weapon_class in ["pdw", "smg"] else (10 if weapon_class in ["dmr", "sniper", "lmg"] else 8))
 	spawn_position = origin
@@ -132,6 +135,8 @@ func _physics_process(delta: float) -> void:
 				var resolved_damage := int(result.get("health_damage", damage))
 				var context := DamageContext.create(global_position, direction, resolved_damage, weapon_id, travel_distance, bool(result.get("lethal", current_hp <= resolved_damage)), hit_zone, spawn_position, collider)
 				context.apply_ballistic_result(result)
+				context.weapon_source = weapon_source
+				context.blood_stain_radius = blood_stain_radius
 				_apply_blood_enhancement(context)
 				# Wound simulation needs the ammunition source too. An empowered hit
 				# already spends a finite blood ledger at impact, so its later bleed

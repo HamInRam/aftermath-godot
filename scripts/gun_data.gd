@@ -6,6 +6,12 @@ extends Resource
 @export var manufacturer := ""
 @export var weapon_class := "handgun"
 @export var caliber := "9x19mm"
+@export_category("Blood Cycle Economy")
+## One trigger pull, including all shotgun pellets.
+@export_range(0.1, 30.0, 0.1) var caliber_blood_cost := 1.0
+## World pixels, not storage chunks. 32 pixels equal one chunk-width.
+@export_range(4.0, 320.0, 1.0) var blood_stain_radius := 24.0
+@export_category("Ballistics & Handling")
 @export var action_type := "semi_auto"
 @export var feed_type := "detachable_magazine"
 @export var magazine_family := "generic"

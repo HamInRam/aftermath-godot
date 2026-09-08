@@ -29,6 +29,9 @@ var bleed_duration := 0.0
 var bleed_dps := 0.0
 var wound_severity := 0.0
 var weapon_id := "pistol"
+## Detached launch-time resource. Consumers must treat it as read-only.
+var weapon_source: GunData
+var blood_stain_radius := -1.0
 var travel_distance := 0.0
 var lethal := false
 var hit_zone := "torso"
@@ -45,6 +48,7 @@ static func create(position: Vector2, shot_direction: Vector2, amount: int, atta
 	context.damage = maxi(1, amount)
 	context.raw_damage = float(context.damage)
 	context.weapon_id = attack_id
+	if AttackCatalog.GUNS.has(attack_id): context.blood_stain_radius = AttackCatalog.get_gun_data(attack_id).blood_stain_radius
 	context.travel_distance = maxf(0.0, distance)
 	context.lethal = is_lethal
 	context.hit_zone = zone

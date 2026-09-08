@@ -80,6 +80,7 @@ var pending_death_attack_id := "pistol"
 var pending_death_travel_distance := 0.0
 var pending_death_blood_enhanced := false
 var pending_death_blood_budget_raw := -1
+var pending_death_stain_radius := -1.0
 var pending_player_death_context: Dictionary = {}
 var player_death_corpse: Node2D
 var player_muzzle_flash: WeakRef
@@ -1004,6 +1005,10 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 			# divide it so a shotgun cannot duplicate blood for every pellet.
 			blood_budget_per_projectile = floori(float(enhancement.raw_blood_budget) / float(maxi(1, data.pellet_count)))
 	bullet.setup(direction, enemy_owned, resolved_damage, weapon_id, origin, data.bullet_speed, shooter, resolved_penetration, data.property_damage, data.damage_falloff_start, data.damage_falloff_end, data.minimum_damage_ratio)
+	bullet.blood_stain_radius = data.blood_stain_radius
+	# Detach from the equipped resource: swapping/modifying a gun must not
+	# retroactively change an in-flight projectile's terrain signature.
+	bullet.weapon_source = data.duplicate(true) as GunData
 	# The fire event precedes the projectile event. Color the same-frame muzzle
 	# only after the gameplay ledger actually paid for this trigger pull.
 	if not enemy_owned and player_muzzle_flash != null:
@@ -1054,9 +1059,9 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	if is_instance_valid(defeated_enemy) and defeated_enemy.get_meta("polluter", false):
 		blood_system.ground_canvas.stamp_pollution(pos, 23.0)
 	elif pending_death_blood_enhanced:
-		blood_system.spawn_death_burst_budgeted(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id, pending_death_blood_budget_raw)
+		blood_system.spawn_death_burst_budgeted(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id, pending_death_blood_budget_raw, pending_death_stain_radius)
 	else:
-		blood_system.spawn_death_burst(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id)
+		blood_system.spawn_death_burst(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id, pending_death_stain_radius)
 	Events.publish_casualty(pos, pending_death_direction)
 	if is_instance_valid(defeated_enemy) and defeated_enemy.enemy_type == "gunner":
 		var remaining_rounds: int = defeated_enemy.gun.ammo
@@ -1069,6 +1074,7 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	pending_death_travel_distance = 0.0
 	pending_death_blood_enhanced = false
 	pending_death_blood_budget_raw = -1
+	pending_death_stain_radius = -1.0
 	_update_combat_objective_hud()
 
 func _get_mission_profile() -> MissionProfile:
@@ -1283,6 +1289,7 @@ func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: in
 	pickup.setup(weapon_id, rounds, attachment_ids)
 
 func _spawn_ammo_pickup(index: int) -> void:
+	if roguelike_mode: return
 	var pickup = AMMO_PICKUP_SCENE.instantiate()
 	if not RuntimeBudget.try_add("ammo_pickup", pickup, self): return
 	var spawn_position := _map_authored_position(ammo_pickup_positions[index])
@@ -1407,6 +1414,7 @@ func _on_damage_impact(context: DamageContext) -> void:
 			pending_death_travel_distance = context.travel_distance
 			pending_death_blood_enhanced = context.blood_enhanced
 			pending_death_blood_budget_raw = context.blood_budget_raw
+			pending_death_stain_radius = context.blood_stain_radius
 			# A lethal impact transfers ownership of the remaining finite blood
 			# ledger to the terminal burst spawned by _on_enemy_died. Clear the
 			# projectile context now so a through-shot cannot reuse the same mass on
@@ -1471,7 +1479,7 @@ func _update_combat_focus(delta: float) -> void:
 	# Focus is a finite combat resource.  The player may walk around the exterior
 	# staging area before deployment, but that is not an active combat window and
 	# must never consume a charge (or slow dormant room enemies).
-	var focus_allowed := phase == "combat" and not run_over and deployment_started and not entry_loadout_active
+	var focus_allowed := not roguelike_mode and phase == "combat" and not run_over and deployment_started and not entry_loadout_active
 	if not focus_allowed:
 		combat_focus_active = false
 		combat_focus_time_remaining = 0.0

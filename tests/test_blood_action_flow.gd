@@ -20,20 +20,35 @@ func _run() -> void:
 	player.set_physics_process(false)
 	player.blood_action_mode = true
 	var blood := BloodResourceController.new()
+	_expect(blood.reserve == 100.0 and blood.capacity == 100.0, "new reserve starts full")
 	add_child(blood)
 	blood.blood_ammo_mode = true
 	blood.set_build("balanced")
 	player.gun.blood_fire_payment = blood.pay_for_shot
 	player.gun.set_gun_data(AttackCatalog.get_gun_data("mossberg_590a1"), true)
 	player.gun.ammo = 0
-	blood.reserve = 10.0
+	var shot_cost: float = player.gun.gun_data.caliber_blood_cost
+	blood.reserve = shot_cost * 2.0
 	var before_reserve: int = player.gun.reserve_ammo
 	_expect(player.gun.try_fire(Vector2.RIGHT), "blood fires without a magazine")
-	_expect(blood.reserve == 5.0, "shotgun pellets share one five-point payment")
-	_expect(not player.gun.try_fire(Vector2.RIGHT) and blood.reserve == 5.0, "cooldown must not charge")
+	_expect(is_equal_approx(blood.reserve, shot_cost), "shotgun pellets share one GunData payment")
+	_expect(not player.gun.try_fire(Vector2.RIGHT) and is_equal_approx(blood.reserve, shot_cost), "cooldown must not charge")
+	_expect(not blood.request_skill("q") and not blood.request_skill("e") and not blood.request_skill("r"), "legacy skills disabled in blood-ammo mode")
+	for id in WeaponPlatformCatalog.get_weapon_ids():
+		var data := AttackCatalog.get_gun_data(id)
+		_expect(data.caliber_blood_cost > 0 and data.blood_stain_radius > 0, "every weapon has valid blood parameters")
 	player.gun.cooldown = 0.0
 	blood.reserve = 0.0
 	_expect(not player.gun.try_fire(Vector2.RIGHT), "empty blood prevents firing")
+	_expect(is_equal_approx(player.gun.cooldown, 0.2), "blood dry fire uses a 200ms cooldown")
+	_expect(AttackCatalog.get_gun_data("glock_17_gen5_mos").caliber_blood_cost == 1.2, "handgun blood baseline")
+	_expect(AttackCatalog.get_gun_data("hk_mp5a5").caliber_blood_cost == 0.6, "SMG blood baseline")
+	_expect(AttackCatalog.get_gun_data("mossberg_590a1").caliber_blood_cost == 9.5, "shotgun blood baseline")
+	_expect(AttackCatalog.get_gun_data("ai_axmc").caliber_blood_cost == 15.0, "sniper blood baseline")
+	var custom := player.gun.gun_data.duplicate() as GunData
+	custom.caliber_blood_cost = 3.3
+	blood.reserve = 4.0
+	_expect(blood.pay_for_shot(custom) and is_equal_approx(blood.reserve, 0.7), "runtime GunData override is authoritative")
 	player.gun.reload()
 	_expect(not player.gun.is_reloading and player.gun.reserve_ammo == before_reserve and player.gun.ammo == 0, "blood mode never transfers conventional ammunition")
 	_expect(player.start_roll(Vector2.UP), "Space roll may start without blood")

@@ -10,6 +10,7 @@ func check(ok: bool, message: String) -> void:
 		push_error(message)
 
 func run() -> void:
+	await check_rotated_sectors()
 	var blood := BloodSystem.new()
 	add_child(blood)
 	var canvas: PixelBloodCanvas = blood.ground_canvas
@@ -71,3 +72,24 @@ func run() -> void:
 	await get_tree().process_frame
 	print("SIPHON_SECTOR_OK" if failures == 0 else "SIPHON_SECTOR_FAILED")
 	get_tree().quit(failures)
+
+func check_rotated_sectors() -> void:
+	var open_rays := PackedFloat32Array()
+	open_rays.resize(96)
+	open_rays.fill(224.0)
+	for direction_index in range(8):
+		var canvas := PixelBloodCanvas.new()
+		add_child(canvas)
+		var origin := Vector2(-500.5, -300.5)
+		var forward := Vector2.RIGHT.rotated(direction_index * PI / 4.0)
+		var inside := origin + forward.rotated(deg_to_rad(44.0)) * 150.0
+		var outside := origin + forward.rotated(deg_to_rad(46.0)) * 150.0
+		var rear := origin - forward * 35.0
+		var too_far := origin + forward * 226.0
+		for point in [inside, outside, rear, too_far]: canvas.add_blood_pixel(point, 80)
+		var result := canvas.absorb_sector(origin, forward * 9.0, 224.0, PI / 4.0, 48.0, open_rays, 8000)
+		check(int(result.amount) == 160, "eight-way sector union drains each valid pixel once: %d" % direction_index)
+		check(canvas.terrain_at(inside) == 0 and canvas.terrain_at(rear) == 0, "rotated front and blind circle cover negative coordinates")
+		check(canvas.terrain_at(outside) == 1 and canvas.terrain_at(too_far) == 1, "angle/range boundaries retain outside pixels")
+		canvas.queue_free()
+	await get_tree().process_frame

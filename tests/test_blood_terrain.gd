@@ -33,8 +33,30 @@ func run() -> void:
 	canvas.add_blood_pixel(player.global_position, 2)
 	check(canvas.terrain_at(player.global_position) == 1, "overpaint removes pollution")
 	check(player.start_roll(Vector2.RIGHT), "overpainting restores roll")
+	check(player.roll_speed_multiplier == 1.35, "blood roll starts with 35 percent bonus")
+	var remaining: float = player.roll_time
+	var cooldown: float = player.roll_cooldown
+	var invulnerable: bool = player.is_roll_invulnerable()
 	canvas.absorb_circle(player.global_position, 1, 255, 10, 100)
 	check(canvas.terrain_at(player.global_position) == 0, "absorbing paint never restores erased pollution")
+	player.refresh_blood_terrain()
+	check(player.roll_speed_multiplier == 1.0, "absorbing blood removes bonus during ongoing roll")
+	canvas.add_blood_pixel(Vector2(-9, -10), 4)
+	player.refresh_blood_terrain()
+	check(player.roll_speed_multiplier == 1.0, "blood elsewhere in same chunk does not boost clean feet")
+	player.global_position = Vector2(-9, -10)
+	player.refresh_blood_terrain()
+	check(player.roll_speed_multiplier == 1.35, "rolling into blood immediately grants bonus")
+	player.global_position = Vector2(-8, -10)
+	player.refresh_blood_terrain()
+	check(player.roll_speed_multiplier == 1.0, "rolling out of blood immediately restores base speed")
+	check(player.roll_time == remaining and player.roll_cooldown == cooldown and player.is_roll_invulnerable() == invulnerable, "terrain transitions do not extend roll or invulnerability")
+	player.roll_cooldown = 0
+	check(not player.start_roll(Vector2.LEFT), "active roll cannot restart even if cooldown is reset")
+	player.roll_cooldown = 0
+	player.roll_time = 0
+	player.global_position = Vector2(-50, -50) # Outside the earlier pollution fixture.
+	check(player.start_roll(Vector2.RIGHT) and player.roll_speed_multiplier == 1.0, "clean-ground roll resets bonus")
 	var spent := canvas.stamp_weapon_footprint(Vector2(100, 100), Vector2.RIGHT, "shotgun", 600)
 	check(spent <= 600 and spent > 0, "shotgun paint respects mass budget")
 	canvas.stamp_weapon_footprint(Vector2(200, 200), Vector2.RIGHT, "shotgun")
@@ -54,6 +76,13 @@ func run() -> void:
 	check(canvas.terrain_at(Vector2(340, 350)) == 1, "sniper paints contiguous route")
 	check(canvas.terrain_at(Vector2(370, 350)) == 0, "sniper route stops at solid wall")
 	check(AttackCatalog.get_blood_profile("hk_mp5a5").pattern == "dots", "SMG gets dotted footprint")
+	var stamp_started := Time.get_ticks_usec()
+	canvas.stamp_weapon_footprint(Vector2(1000, 1000), Vector2.RIGHT, "shotgun", -1, 160.0)
+	var stamp_ms := float(Time.get_ticks_usec() - stamp_started) / 1000.0
+	check(canvas.terrain_at(Vector2(1140, 1000)) == 1, "five chunk-width shotgun footprint is not clamped to old radius")
+	check(canvas.terrain_at(Vector2(1170, 1000)) == 0, "shotgun footprint respects configured outer bound")
+	check(stamp_ms < 2000.0, "large stencil has bounded CPU cost")
+	print("LARGE_STENCIL_MS ", stamp_ms)
 	player.queue_free()
 	canvas.queue_free()
 	wall.queue_free()

@@ -72,21 +72,29 @@ var blood_terrain_canvas: Node2D
 var blood_terrain_multiplier := 1.0
 
 func refresh_blood_terrain() -> void:
+	var previous_roll_multiplier := roll_speed_multiplier
 	blood_terrain_multiplier = 1.0
 	if blood_action_mode and is_instance_valid(blood_terrain_canvas):
 		var terrain: int = blood_terrain_canvas.terrain_at(global_position)
 		blood_terrain_multiplier = 0.6 if terrain < 0 else (1.3 if terrain > 0 else 1.0)
+	# Sample the actual 1px cell, not whether its 32px storage chunk has blood.
+	# Re-evaluated before each movement step, including an ongoing roll.
+	roll_speed_multiplier = 1.35 if blood_terrain_multiplier > 1.0 else 1.0
+	if roll_time > 0.0 or previous_roll_multiplier != roll_speed_multiplier:
+		queue_redraw()
 var roll_time := 0.0
 var roll_cooldown := 0.0
 var roll_direction := Vector2.RIGHT
+var roll_speed_multiplier := 1.0
 const ROLL_DURATION := 0.28
 const ROLL_IFRAMES := 0.18
 
 func start_roll(direction: Vector2) -> bool:
 	refresh_blood_terrain()
 	if blood_terrain_multiplier < 1.0: return false
-	if not blood_action_mode or is_dead or is_executing or not controls_enabled or predeployment_mode or roll_cooldown > 0.0: return false
+	if not blood_action_mode or is_dead or is_executing or not controls_enabled or predeployment_mode or roll_cooldown > 0.0 or roll_time > 0.0: return false
 	roll_direction = direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT.rotated(actual_aim_angle)
+	roll_speed_multiplier = 1.35 if blood_terrain_multiplier > 1.0 else 1.0
 	roll_time = ROLL_DURATION
 	roll_cooldown = 0.7
 	return true
@@ -169,7 +177,9 @@ func _physics_process(delta: float) -> void:
 	if predeployment_mode:
 		_handle_predeployment_movement(delta)
 		return
+	var was_rolling := roll_time > 0.0
 	roll_time = maxf(0.0, roll_time - delta)
+	if was_rolling and roll_time == 0.0: queue_redraw()
 	roll_cooldown = maxf(0.0, roll_cooldown - delta)
 	_update_targeting_mode()
 	if not blood_action_mode and execution_query_cooldown <= 0.0 and not is_executing and not is_dead:
@@ -191,13 +201,13 @@ func _physics_process(delta: float) -> void:
 	if execution_input_buffer > 0.0:
 		if attempt_ground_execution(): execution_input_buffer = 0.0
 		if is_executing: return
-	if Input.is_action_just_pressed("interact") and not blood_stance_active:
+	if Input.is_action_just_pressed("interact") and (not blood_stance_active or blood_action_mode):
 		if not attempt_weapon_pickup(): world_interaction_requested.emit()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	refresh_blood_terrain()
 	var executioner_mobility := 1.0 + Progression.get_specialization_level("executioner") * 0.03
 	velocity = input_direction * move_speed * get_equipped_movement_multiplier() * executioner_mobility * field_movement_multiplier * blood_stance_movement_multiplier * blood_terrain_multiplier
-	if roll_time > 0.0: velocity = roll_direction * move_speed * 2.6
+	if roll_time > 0.0: velocity = roll_direction * move_speed * 2.6 * roll_speed_multiplier
 	var intended_velocity := velocity
 	move_and_slide()
 	push_contact_bodies(intended_velocity)
@@ -208,16 +218,16 @@ func _physics_process(delta: float) -> void:
 	if not blood_action_mode and equipped_mode != "gun" and Input.is_action_just_pressed("targeting_mode"):
 		_start_kick_attack()
 	_handle_primary_input(Input.is_action_just_pressed("shoot"), Input.is_action_pressed("shoot"))
-	if blood_stance_active:
+	if blood_stance_active and not blood_action_mode:
 		if Input.is_action_just_pressed("throw_weapon"): blood_skill_requested.emit("q")
 		if Input.is_action_just_pressed("interact"): blood_skill_requested.emit("e")
 		if Input.is_action_just_pressed("reload"): blood_skill_requested.emit("r")
-	if Input.is_action_just_pressed("blood_heal"): blood_heal_requested.emit()
-	if Input.is_action_just_pressed("reload") and not blood_stance_active: reload_input_buffer = INPUT_BUFFER_DURATION
+	if not blood_action_mode and Input.is_action_just_pressed("blood_heal"): blood_heal_requested.emit()
+	if not blood_action_mode and Input.is_action_just_pressed("reload") and not blood_stance_active: reload_input_buffer = INPUT_BUFFER_DURATION
 	if reload_input_buffer > 0.0 and equipped_mode == "gun" and not gun.is_reloading and gun.ammo < gun.max_ammo:
 		gun.reload()
 		if gun.is_reloading: reload_input_buffer = 0.0
-	if Input.is_action_just_pressed("throw_weapon") and not blood_stance_active: throw_input_buffer = INPUT_BUFFER_DURATION
+	if Input.is_action_just_pressed("throw_weapon") and (not blood_stance_active or blood_action_mode): throw_input_buffer = INPUT_BUFFER_DURATION
 	if throw_input_buffer > 0.0 and throw_equipped_gun(Vector2.RIGHT.rotated(actual_aim_angle)):
 		throw_input_buffer = 0.0
 
@@ -949,6 +959,13 @@ func apply_lifecycle_impact(direction: Vector2, power: float, hit_zone := "torso
 
 func _draw() -> void:
 	_draw_aim_laser()
+	if not is_dead and roll_time > 0.0 and roll_speed_multiplier > 1.0:
+		var progress := 1.0 - roll_time / ROLL_DURATION
+		var local_back := (-roll_direction).rotated(-global_rotation)
+		for index in range(8):
+			var side := (float(index) - 3.5) * 0.18
+			var point := local_back.rotated(side) * (5.0 + progress * 13.0 + float(index % 3))
+			PIXEL_PAINTER.pixel(self, point.round(), NeonPalette.BLOOD_CRIMSON)
 	if is_dead:
 		PIXEL_PAINTER.material_rect(self, Rect2(-5, -6, 10, 12), Color(0.2, 0.18, 0.22, 0.75), Color(0.26, 0.23, 0.28, 0.75), Color(0.1, 0.08, 0.12, 0.75), 17, &"fabric")
 	if is_executing:

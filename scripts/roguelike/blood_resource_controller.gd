@@ -13,9 +13,9 @@ const MAX_SIPHON_MOTES := 96
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 var capacity := 100.0
-var reserve := 24.0
+var reserve := 100.0
 var absorption_radius := 29.0
-var absorption_half_angle := deg_to_rad(43.0)
+var absorption_half_angle := deg_to_rad(45.0)
 var absorption_power := 255
 var absorption_efficiency := 1.0
 var absorption_rate_per_second := 24.0
@@ -63,8 +63,8 @@ const SIPHON_REACH := 224.0
 const SIPHON_PROXIMITY := 48.0
 
 func pay_for_shot(data: GunData) -> bool:
-	var costs := {"handgun": 2.0, "pdw": 0.8, "smg": 1.0, "shotgun": 5.0, "carbine": 1.5, "dmr": 3.5, "sniper": 6.0, "lmg": 1.3}
-	var cost := float(costs.get(data.weapon_class, 2.0))
+	if data == null: return false
+	var cost := maxf(0.1, data.caliber_blood_cost)
 	if reserve + 0.0001 < cost: return false
 	reserve = maxf(0.0, reserve - cost)
 	_emit_if_changed()
@@ -166,6 +166,7 @@ func consume_enhanced_round(shot_id := -1, last_round := false) -> Dictionary:
 	return enhanced_shot_cache
 
 func request_skill(skill_id: String) -> bool:
+	if blood_ammo_mode: return false
 	var id := skill_id.to_lower()
 	if not skill_costs.has(id) or float(skill_cooldowns.get(id, 0.0)) > 0.0: return false
 	var cost := float(skill_costs[id])
@@ -178,6 +179,7 @@ func request_skill(skill_id: String) -> bool:
 	return true
 
 func consume_heal(player: Node) -> bool:
+	if blood_ammo_mode: return false
 	if reserve + 0.001 < heal_cost or not is_instance_valid(player): return false
 	if int(player.get("hp")) >= int(player.get("max_hp")): return false
 	var healed := int(player.heal(heal_amount)) if player.has_method("heal") else 0

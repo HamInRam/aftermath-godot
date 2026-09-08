@@ -24,6 +24,7 @@ var focus_meter
 var focus_backplate: ColorRect
 var focus_icon: TextureRect
 var focus_count_label: Label
+var focus_caption: Label
 var blood_meter
 var blood_backplate: ColorRect
 var blood_icon: TextureRect
@@ -105,7 +106,8 @@ func _ready() -> void:
 	focus_count_label = _make_label(Vector2(20, 164), 5, Color.WHITE)
 	focus_count_label.text = "x3"
 	focus_count_label.size = Vector2(16, 7)
-	_make_label(Vector2(40, 164), 4, Color("b8b8b8")).text = "X FOCUS"
+	focus_caption = _make_label(Vector2(40, 164), 4, Color("b8b8b8"))
+	focus_caption.text = "X FOCUS"
 	focus_meter = _make_meter(Vector2(20, 171), Vector2(47, 1), Color.WHITE)
 	blood_icon = _make_icon(Vector2(257, 160), "blood", Color("d10b32"))
 	blood_count_label = _make_label(Vector2(268, 158), 7, Color("d10b32"))
@@ -262,6 +264,9 @@ func show_hit_confirmation(kind: String, lethal := false) -> void:
 
 func set_combat_focus(value: float, active: bool, charges := 0, max_charges := 3, recharge_progress := 0.0) -> void:
 	if not is_instance_valid(focus_meter): return
+	if _roguelike_mode:
+		for node in [focus_backplate, focus_icon, focus_count_label, focus_meter, focus_caption]: node.hide()
+		return
 	var normalized := clampf(value, 0.0, 1.0)
 	focus_meter.value = normalized
 	focus_meter.visible = true
@@ -284,7 +289,7 @@ func set_roguelike_mode(enabled: bool) -> void:
 	ammo_icon.visible = false
 	ammo_label.visible = false
 	ammo_meter.visible = false
-	focus_backplate.visible = true
+	focus_backplate.visible = false
 	blood_backplate.visible = true
 	blood_icon.visible = true
 	blood_count_label.visible = true
@@ -316,7 +321,7 @@ func set_blood_resource(current: float, maximum: float, active: bool, cooldowns 
 		var r := "R" if float(cooldowns.get("r", 0.0)) <= 0.0 else "r"
 		blood_skill_label.text = "%s STEP   %s PULSE   %s GUARD   B HEAL" % [q, e, r]
 		blood_skill_label.modulate = color if active else Color("a8a8a8")
-		blood_skill_label.visible = active
+		blood_skill_label.visible = active and not _roguelike_mode
 
 func set_player_health(current: int, maximum: int) -> void:
 	if not is_instance_valid(health_meter): return
@@ -365,10 +370,7 @@ func set_phase(value: String) -> void:
 	ammo_icon.visible = not _roguelike_mode
 	ammo_label.visible = not _roguelike_mode
 	ammo_meter.visible = not _roguelike_mode
-	focus_backplate.visible = true
-	focus_icon.visible = true
-	focus_count_label.visible = true
-	focus_meter.visible = true
+	for node in [focus_backplate, focus_icon, focus_count_label, focus_meter, focus_caption]: node.visible = not _roguelike_mode
 	blood_backplate.visible = _roguelike_mode
 	blood_icon.visible = _roguelike_mode
 	blood_count_label.visible = _roguelike_mode

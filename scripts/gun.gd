@@ -329,7 +329,7 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 		return false
 	# Pay exactly once per successful trigger, never once per shotgun pellet.
 	if blood_fire_payment.is_valid() and not blood_fire_payment.call(gun_data):
-		cooldown = 0.15
+		cooldown = 0.2
 		play_dry_fire()
 		return false
 	# Preserve overshoot from the previous frame so a 750 RPM weapon does not

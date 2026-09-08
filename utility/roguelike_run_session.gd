@@ -44,7 +44,7 @@ func restore(state: Dictionary, player: Node, blood: Node) -> bool:
 	player.armor_protection = float(state.get("armor_protection", 0.0))
 	player.armor_damage_reduction = float(state.get("armor_reduction", 0.0))
 	player.armor_covers_head = bool(state.get("armor_head", false))
-	player.blood_guard_points = maxi(0, int(state.get("guard", 0)))
+	player.blood_guard_points = 0 if blood.blood_ammo_mode else maxi(0, int(state.get("guard", 0)))
 	blood.set_build(str(state.get("blood_build", "balanced")))
 	blood.perks.restore(state.get("combat_perks", {}))
 	blood.capacity = maxf(1.0, float(state.get("blood_capacity", 100.0)))
