@@ -81,7 +81,10 @@ static func chase_velocity(enemy_type: String, direction: Vector2, speed: float,
 	if holds_position: return Vector2.ZERO
 	if enemy_type == "gunner" and reposition_time > 0.0:
 		return direction.rotated(PI * 0.5 * reposition_sign) * speed * 0.82
-	if enemy_type == "melee" and tactical_distance <= melee_range * 0.7:
+	# Stop at authored weapon reach. The previous 70% threshold was smaller than
+	# the combined actor colliders for hounds, so they could never satisfy it and
+	# continuously tried to move through the player between attacks.
+	if enemy_type == "melee" and tactical_distance <= melee_range:
 		return Vector2.ZERO
 	if enemy_type == "gunner" and tactical_distance < 28.0:
 		return direction.rotated(PI * 0.5) * speed * 0.4 * strafe_sign

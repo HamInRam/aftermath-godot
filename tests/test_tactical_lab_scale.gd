@@ -17,7 +17,7 @@ func _run() -> void:
 	_expect(level.ammo_pickup_weapon_ids.count("shotgun") >= 2, "expanded test map should provide repeatable shotgun ammunition")
 	_expect(level.trauma_camera.camera_center_bounds.end.x >= 352.0 and level.trauma_camera.camera_center_bounds.end.y >= 198.0, "camera bounds must cover the expanded test map")
 	_expect(tile_world.is_navigation_position_walkable(tile_world.map_authored_position(Vector2(460, 248))), "new south-east test sector must be navigable")
-	_expect(tile_world.get_tactical_room_id(tile_world.map_authored_position(Vector2(420, 60))) != tile_world.get_tactical_room_id(tile_world.map_authored_position(Vector2(420, 180))), "separated east-side sectors need distinct tactical room identities")
+	_expect(tile_world.get_tactical_room_id(tile_world.map_authored_position(Vector2(420, 60))) == tile_world.get_tactical_room_id(tile_world.map_authored_position(Vector2(420, 180))), "expanded east side should remain one broad observation combat hall")
 	_expect(tile_world.get_tactical_room_id(tile_world.map_authored_position(Vector2(300, 180))) != tile_world.get_tactical_room_id(tile_world.map_authored_position(Vector2(300, 250))), "expanded south sector needs its own tactical room identity")
 	_expect(tile_world.destructible_cells.any(func(cell: Vector2i) -> bool: return cell.x >= 48 or cell.y >= 27), "expanded sectors should contain authored destructible environmental props")
 	_expect(level.get_node("Lighting").get_child_count() >= 8, "expanded sectors should receive dedicated atmospheric lights")
@@ -37,7 +37,8 @@ func _run() -> void:
 			break
 	_expect(has_walkable_splatter, "projected pixel splatter must remain on reachable floor")
 	var trauma_before_projectiles: float = level.trauma_camera.trauma
-	for pellet in range(7): level._on_projectile_requested(level.player.global_position, Vector2.RIGHT, false, 1, "shotgun")
+	var shotgun_pellet_count := AttackCatalog.get_gun_data("shotgun").pellet_count
+	for pellet in range(shotgun_pellet_count): level._on_projectile_requested(level.player.global_position, Vector2.RIGHT, false, 1, "shotgun")
 	_expect(is_equal_approx(level.trauma_camera.trauma, trauma_before_projectiles), "individual shotgun pellets must not each add camera trauma")
 	level._on_weapon_fired(level.player.global_position, Vector2.RIGHT, false, "shotgun")
 	_expect(level.trauma_camera.trauma > trauma_before_projectiles, "one shotgun trigger pull should add camera trauma exactly once")

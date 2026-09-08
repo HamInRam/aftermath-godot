@@ -2,8 +2,10 @@ extends "res://scripts/actor.gd"
 
 signal projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String, shooter: CollisionObject2D)
 signal died_at(world_position: Vector2, facing: float)
+signal combat_contact(source_position: Vector2)
 
 const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
+const HIT_FEEDBACK_PROFILE := preload("res://scripts/combat/hit_feedback_profile.gd")
 const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 const PIXEL_ACTOR_FRAMES := preload("res://utility/pixel_actor_texture_factory.gd")
 
@@ -36,9 +38,10 @@ const PIXEL_ACTOR_FRAMES := preload("res://utility/pixel_actor_texture_factory.g
 @export_group("Alert Memory")
 @export_range(1.0, 20.0, 0.5) var suspicious_memory_duration := 5.0
 @export_range(2.0, 30.0, 0.5) var alert_memory_duration := 10.0
-@onready var gun = $Gun
-@onready var legs_visual: PixelActorPart = $LegsVisual
-@onready var lifecycle_rig = $LifecycleRig
+@onready var upper_body: Node2D = $UpperBody
+@onready var gun = $UpperBody/Gun
+@onready var legs_visual: PixelActorPart = $Legs
+@onready var lifecycle_rig = $UpperBody/LifecycleRig
 
 enum State { IDLE, INVESTIGATE, SEARCH, RETURN, CHASE, ATTACK, STAGGERED, KNOCKED_DOWN }
 enum PatrolMode { MOVING, WAITING, SENTRY }
@@ -125,8 +128,22 @@ var previous_visual_state := State.IDLE
 var state_pose_pulse := 0.0
 var knockdown_pose_phase := 0.0
 var lifecycle_context_impact_frame := -1
+var ballistic_feedback_frame := -1
 var combat_time_scale := 1.0
+var active_bleed_rate := 0.0
+var active_bleed_time := 0.0
+var active_bleed_dps := 0.0
+var active_bleed_emits_blood := true
+var bleed_damage_accumulator := 0.0
+var bleed_drop_accumulator := 0.0
+var bleed_stationary_accumulator := 0.0
+var last_bleed_position := Vector2.INF
+var last_wound_direction := Vector2.RIGHT
+var visual_update_accumulator := 0.0
+var room_combat_active := true
+var pending_impact_investigation := Vector2.INF
 const KNOCKDOWN_DURATION := 4.0
+const MELEE_CONTACT_MARGIN := 2.0
 
 static func clear_shared_caches() -> void:
 	blood_clue_cache_bucket = -1
@@ -150,10 +167,10 @@ func _ready() -> void:
 	hit_received.connect(_on_hit_received)
 	progress_anchor = global_position
 	_apply_compatibility_frame()
-	legs_visual.visible = false
-	$Sprite2D.visible = false
+	legs_visual.visible = true
+	$UpperBody/Sprite2D.visible = false
 	$FakeShadow.visible = false
-	lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("6e4a37") if actor_type == "dog" else Color("7c235b"), Color("e8d8c8") if actor_type == "dog" else Color("f23d78"), "hound" if actor_type == "dog" else archetype_id)
+	lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("555555") if actor_type == "dog" else Color("3c3c3c"), Color("d8d8d8") if actor_type == "dog" else Color("bcbcbc"), "hound" if actor_type == "dog" else archetype_id)
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
@@ -176,11 +193,24 @@ func _physics_process(delta: float) -> void:
 		if local_motion.length_squared() > 0.5: legs_visual.rotation = local_motion.angle()
 		legs_visual.update_pose(delta, local_motion, move_speed, "attack" if state == State.ATTACK else "idle", clampf(state_pose_pulse / 0.22, 0.0, 1.0))
 	if is_instance_valid(lifecycle_rig):
-		var rig_action := "attack" if state == State.ATTACK or melee_swing_time > 0.0 else "idle"
-		var rig_amount := clampf(state_pose_pulse / 0.22, 0.0, 1.0) if rig_action == "attack" else 0.0
-		lifecycle_rig.set_weapon_stance("hound" if actor_type == "dog" else ("gun" if enemy_type == "gunner" else "melee"))
-		lifecycle_rig.update_lifecycle(delta, velocity.rotated(-rotation), move_speed, Vector2.ZERO, 0.0, rig_action, rig_amount)
-		gun.z_index = 0 if lifecycle_rig.weapon_should_render_behind() else 2
+		visual_update_accumulator += delta
+		var near_camera := not is_instance_valid(player) or global_position.distance_squared_to(player.global_position) <= 260.0 * 260.0
+		var reactive_visual := state in [State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or state_pose_pulse > 0.0 or active_bleed_time > 0.0
+		var visual_step := 1.0 / 30.0 if near_camera or reactive_visual else 1.0 / 8.0
+		if visual_update_accumulator >= visual_step:
+			var visual_delta := minf(visual_update_accumulator, 0.15)
+			visual_update_accumulator = 0.0
+			var rig_action := "attack" if state == State.ATTACK or melee_swing_time > 0.0 else "idle"
+			var rig_amount := clampf(state_pose_pulse / 0.22, 0.0, 1.0) if rig_action == "attack" else 0.0
+			lifecycle_rig.set_weapon_stance("hound" if actor_type == "dog" else ("gun" if enemy_type == "gunner" else "melee"))
+			if actor_type != "dog" and enemy_type == "gunner" and gun.gun_data != null:
+				lifecycle_rig.set_weapon_stance(gun.gun_data.weapon_class)
+				if gun.is_reloading:
+					rig_action = "reload"
+					rig_amount = 1.0 - gun.reload_timer.time_left / maxf(gun.active_reload_duration, 0.01)
+			lifecycle_rig.set_weapon_presentation(gun.visual_offset, gun.visual_angle, gun.magazine_offset)
+			lifecycle_rig.update_lifecycle(visual_delta, velocity.rotated(-rotation), move_speed, Vector2.ZERO, 0.0, rig_action, rig_amount)
+			gun.z_index = 0 if lifecycle_rig.weapon_should_render_behind() else 2
 	if state != previous_visual_state:
 		state_pose_pulse = 0.22
 		previous_visual_state = state
@@ -192,9 +222,30 @@ func _physics_process(delta: float) -> void:
 	if is_dead or not is_instance_valid(player) or player.is_dead:
 		velocity = velocity.move_toward(Vector2.ZERO, 125.0 * delta)
 		return
+	_update_active_wound(delta)
+	# Enemies in rooms the player has not entered remain physically present and
+	# visibly patrol, but room isolation suppresses perception and combat. This
+	# replaces the old PROCESS_MODE_DISABLED freeze that looked like broken AI.
+	# A real damage/door/throw contact wakes that room through combat_contact, so
+	# struck guards retain their investigation after the hit reaction completes.
+	if not room_combat_active and state not in [State.STAGGERED, State.KNOCKED_DOWN]:
+		if state != State.IDLE:
+			state = State.IDLE
+			path_points.clear()
+			path_refresh = 0.0
+		player_in_sight = false
+		cached_visual_contact = false
+		visual_exposure = 0.0
+		_update_patrol(delta)
+		return
 	var to_player := player.global_position - global_position
 	var distance := to_player.length()
-	if distance < 0.001: return
+	if distance < 0.001:
+		# This can occur after a spawn correction or a strong body impulse.  The
+		# previous early return left a melee actor inert while overlapping the
+		# player, which looked like the AI had switched off.
+		if enemy_type == "melee" and melee_cooldown <= 0.0: _begin_attack()
+		return
 	if state == State.STAGGERED:
 		stagger_time -= delta
 		var stagger_velocity := velocity
@@ -202,7 +253,9 @@ func _physics_process(delta: float) -> void:
 		push_contact_bodies(stagger_velocity)
 		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
 		if stagger_time <= 0.0:
-			_begin_investigation(global_position, 0.6)
+			var recovery_target := pending_impact_investigation if pending_impact_investigation != Vector2.INF else global_position
+			pending_impact_investigation = Vector2.INF
+			_begin_investigation(recovery_target, 0.8)
 		return
 	if state == State.KNOCKED_DOWN:
 		knockdown_time -= delta
@@ -212,7 +265,9 @@ func _physics_process(delta: float) -> void:
 		velocity = velocity.move_toward(Vector2.ZERO, 260.0 * delta)
 		if knockdown_time <= 0.0:
 			_set_knockdown_visual(false)
-			_begin_search(global_position, Vector2.RIGHT.rotated(rotation))
+			var recovery_target := pending_impact_investigation if pending_impact_investigation != Vector2.INF else global_position
+			pending_impact_investigation = Vector2.INF
+			_begin_search(recovery_target, Vector2.RIGHT.rotated(rotation))
 		return
 	vision_scan_cooldown -= delta
 	if vision_scan_cooldown <= 0.0:
@@ -220,7 +275,11 @@ func _physics_process(delta: float) -> void:
 		cached_visual_contact = _can_see_player(distance, to_player)
 	var has_visual_contact := cached_visual_contact
 	player_in_sight = has_visual_contact
-	var sees_player := _update_visual_reaction(has_visual_contact, delta)
+	var contact_can_reach := enemy_type == "melee" and _can_reach_player_with_melee(distance)
+	# At arm's length the attack wind-up itself is the readable reaction window.
+	# Requiring the normal long-range FOV exposure first made rushers spend several
+	# frames pushing their collision circle into the player before attacking.
+	var sees_player := _update_visual_reaction(has_visual_contact, delta) or contact_can_reach
 	if debug_draw_vision: queue_redraw()
 	# Initial acquisition requires the reaction delay. Once alerted, raw visual
 	# contact is enough to keep tracking, but a clear ray outside the FOV is not.
@@ -269,6 +328,17 @@ func _physics_process(delta: float) -> void:
 			if search_time_remaining <= 0.0:
 				_finish_search()
 				return
+	# Resolve contact combat before navigation, doorway reservations and crowd
+	# separation.  Once a melee actor has a clear physical lane into attack range,
+	# it should plant its feet and wind up instead of trying to walk through the
+	# player. During cooldown it keeps spacing rather than body-shoving.
+	if state == State.CHASE and enemy_type == "melee" and contact_can_reach:
+		velocity = velocity.move_toward(Vector2.ZERO, move_speed * 12.0 * delta)
+		rotation = lerp_angle(rotation, to_player.angle(), 1.0 - exp(-16.0 * delta))
+		move_and_slide()
+		_reset_movement_progress()
+		if melee_cooldown <= 0.0: _begin_attack()
+		return
 	var target_position := investigation_target
 	if state == State.CHASE:
 		if tactical_move_mode in ["to_cover", "hold"]: target_position = tactical_cover_position
@@ -358,7 +428,10 @@ func _physics_process(delta: float) -> void:
 				_begin_attack()
 		return
 	if state == State.CHASE:
-		var holds_position := is_fixed_sentry or tactical_role == "guard" or tactical_move_mode == "at_peek"
+		# Holding cover and fixed sentry positions are firearm behaviours. Applying
+		# them to a rusher/hound produced alerted melee enemies that simply stood in
+		# place forever instead of closing the remaining distance.
+		var holds_position := enemy_type == "gunner" and (is_fixed_sentry or tactical_role == "guard" or tactical_move_mode == "at_peek")
 		var tactical_distance := distance if has_visual_contact else target_distance
 		velocity = EnemyCombatController.chase_velocity(enemy_type, direction, move_speed, chase_speed_multiplier, actor_type, tactical_distance, melee_range, holds_position, reposition_time, reposition_sign, strafe_sign)
 	elif state in [State.INVESTIGATE, State.SEARCH] or distance > preferred_distance:
@@ -459,6 +532,8 @@ func configure_patrol(points: PackedVector2Array) -> void:
 
 func configure_combat(type_name: String) -> void:
 	var profile := EnemyCatalog.get_profile(type_name)
+	set_max_health(profile.max_health, true)
+	configure_armor(profile.armor_protection, profile.armor_damage_reduction, profile.armor_durability, profile.armor_covers_head, true)
 	archetype_id = profile.archetype_id
 	enemy_type = profile.combat_type
 	actor_type = profile.actor_type
@@ -479,6 +554,14 @@ func configure_combat(type_name: String) -> void:
 	distance_spread_multiplier = profile.distance_spread_multiplier
 	aim_prediction_seconds = profile.aim_prediction_seconds
 	knockdown_resistance = profile.knockdown_resistance
+	active_bleed_rate = 0.0
+	active_bleed_time = 0.0
+	active_bleed_dps = 0.0
+	active_bleed_emits_blood = true
+	bleed_damage_accumulator = 0.0
+	bleed_drop_accumulator = 0.0
+	bleed_stationary_accumulator = 0.0
+	last_bleed_position = Vector2.INF
 	var uses_gun := enemy_type == "gunner"
 	gun.visible = uses_gun
 	gun.set_process(uses_gun)
@@ -488,17 +571,17 @@ func configure_combat(type_name: String) -> void:
 	gun.get_node("WeaponPivot/FakeShadow").visible = false
 	# Identity colors are authored into the limited-palette sprites. Runtime
 	# tinting previously collapsed gunner, melee and heavy silhouettes together.
-	$Sprite2D.modulate = Color.WHITE
+	$UpperBody/Sprite2D.modulate = Color.WHITE
 	_apply_compatibility_frame()
 	if is_instance_valid(legs_visual):
-		var role_color := Color("7c235b")
-		var role_accent := Color("f23d78")
+		var role_color := Color("3c3c3c")
+		var role_accent := Color("bcbcbc")
 		match archetype_id:
-			"assault": role_color = Color("9a5719"); role_accent = Color("ff9a45")
-			"heavy": role_color = Color("41306e"); role_accent = Color("a59cff")
-			"melee": role_color = Color("7d163f"); role_accent = Color("ff4f91")
+			"assault": role_color = Color("4a4a4a"); role_accent = Color("d0d0d0")
+			"heavy": role_color = Color("242424"); role_accent = Color("9a9a9a")
+			"melee": role_color = Color("343434"); role_accent = Color("eeeeee")
 		legs_visual.configure("dog" if actor_type == "dog" else "enemy", role_color, role_accent)
-		if is_instance_valid(lifecycle_rig): lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("6e4a37") if actor_type == "dog" else role_color, Color("e8d8c8") if actor_type == "dog" else role_accent, "hound" if actor_type == "dog" else archetype_id)
+		if is_instance_valid(lifecycle_rig): lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("555555") if actor_type == "dog" else role_color, Color("d8d8d8") if actor_type == "dog" else role_accent, "hound" if actor_type == "dog" else archetype_id)
 
 func set_combat_time_scale(value: float) -> void:
 	var next_scale := clampf(value, 0.2, 1.0)
@@ -516,7 +599,7 @@ func set_combat_time_scale(value: float) -> void:
 func _apply_compatibility_frame() -> void:
 	var frame_role := "hound" if actor_type == "dog" else archetype_id
 	var texture := PIXEL_ACTOR_FRAMES.get_frame(frame_role)
-	$Sprite2D.texture = texture
+	$UpperBody/Sprite2D.texture = texture
 	$FakeShadow.texture = texture
 
 func configure_fixed_sentry() -> void:
@@ -525,6 +608,36 @@ func configure_fixed_sentry() -> void:
 	enemy_spread_multiplier *= 0.72
 	home_position = global_position
 	configure_patrol(PackedVector2Array())
+
+func set_room_combat_active(active: bool) -> void:
+	if room_combat_active == active: return
+	room_combat_active = active
+	set_meta("rogue_room_active", active)
+	if active: return
+	CombatDirector.release_fire_token(self)
+	_release_corpse_claim()
+	_clear_tactical_move()
+	tactical_role = "none"
+	guard_alert_time = 0.0
+	attack_windup_time = 0.0
+	player_in_sight = false
+	cached_visual_contact = false
+	visual_exposure = 0.0
+	if state not in [State.STAGGERED, State.KNOCKED_DOWN]: state = State.IDLE
+	path_points.clear()
+	path_refresh = 0.0
+	_reset_movement_progress()
+
+func react_to_room_attack(source_position: Vector2) -> void:
+	if is_dead: return
+	set_room_combat_active(true)
+	_raise_alert(AlertLevel.ALERT, alert_memory_duration)
+	if state in [State.STAGGERED, State.KNOCKED_DOWN]:
+		pending_impact_investigation = source_position
+		return
+	if state in [State.CHASE, State.ATTACK]: return
+	_begin_investigation(source_position, 0.85)
+	noise_reaction_delay = 0.08
 
 func _execute_melee_attack() -> void:
 	if melee_cooldown > 0.0 or not is_instance_valid(player) or player.is_dead: return
@@ -535,11 +648,11 @@ func _execute_melee_attack() -> void:
 		var attack_id := "hound_bite" if actor_type == "dog" else "fist"
 		var physical := RAGDOLL_IMPACT.resolve(attack_id, global_position.distance_to(player.global_position), "torso", "human")
 		player.apply_lifecycle_impact(global_position.direction_to(player.global_position), float(physical.limb_force) * 0.72, "torso")
-	player.take_damage(1, global_position)
+	player.take_damage(62 if actor_type == "dog" else 48, global_position)
 
 func _begin_attack() -> void:
 	if state == State.ATTACK: return
-	if enemy_type == "gunner" and not CombatDirector.request_fire_token(self):
+	if not CombatDirector.request_fire_token(self):
 		tactical_decision_cooldown = maxf(tactical_decision_cooldown, randf_range(0.08, 0.16))
 		return
 	state = State.ATTACK
@@ -553,7 +666,8 @@ func _begin_attack() -> void:
 func _update_attack(delta: float, to_player: Vector2, distance: float, has_visual_contact: bool) -> void:
 	velocity = velocity.move_toward(Vector2.ZERO, 240.0 * delta)
 	move_and_slide()
-	if not has_visual_contact:
+	var melee_contact := enemy_type == "melee" and _can_reach_player_with_melee(distance)
+	if not has_visual_contact and not melee_contact:
 		CombatDirector.release_fire_token(self)
 		state = State.CHASE
 		attack_windup_time = 0.0
@@ -574,12 +688,31 @@ func _update_attack(delta: float, to_player: Vector2, distance: float, has_visua
 			elif tactical_decision_cooldown <= 0.0 and not is_fixed_sentry and tactical_role != "guard":
 				_begin_tactical_reposition(false)
 		CombatDirector.release_fire_token(self)
-	elif distance <= melee_range:
+	elif melee_contact:
 		_execute_melee_attack()
+	CombatDirector.release_fire_token(self)
 	state = State.CHASE
 	attack_windup_time = 0.0
 
+func _effective_melee_range() -> float:
+	# Keep authored archetype reach, with a tiny collision tolerance for the two
+	# five-pixel character bodies and discrete physics steps.
+	return melee_range + MELEE_CONTACT_MARGIN
+
+func _can_reach_player_with_melee(distance: float) -> bool:
+	if not is_instance_valid(player) or player.is_dead or distance > _effective_melee_range(): return false
+	# World solids, closed doors, glass and solid props block a melee strike. The
+	# player is intentionally absent from this mask; an empty result means the
+	# short segment contains no intervening physical obstacle.
+	var query := PhysicsRayQueryParameters2D.create(global_position, player.global_position, 12)
+	query.exclude = [get_rid()]
+	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+
 func _has_clear_shot() -> bool:
+	var active_camera := get_viewport().get_camera_2d()
+	if is_instance_valid(active_camera) and active_camera.has_method("is_world_position_combat_visible"):
+		if not bool(active_camera.call("is_world_position_combat_visible", global_position)):
+			return false
 	return EnemyCombatController.has_clear_shot(self, gun, player)
 
 func _begin_tactical_reposition(allow_flank := true) -> void:
@@ -648,9 +781,9 @@ func _find_weapon_pickup() -> Node2D:
 		nearest_distance = distance
 	return nearest
 
-func equip_dropped_weapon(weapon_id: String, rounds: int) -> bool:
+func equip_dropped_weapon(weapon_id: String, rounds: int, attachment_ids := PackedStringArray()) -> bool:
 	if enemy_type != "gunner" or rounds <= 0: return false
-	gun.set_gun_data(AttackCatalog.get_gun_data(weapon_id), true)
+	gun.set_gun_data(preload("res://utility/arcade_weapon_balance.gd").for_enemy(AttackCatalog.get_gun_data(weapon_id, attachment_ids)), true)
 	gun.set_weapon_ammo(weapon_id, mini(rounds, gun.max_ammo))
 	default_weapon_id = weapon_id
 	gun.visible = true
@@ -913,7 +1046,7 @@ func _reset_movement_progress() -> void:
 func _update_movement_progress(delta: float, expected_to_move: bool) -> void:
 	if state != State.KNOCKED_DOWN:
 		var movement_ratio := clampf(velocity.length() / maxf(1.0, move_speed), 0.0, 1.5)
-		$Sprite2D.position.y = lerpf($Sprite2D.position.y, sin(Time.get_ticks_msec() * 0.018 + get_instance_id() * 0.1) * 0.45 * movement_ratio, 1.0 - exp(-14.0 * delta))
+		$UpperBody/Sprite2D.position.y = lerpf($UpperBody/Sprite2D.position.y, sin(Time.get_ticks_msec() * 0.018 + get_instance_id() * 0.1) * 0.45 * movement_ratio, 1.0 - exp(-14.0 * delta))
 	if not expected_to_move:
 		progress_anchor = global_position
 		progress_elapsed = 0.0
@@ -958,7 +1091,7 @@ func get_noise_response_priority(world_position: Vector2, radius: float) -> floa
 	return float(response.priority) if bool(response.eligible) else INF
 
 func evaluate_noise_response(world_position: Vector2, radius: float, source_kind := "generic") -> Dictionary:
-	if is_dead or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
+	if not room_combat_active or is_dead or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
 		return {"eligible": false, "priority": INF, "occluded": false}
 	if is_instance_valid(tile_world) and tile_world.has_method("evaluate_acoustic_response"):
 		return tile_world.evaluate_acoustic_response(global_position, world_position, radius, source_kind)
@@ -999,7 +1132,7 @@ func receive_combat_noise_result(world_position: Vector2, radius: float, _source
 	return true
 
 func evaluate_tactical_assignment(world_position: Vector2, source_kind := "generic") -> Dictionary:
-	if is_dead or is_instance_valid(claimed_corpse) or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
+	if not room_combat_active or is_dead or is_instance_valid(claimed_corpse) or state in [State.CHASE, State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or is_fixed_sentry:
 		return {"eligible": false, "priority": INF}
 	if source_kind not in ["security_alarm", "security_camera"] and is_instance_valid(tile_world) and tile_world.has_method("evaluate_acoustic_response"):
 		var tactical_radius := 220.0 if source_kind in ["ambush", "radio_corpse", "corpse"] else 150.0
@@ -1086,15 +1219,20 @@ func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	_reset_movement_progress()
 	stagger_time = duration
 	velocity = push_direction.normalized() * 62.0
-	if is_instance_valid(lifecycle_rig): lifecycle_rig.apply_hit(push_direction, 19.0, "torso")
+	# Ballistic context already resolved the weapon's joint impulse this frame.
+	# Entering the AI stagger must not overwrite it with a generic 19-power hit.
+	if is_instance_valid(lifecycle_rig) and lifecycle_context_impact_frame != Engine.get_physics_frames():
+		lifecycle_rig.apply_hit(push_direction, 19.0, "torso")
 	gun.cooldown = maxf(gun.cooldown, duration)
 
 func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 	if is_dead: return
+	pending_impact_investigation = global_position - hit_direction.normalized() * 8.0
+	combat_contact.emit(pending_impact_investigation)
 	_clear_tactical_move()
 	_release_corpse_claim()
 	if hit_type == "kill":
-		take_damage(1, global_position - hit_direction)
+		take_damage(maxi(1, hp), global_position - hit_direction)
 		return
 	if knockdown_resistance >= 1.0:
 		apply_stagger(hit_direction, 0.24)
@@ -1116,8 +1254,31 @@ func classify_hit_zone(world_hit_position: Vector2) -> String:
 	if absf(local_hit.y) >= 3.2 or local_hit.x <= -4.0: return "limb"
 	return "torso"
 
+func classify_ballistic_hit(world_entry: Vector2, world_direction: Vector2) -> String:
+	if world_direction.length_squared() < 0.0001: return classify_hit_zone(world_entry)
+	var local_entry := to_local(world_entry)
+	var local_direction := (to_local(world_entry + world_direction.normalized()) - local_entry).normalized()
+	# The collision is the projectile's first contact with a broad circular body.
+	# Its entry edge is not the tissue its path traverses: a centre-mass shot from
+	# behind or the side must not become a limb hit solely because of that edge.
+	# Only advance along the ray, so a projectile moving away cannot claim tissue
+	# behind its entry point. The contact position itself remains untouched for FX.
+	var distance_along_ray := maxf(0.0, -local_entry.dot(local_direction))
+	var tissue_sample := local_entry + local_direction * distance_along_ray
+	return classify_hit_zone(to_global(tissue_sample))
+
+func is_unaware_for_ballistics() -> bool:
+	return not is_dead and alert_level == AlertLevel.NORMAL and state in [State.IDLE, State.RETURN]
+
 func is_actively_engaging_player() -> bool:
 	return not is_dead and state in [State.CHASE, State.ATTACK]
+
+func apply_ballistic_hit(result: Dictionary, source_position := Vector2.ZERO) -> void:
+	if is_dead: return
+	ballistic_feedback_frame = Engine.get_physics_frames()
+	if is_instance_valid(lifecycle_rig) and not bool(result.get("lethal", false)):
+		lifecycle_rig.trigger_damage_feedback(HIT_FEEDBACK_PROFILE.from_ballistic_result(result, str(result.get("hit_zone", "torso"))))
+	super.apply_ballistic_hit(result, source_position)
 
 func execute_ground(source_position: Vector2) -> void:
 	if not is_knocked_down(): return
@@ -1125,10 +1286,10 @@ func execute_ground(source_position: Vector2) -> void:
 	take_damage(maxi(1, hp), source_position)
 
 func _set_knockdown_visual(enabled: bool) -> void:
-	$Sprite2D.rotation = 0.0
-	$Sprite2D.position = Vector2.ZERO
-	$Sprite2D.visible = false
-	if is_instance_valid(legs_visual): legs_visual.visible = false
+	$UpperBody/Sprite2D.rotation = 0.0
+	$UpperBody/Sprite2D.position = Vector2.ZERO
+	$UpperBody/Sprite2D.visible = false
+	if is_instance_valid(legs_visual): legs_visual.visible = not enabled
 	$FakeShadow.visible = false
 	$FakeShadow.rotation = 0.0
 	gun.visible = false if enabled else enemy_type == "gunner"
@@ -1161,12 +1322,67 @@ func _on_actor_died(source_position: Vector2) -> void:
 	died_at.emit(global_position, rotation)
 	queue_free()
 
-func _on_hit_received(_amount: int, source_position: Vector2) -> void:
+func _on_hit_received(amount: int, source_position: Vector2) -> void:
 	var direction := source_position.direction_to(global_position)
 	if direction.length_squared() < 0.001: direction = -Vector2.RIGHT.rotated(rotation)
 	if is_instance_valid(lifecycle_rig) and lifecycle_context_impact_frame != Engine.get_physics_frames(): lifecycle_rig.apply_hit(direction, 22.0, classify_hit_zone(global_position))
-	if hp > 1:
+	if is_instance_valid(lifecycle_rig) and ballistic_feedback_frame != Engine.get_physics_frames() and amount < hp:
+		lifecycle_rig.trigger_damage_feedback(HIT_FEEDBACK_PROFILE.generic_flesh("torso", clampf(float(amount) / maxf(1.0, float(max_hp)), 0.25, 1.0)))
+	if amount < hp:
+		pending_impact_investigation = source_position
 		apply_stagger(direction, 0.09)
+	combat_contact.emit(source_position)
+
+func _on_ballistic_wound(result: Dictionary, source_position: Vector2) -> void:
+	var incoming_bleed_rate := clampf(float(result.get("bleed_rate", 0.1)), 0.0, 1.72)
+	var incoming_duration := clampf(float(result.get("bleed_duration", 2.0)), 0.0, 14.0)
+	var incoming_dps := clampf(float(result.get("bleed_dps", 0.1)), 0.0, 2.6)
+	active_bleed_rate = clampf(active_bleed_rate * 0.62 + incoming_bleed_rate, 0.0, 2.35)
+	active_bleed_time = maxf(active_bleed_time, incoming_duration)
+	active_bleed_dps = clampf(active_bleed_dps * 0.55 + incoming_dps, 0.0, 3.2)
+	active_bleed_emits_blood = not bool(result.get("blood_enhanced", false))
+	last_wound_direction = source_position.direction_to(global_position)
+	if last_wound_direction.length_squared() < 0.001: last_wound_direction = Vector2.RIGHT.rotated(rotation)
+	last_bleed_position = global_position
+	bleed_drop_accumulator = minf(bleed_drop_accumulator, 0.12)
+	bleed_stationary_accumulator = 0.0
+
+func _update_active_wound(delta: float) -> void:
+	if active_bleed_time <= 0.0 or active_bleed_rate <= 0.0: return
+	active_bleed_time = maxf(0.0, active_bleed_time - delta)
+	bleed_drop_accumulator += delta
+	bleed_stationary_accumulator += delta
+	bleed_damage_accumulator += active_bleed_dps * delta
+	# Bleeding creates tactical attrition but never silently kills off-screen. The
+	# final point of vitality still requires a resolved attack and death context.
+	if bleed_damage_accumulator >= 1.0 and hp > 1:
+		var bleed_damage := mini(floori(bleed_damage_accumulator), hp - 1)
+		if bleed_damage > 0:
+			hp -= bleed_damage
+			bleed_damage_accumulator -= float(bleed_damage)
+			health_changed.emit(hp, max_hp)
+	var drop_interval := lerpf(0.62, 0.18, clampf(active_bleed_rate / 1.72, 0.0, 1.0))
+	var drop_spacing := lerpf(5.5, 2.5, clampf(active_bleed_rate / 1.72, 0.0, 1.0))
+	var moved_distance := 0.0 if last_bleed_position == Vector2.INF else global_position.distance_to(last_bleed_position)
+	var should_drop := bleed_drop_accumulator >= drop_interval and (moved_distance >= drop_spacing or bleed_stationary_accumulator >= drop_interval * 2.4)
+	if should_drop and active_bleed_emits_blood:
+		var blood_system := get_tree().get_first_node_in_group("blood_system")
+		if is_instance_valid(blood_system) and blood_system.has_method("spawn_wound_drop"):
+			var movement_direction := last_bleed_position.direction_to(global_position) if moved_distance > 0.01 else last_wound_direction
+			blood_system.spawn_wound_drop(global_position - last_wound_direction * 2.0, movement_direction, active_bleed_rate)
+		last_bleed_position = global_position
+		bleed_drop_accumulator = 0.0
+		bleed_stationary_accumulator = 0.0
+	elif should_drop:
+		# Advance the cadence even when this wound is ledger-limited; otherwise a
+		# later ordinary wound would dump all deferred drops in one frame.
+		last_bleed_position = global_position
+		bleed_drop_accumulator = 0.0
+		bleed_stationary_accumulator = 0.0
+	if active_bleed_time <= 0.0:
+		active_bleed_rate = 0.0
+		active_bleed_dps = 0.0
+		bleed_damage_accumulator = 0.0
 
 func get_lifecycle_pose() -> Dictionary:
 	return lifecycle_rig.get_pose_snapshot() if is_instance_valid(lifecycle_rig) else {}

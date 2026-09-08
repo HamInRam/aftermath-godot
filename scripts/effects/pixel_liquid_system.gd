@@ -8,6 +8,8 @@ extends Node2D
 const CHUNK_SIZE := 32
 const PIXELS_PER_CHUNK := CHUNK_SIZE * CHUNK_SIZE
 const MAX_JET_PARTICLES := 128
+const MAX_JET_DRAW_PIXELS := MAX_JET_PARTICLES * 7
+const MAX_CHUNK_UPLOADS_PER_FRAME := 4
 const JET_FIXED_STEP := 1.0 / 60.0
 const LIQUID_KINDS := [&"water", &"oil", &"spill", &"cleaner"]
 const PROFILE := {
@@ -22,7 +24,12 @@ class PixelLiquidChunk extends Node2D:
 	var chunk_coordinate := Vector2i.ZERO
 	var channels: Dictionary = {}
 	var age := PackedByteArray()
-	var dirty := true
+	var active_pixels := PackedInt32Array()
+	var active_flags := PackedByteArray()
+	var dirty_pixels := PackedInt32Array()
+	var dirty_flags := PackedByteArray()
+	var dirty := false
+	var upload_queued := false
 	var image: Image
 	var texture: ImageTexture
 	var sprite: Sprite2D
@@ -41,6 +48,10 @@ class PixelLiquidChunk extends Node2D:
 			channels[kind] = data
 		age.resize(PixelLiquidSystem.PIXELS_PER_CHUNK)
 		age.fill(0)
+		active_flags.resize(PixelLiquidSystem.PIXELS_PER_CHUNK)
+		active_flags.fill(0)
+		dirty_flags.resize(PixelLiquidSystem.PIXELS_PER_CHUNK)
+		dirty_flags.fill(0)
 		image = Image.create(PixelLiquidSystem.CHUNK_SIZE, PixelLiquidSystem.CHUNK_SIZE, false, Image.FORMAT_RGBA8)
 		image.fill(Color.TRANSPARENT)
 		texture = ImageTexture.create_from_image(image)
@@ -51,6 +62,21 @@ class PixelLiquidChunk extends Node2D:
 		add_child(sprite)
 		add_to_group("pixel_liquid_chunk")
 
+	func _mark_active(index: int) -> void:
+		if active_flags[index] != 0: return
+		active_flags[index] = 1
+		active_pixels.append(index)
+
+	func _mark_dirty(index: int) -> void:
+		dirty = true
+		if dirty_flags[index] == 0:
+			dirty_flags[index] = 1
+			dirty_pixels.append(index)
+		if is_instance_valid(system): system.request_chunk_upload(self)
+
+	func mark_all_active_dirty() -> void:
+		for index in active_pixels: _mark_dirty(index)
+
 	func add_local(local_cell: Vector2i, kind: StringName, amount: int) -> int:
 		if not channels.has(kind): return 0
 		var index := local_cell.y * PixelLiquidSystem.CHUNK_SIZE + local_cell.x
@@ -60,7 +86,8 @@ class PixelLiquidChunk extends Node2D:
 		data[index] = after
 		channels[kind] = data
 		if after > before: age[index] = 0
-		dirty = dirty or after != before
+		if after > 0: _mark_active(index)
+		if after != before: _mark_dirty(index)
 		return after - before
 
 	func remove_local(local_cell: Vector2i, kind: StringName, amount: int) -> int:
@@ -71,7 +98,7 @@ class PixelLiquidChunk extends Node2D:
 		var removed := mini(before, maxi(0, amount))
 		data[index] = before - removed
 		channels[kind] = data
-		dirty = dirty or removed > 0
+		if removed > 0: _mark_dirty(index)
 		return removed
 
 	func amount_at(local_cell: Vector2i, kind: StringName = &"") -> int:
@@ -82,29 +109,41 @@ class PixelLiquidChunk extends Node2D:
 		return mini(255, total)
 
 	func evaporate() -> bool:
-		var occupied := false
-		for index in PixelLiquidSystem.PIXELS_PER_CHUNK:
+		var survivors := PackedInt32Array()
+		for index in active_pixels:
+			if active_flags[index] == 0: continue
 			var pixel_active := false
+			var changed := false
 			for kind in PixelLiquidSystem.LIQUID_KINDS:
 				var data := channels[kind] as PackedByteArray
 				var value := int(data[index])
 				if value > 0:
 					var loss := int((PixelLiquidSystem.PROFILE[kind] as Dictionary).evaporation)
-					data[index] = maxi(0, value - loss)
+					var after := maxi(0, value - loss)
+					data[index] = after
 					channels[kind] = data
-					pixel_active = pixel_active or data[index] > 0
-					dirty = dirty or loss > 0
+					pixel_active = pixel_active or after > 0
+					changed = changed or after != value
 			age[index] = mini(255, int(age[index]) + 4) if pixel_active else 0
-			occupied = occupied or pixel_active
-		return occupied
+			if pixel_active:
+				survivors.append(index)
+			else:
+				active_flags[index] = 0
+			if changed: _mark_dirty(index)
+		active_pixels = survivors
+		return not active_pixels.is_empty()
 
 	func flush_texture() -> void:
+		upload_queued = false
 		if not dirty: return
 		dirty = false
-		for y in PixelLiquidSystem.CHUNK_SIZE:
-			for x in PixelLiquidSystem.CHUNK_SIZE:
-				var index := y * PixelLiquidSystem.CHUNK_SIZE + x
-				image.set_pixel(x, y, _pixel_color(index, x, y))
+		var pending := dirty_pixels
+		dirty_pixels = PackedInt32Array()
+		for index in pending:
+			dirty_flags[index] = 0
+			var x := index % PixelLiquidSystem.CHUNK_SIZE
+			var y := index / PixelLiquidSystem.CHUNK_SIZE
+			image.set_pixel(x, y, _pixel_color(index, x, y))
 		texture.update(image)
 
 	func _pixel_color(index: int, x: int, y: int) -> Color:
@@ -121,7 +160,10 @@ class PixelLiquidChunk extends Node2D:
 		var base_color := Color.TRANSPARENT
 		match dominant:
 			&"water":
-				var water := Color("48cce0") if checker > 0 else Color("d8fbff")
+				# Water owns a dedicated azure hue in the noir presentation palette.
+				# Keeping blue slightly stronger than green lets the screen shader
+				# distinguish fluid from neutral/cyan interface accents.
+				var water := Color("349cff") if checker > 0 else Color("9edcff")
 				water.a = 0.16 + density * (0.32 if checker > 0 else 0.46)
 				base_color = water
 			&"oil":
@@ -138,7 +180,7 @@ class PixelLiquidChunk extends Node2D:
 		return system._apply_electric_tint(world_cell, base_color) if is_instance_valid(system) else base_color
 
 var chunks: Dictionary = {}
-var texture_accumulator := 0.0
+var upload_queue: Array[PixelLiquidChunk] = []
 var surface_accumulator := 0.0
 var contact_accumulator := 0.0
 var actor_tracks: Dictionary = {}
@@ -154,12 +196,29 @@ var energized_cells: Dictionary = {}
 var electric_visual_accumulator := 0.0
 var electric_visual_tick := 0
 var electric_topology_dirty := false
+var jet_batch: MultiMeshInstance2D
 
 func _ready() -> void:
 	add_to_group("pixel_liquid_system")
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	z_index = 4
+	_configure_jet_batch()
 	set_process(true)
+
+func _configure_jet_batch() -> void:
+	jet_batch = MultiMeshInstance2D.new()
+	jet_batch.name = "PressureJetBatch"
+	jet_batch.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE
+	var instances := MultiMesh.new()
+	instances.transform_format = MultiMesh.TRANSFORM_2D
+	instances.use_colors = true
+	instances.mesh = quad
+	instances.instance_count = MAX_JET_DRAW_PIXELS
+	instances.visible_instance_count = 0
+	jet_batch.multimesh = instances
+	add_child(jet_batch)
 
 static func get_or_create(tree: SceneTree) -> Node2D:
 	var existing := tree.get_first_node_in_group("pixel_liquid_system") as Node2D
@@ -171,7 +230,6 @@ static func get_or_create(tree: SceneTree) -> Node2D:
 	return system
 
 func _process(delta: float) -> void:
-	texture_accumulator += delta
 	surface_accumulator += delta
 	contact_accumulator += delta
 	pressure_emit_gap += delta
@@ -184,10 +242,7 @@ func _process(delta: float) -> void:
 	while jet_accumulator >= JET_FIXED_STEP:
 		jet_accumulator -= JET_FIXED_STEP
 		_update_pressure_jets(JET_FIXED_STEP)
-	if texture_accumulator >= 1.0 / 24.0:
-		texture_accumulator = 0.0
-		for chunk in chunks.values():
-			if is_instance_valid(chunk): (chunk as PixelLiquidChunk).flush_texture()
+	_flush_upload_queue()
 	if surface_accumulator >= 1.0:
 		surface_accumulator = fmod(surface_accumulator, 1.0)
 		for chunk in chunks.values():
@@ -196,6 +251,22 @@ func _process(delta: float) -> void:
 	if contact_accumulator >= 0.12:
 		contact_accumulator = 0.0
 		_update_actor_contacts()
+
+func request_chunk_upload(chunk: PixelLiquidChunk) -> void:
+	if not is_instance_valid(chunk) or chunk.upload_queued: return
+	chunk.upload_queued = true
+	upload_queue.append(chunk)
+
+func _flush_upload_queue() -> void:
+	var uploads := 0
+	while uploads < MAX_CHUNK_UPLOADS_PER_FRAME and not upload_queue.is_empty():
+		var chunk := upload_queue.pop_front() as PixelLiquidChunk
+		if not is_instance_valid(chunk): continue
+		chunk.flush_texture()
+		uploads += 1
+
+func get_debug_pending_upload_count() -> int:
+	return upload_queue.size()
 
 func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float, power: int, washer_level := 0) -> float:
 	var segment := target - origin
@@ -232,11 +303,13 @@ func emit_pressure_stream(origin: Vector2, target: Vector2, brush_radius: float,
 			"washer_level": washer_level,
 			"stability": pressure_stability,
 		})
-	queue_redraw()
+	_refresh_jet_batch()
 	return pressure_stability
 
 func _update_pressure_jets(delta: float) -> void:
-	if jet_particles.is_empty(): return
+	if jet_particles.is_empty():
+		if is_instance_valid(jet_batch): jet_batch.multimesh.visible_instance_count = 0
+		return
 	var active: Array[Dictionary] = []
 	for particle in jet_particles:
 		var previous: Vector2 = particle.position
@@ -255,7 +328,7 @@ func _update_pressure_jets(delta: float) -> void:
 			particle.position = next
 			active.append(particle)
 	jet_particles = active
-	queue_redraw()
+	_refresh_jet_batch()
 
 func _pressure_impact(particle: Dictionary, surface_normal: Vector2) -> void:
 	var position: Vector2 = particle.position
@@ -277,20 +350,27 @@ func _pressure_impact(particle: Dictionary, surface_normal: Vector2) -> void:
 	if is_instance_valid(blood_system) and blood_system.has_method("pressure_wash_pixel_water"):
 		blood_system.pressure_wash_pixel_water(position, radius, int(particle.power), direction, int(particle.washer_level))
 
-func _draw() -> void:
-	# Every airborne droplet is rendered as an integer-aligned 1x1 source pixel.
-	# Sampling the short previous-to-current segment creates a coherent hose stream
-	# without antialiased lines, textures or one scene node per droplet.
+func _refresh_jet_batch() -> void:
+	if not is_instance_valid(jet_batch): return
+	var instances := jet_batch.multimesh
+	var instance_index := 0
+	# Every airborne droplet remains an integer-aligned 1x1 source pixel, but all
+	# stream pixels now share one MultiMesh draw call instead of rebuilding hundreds
+	# of CanvasItem draw commands at 60 Hz.
 	for particle in jet_particles:
 		var previous := to_local(particle.previous as Vector2)
 		var current := to_local(particle.position as Vector2)
 		var length := previous.distance_to(current)
 		var steps := clampi(ceili(length), 1, 6)
 		for step in range(steps + 1):
-			var point := previous.lerp(current, float(step) / float(steps)).floor()
+			if instance_index >= MAX_JET_DRAW_PIXELS: break
+			var point := previous.lerp(current, float(step) / float(steps)).floor() + Vector2(0.5, 0.5)
 			var bright := posmod(int(particle.sequence) + step, 4) == 0 or (float(particle.stability) >= 0.75 and step % 2 == 0)
-			var color := Color(0.86, 0.98, 1.0, 0.92) if bright else Color(0.25, 0.78, 0.92, 0.78)
-			draw_rect(Rect2(point, Vector2.ONE), color, true)
+			var color := Color(0.62, 0.86, 1.0, 0.94) if bright else Color(0.16, 0.56, 1.0, 0.82)
+			instances.set_instance_transform_2d(instance_index, Transform2D(0.0, point))
+			instances.set_instance_color(instance_index, color)
+			instance_index += 1
+	instances.visible_instance_count = instance_index
 
 func _raycast_solid(start: Vector2, finish: Vector2) -> Dictionary:
 	if start.distance_squared_to(finish) <= 0.01: return {}
@@ -309,6 +389,8 @@ func reset_pressure_stream() -> void:
 	pressure_sustain = 0.0
 	pressure_emit_gap = 1.0
 	pressure_stability = 0.0
+	jet_particles.clear()
+	if is_instance_valid(jet_batch): jet_batch.multimesh.visible_instance_count = 0
 
 func emit_burst(origin: Vector2, kind: StringName, direction := Vector2.RIGHT, strength := 1.0) -> void:
 	if kind not in LIQUID_KINDS: return
@@ -484,17 +566,17 @@ func _mark_energized_chunks_dirty(cells: Array) -> void:
 		if touched_chunks.has(coordinate): continue
 		touched_chunks[coordinate] = true
 		var chunk := chunks.get(coordinate) as PixelLiquidChunk
-		if is_instance_valid(chunk): chunk.dirty = true
+		if is_instance_valid(chunk): chunk.mark_all_active_dirty()
 
 func _apply_electric_tint(cell: Vector2i, base_color: Color) -> Color:
 	if not energized_cells.has(cell): return base_color
 	# Integer hashing plus a moving time phase creates charge packets that race
-	# across the connected wet pixels. Only a sparse subset turns gold per frame,
-	# preserving the underlying water silhouette instead of recoloring the puddle.
+	# across the connected blue surface. Crimson is legal here because this
+	# connected surface is an immediately lethal trap.
 	var phase := posmod(cell.x * 17 + cell.y * 31 + electric_visual_tick * 5, 23)
-	if phase == 0: return Color(1.0, 0.96, 0.63, 0.96)
-	if phase <= 3: return Color(1.0, 0.72, 0.16, 0.88)
-	if phase <= 5: return base_color.lerp(Color(0.95, 0.48, 0.06, maxf(base_color.a, 0.72)), 0.72)
+	if phase == 0: return Color(1.0, 0.96, 0.96, 0.98)
+	if phase <= 3: return Color(0.92, 0.015, 0.035, 0.92)
+	if phase <= 5: return base_color.lerp(Color(0.68, 0.006, 0.018, maxf(base_color.a, 0.74)), 0.78)
 	return base_color
 
 func get_debug_energized_pixel_count() -> int:

@@ -2,19 +2,15 @@ shader_type canvas_item;
 
 uniform bool enable_cycle = true;
 uniform float cycle_speed : hint_range(0.0, 1.0) = 0.08;
-uniform float base_saturation : hint_range(0.0, 1.0) = 0.62;
-uniform float base_value : hint_range(0.0, 1.0) = 0.48;
-
-vec3 hsv2rgb(vec3 c) {
-	vec4 K = vec4(1.0, 0.6666667, 0.3333333, 3.0);
-	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
+uniform float base_saturation : hint_range(0.0, 1.0) = 0.0;
+uniform float base_value : hint_range(0.0, 1.0) = 0.24;
 
 void fragment() {
 	vec2 texture_size = vec2(textureSize(TEXTURE, 0));
 	vec2 pixel_uv = (floor(UV * texture_size) + vec2(0.5)) / max(texture_size, vec2(1.0));
 	vec4 tex = texture(TEXTURE, pixel_uv);
-	vec3 tint = enable_cycle ? hsv2rgb(vec3(fract(TIME * cycle_speed), base_saturation, base_value)) : vec3(0.24, 0.16, 0.3);
-	COLOR = vec4(tex.rgb * tint * 2.0, tex.a) * COLOR;
+	float phase = enable_cycle ? sin(TIME * cycle_speed * 6.2831853) * 0.035 : 0.0;
+	float grain = fract(sin(dot(floor(pixel_uv * texture_size), vec2(12.9898, 78.233))) * 43758.5453);
+	float value = clamp(base_value + phase + (grain - 0.5) * 0.035, 0.0, 1.0);
+	COLOR = vec4(tex.rgb * vec3(value) * 2.0, tex.a) * COLOR;
 }

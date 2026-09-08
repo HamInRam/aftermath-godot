@@ -7,6 +7,7 @@ script = ExtResource("1_profile")
 archetype_id = "assault"
 default_weapon_id = "shotgun"
 display_name = "ASSAULT"
+max_health = 85
 move_speed = 50.0
 chase_speed_multiplier = 1.5
 preferred_distance = 52.0

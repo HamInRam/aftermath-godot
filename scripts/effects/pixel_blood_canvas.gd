@@ -7,16 +7,17 @@ const PRESSURE_WASH_LEVEL_BONUS := 0.35
 signal cleaning_layer_changed(world_position: Vector2, layer: String, progress: float)
 signal cleaning_region_completed(world_position: Vector2)
 
-## Sparse room-scale blood simulation. Every occupied world pixel stores blood,
-## water, age and forensic residue. Visuals are uploaded in 32x32 nearest-filtered
-## chunks, so combat can paint thousands of hard pixels without thousands of nodes.
+## Sparse room-scale combat blood canvas. Every occupied world pixel is immutable
+## crimson until siphoned. Chunks keep thousands of hard pixels inexpensive.
 
 const CHUNK_SIZE := 32
 const PIXELS_PER_CHUNK := CHUNK_SIZE * CHUNK_SIZE
-const FRESH := Color("c7072d")
-const DARK := Color("4b0318")
-const DILUTED := Color("dd7b86")
-const UV_GLOW := Color("78ff8a")
+const MAX_CHUNK_UPLOADS_PER_FRAME := 4
+const POOL_OCCLUSION_RAYS := 32
+const FRESH := NeonPalette.BLOOD_CRIMSON
+const DARK := NeonPalette.BLOOD_CRIMSON
+const DILUTED := NeonPalette.BLOOD_CRIMSON
+const UV_GLOW := NeonPalette.BLOOD_CRIMSON
 
 class PixelBloodChunk extends Node2D:
 	var canvas: PixelBloodCanvas
@@ -39,6 +40,7 @@ class PixelBloodChunk extends Node2D:
 	var ultraviolet_radius := 0.0
 	var ultraviolet_possible := false
 	var dirty := false
+	var upload_queued := false
 	var registered := false
 	var image: Image
 	var texture: ImageTexture
@@ -75,6 +77,7 @@ class PixelBloodChunk extends Node2D:
 
 	func _mark_dirty(index: int) -> void:
 		dirty = true
+		if is_instance_valid(canvas): canvas.request_chunk_upload(self)
 		if dirty_flags[index] != 0: return
 		dirty_flags[index] = 1
 		dirty_pixels.append(index)
@@ -92,9 +95,6 @@ class PixelBloodChunk extends Node2D:
 		initial_load += float(maxi(0, added))
 		if after > 0 or water[index] > 0 or residue[index] > 0: _mark_active(index)
 		_mark_dirty(index)
-		if after > 0 and not registered:
-			registered = true
-			CleanupRegistry.register_target(self)
 		return added
 
 	func clean_local_pixel(local_cell: Vector2i, removal: int, tool_name: String) -> int:
@@ -123,6 +123,24 @@ class PixelBloodChunk extends Node2D:
 			residue_load -= washed_residue
 			water[index] = 220
 			removed = washed_residue
+		_mark_active(index)
+		_mark_dirty(index)
+		return removed
+
+	func absorb_local_pixel(local_cell: Vector2i, removal: int) -> int:
+		# Blood absorption is a combat resource transfer, not a cleanup pass. It
+		# removes visible liquid without adding water or forensic residue, allowing
+		# the same sparse pixel simulation to power both gore and the roguelike loop.
+		if local_cell.x < 0 or local_cell.y < 0 or local_cell.x >= PixelBloodCanvas.CHUNK_SIZE or local_cell.y >= PixelBloodCanvas.CHUNK_SIZE: return 0
+		var index := local_cell.y * PixelBloodCanvas.CHUNK_SIZE + local_cell.x
+		var before := int(blood[index])
+		if before <= 0: return 0
+		var removed := mini(before, maxi(1, removal))
+		blood[index] = before - removed
+		blood_load -= removed
+		# Keep the sparse slot reserved until the chunk is compacted or disposed.
+		# Clearing the flag while its old index remained in active_pixels allowed
+		# repeated deposit/absorb cycles to append duplicates without bound.
 		_mark_active(index)
 		_mark_dirty(index)
 		return removed
@@ -165,6 +183,7 @@ class PixelBloodChunk extends Node2D:
 		active_pixels = survivors
 
 	func flush_texture() -> void:
+		upload_queued = false
 		if not dirty: return
 		dirty = false
 		# Preserve the exact same RGBA image, but repaint only cells changed since
@@ -177,27 +196,9 @@ class PixelBloodChunk extends Node2D:
 		texture.update(image)
 
 	func _pixel_color(index: int) -> Color:
-		var amount := float(blood[index]) / 255.0
-		var wetness := float(water[index]) / 255.0
-		var uv_lit := _is_pixel_ultraviolet_lit(index)
-		if amount > 0.0:
-			var coagulation := floorf(clampf(float(age[index]) / 255.0, 0.0, 0.999) * 4.0) / 3.0
-			var color := FRESH.lerp(DARK, coagulation)
-			# Density is also a visible cleaning layer: a deliberate first pass peels
-			# dark mass into a brighter diluted film before UV-only residue remains.
-			var thinning := clampf((0.58 - amount) / 0.58, 0.0, 1.0)
-			color = color.lerp(DILUTED, clampf(thinning * 0.72 + wetness * 0.58, 0.0, 0.88))
-			color.a = clampf(0.24 + amount * 0.76, 0.0, 1.0)
-			if uv_lit:
-				color = color.lerp(UV_GLOW, 0.76)
-				color.a = maxf(color.a, 0.72)
-			return color
-		if wetness > 0.0:
-			return Color(0.58, 0.75, 0.78, wetness * 0.12)
-		if uv_lit and residue[index] > 0:
-			var residue_strength := float(residue[index]) / 255.0
-			return Color(UV_GLOW, 0.18 + residue_strength * 0.72)
-		return Color.TRANSPARENT
+		# Blood density remains simulation data for absorption. Every visible blood
+		# pixel is the exact same opaque crimson—no aging, dilution or UV tint.
+		return FRESH if blood[index] > 0 else Color.TRANSPARENT
 
 	func _is_pixel_ultraviolet_lit(index: int) -> bool:
 		if not ultraviolet_visible or not ultraviolet_possible: return false
@@ -307,16 +308,12 @@ class PixelBloodChunk extends Node2D:
 
 	func dispose_if_empty() -> void:
 		if has_visible_or_residual_blood(): return
-		if registered:
-			CleanupRegistry.unregister_target(self)
-			registered = false
 		queue_free()
 
 var chunks: Dictionary = {}
+var upload_queue: Array[PixelBloodChunk] = []
 var growing_pools: Array[Dictionary] = []
 var simulation_accumulator := 0.0
-var texture_accumulator := 0.0
-var surface_age_accumulator := 0.0
 var evidence_layer := "ground"
 
 func _ready() -> void:
@@ -327,22 +324,32 @@ func configure(layer_name: String, draw_order: int) -> void:
 	evidence_layer = layer_name
 	z_index = draw_order
 
-func _process(delta: float) -> void:
-	simulation_accumulator += delta
-	texture_accumulator += delta
-	surface_age_accumulator += delta
-	if simulation_accumulator >= 0.12:
-		var step := simulation_accumulator
-		simulation_accumulator = 0.0
-		_update_pools(step)
-	if texture_accumulator >= 1.0 / 24.0:
-		texture_accumulator = 0.0
-		for chunk in chunks.values():
-			if is_instance_valid(chunk): (chunk as PixelBloodChunk).flush_texture()
-	if surface_age_accumulator >= 1.0:
-		surface_age_accumulator = fmod(surface_age_accumulator, 1.0)
-		for chunk in chunks.values():
-			if is_instance_valid(chunk): (chunk as PixelBloodChunk).tick_surface()
+func _process(_delta: float) -> void:
+	_flush_upload_queue()
+
+func request_chunk_upload(chunk: PixelBloodChunk) -> void:
+	if not is_instance_valid(chunk) or chunk.upload_queued: return
+	chunk.upload_queued = true
+	upload_queue.append(chunk)
+
+func _flush_upload_queue() -> void:
+	var uploads := 0
+	var consumed := 0
+	while uploads < MAX_CHUNK_UPLOADS_PER_FRAME and consumed < upload_queue.size():
+		# Siphoning may retire a chunk before its queued texture upload. Casting a
+		# freed Godot object already raises an error, before a later validity check.
+		var pending: Variant = upload_queue[consumed]
+		consumed += 1
+		if not is_instance_valid(pending) or pending.is_queued_for_deletion(): continue
+		var chunk := pending as PixelBloodChunk
+		chunk.flush_texture()
+		uploads += 1
+	# Compact once per batch, not once per upload (which repeatedly shifts every
+	# pending entry). Preserve ordering and any entries appended while flushing.
+	if consumed > 0: upload_queue = upload_queue.slice(consumed)
+
+func get_debug_pending_upload_count() -> int:
+	return upload_queue.size()
 
 func deposit_drop(world_position: Vector2, strength := 0.5, direction := Vector2.RIGHT, surface_profile := {}) -> void:
 	var amount := clampi(roundi(110.0 + strength * 130.0), 64, 240)
@@ -353,12 +360,14 @@ func deposit_drop(world_position: Vector2, strength := 0.5, direction := Vector2
 		for step in range(1, clampi(roundi(1.0 + spread), 2, 3)):
 			add_blood_pixel(world_position - forward * float(step), roundi(amount * (0.62 / float(step))))
 
-func stamp_splatter(world_position: Vector2, direction: Vector2, intensity: float, pattern: String, cone: float, wound_kind := "") -> void:
+func stamp_splatter(world_position: Vector2, direction: Vector2, intensity: float, pattern: String, cone: float, wound_kind := "", raw_budget := -1) -> int:
 	var forward := direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
 	var count := clampi(roundi(10.0 + intensity * 9.0), 8, 54)
 	var reach := 7.0 + intensity * (8.0 if pattern == "fan" else 11.0)
+	var total_added := 0
 	if wound_kind in ["crush", "execution"]: reach *= 0.62
 	for index in range(count):
+		if raw_budget >= 0 and total_added >= raw_budget: break
 		var angle := randf_range(-cone, cone)
 		if pattern == "radial": angle = randf_range(-PI, PI)
 		var ray_direction := forward.rotated(angle)
@@ -374,50 +383,27 @@ func stamp_splatter(world_position: Vector2, direction: Vector2, intensity: floa
 		if pattern == "line":
 			# Firearm trails are separated droplets with occasional two-pixel tails,
 			# never many overlapping rays that merge into one implausible solid stripe.
-			add_blood_pixel(endpoint, amount)
-			if index % 3 == 0: add_blood_pixel(endpoint - ray_direction, roundi(amount * 0.58))
+			total_added += add_blood_pixel(endpoint, mini(amount, raw_budget - total_added) if raw_budget >= 0 else amount)
+			if index % 3 == 0 and (raw_budget < 0 or total_added < raw_budget):
+				var tail_amount := roundi(amount * 0.58)
+				total_added += add_blood_pixel(endpoint - ray_direction, mini(tail_amount, raw_budget - total_added) if raw_budget >= 0 else tail_amount)
 		else:
-			_stamp_sparse_line(world_position, endpoint, amount, 0.20)
-		if index % 4 == 0: _stamp_disc(endpoint, 1.0 + intensity * 0.22, amount)
-	_stamp_disc(world_position, 1.5 + intensity * 0.45, clampi(roundi(118.0 + intensity * 48.0), 80, 255))
+			total_added += _stamp_sparse_line_budgeted(world_position, endpoint, amount, 0.20, raw_budget - total_added if raw_budget >= 0 else -1)
+		if index % 4 == 0 and (raw_budget < 0 or total_added < raw_budget):
+			total_added += _stamp_disc_budgeted(endpoint, 1.0 + intensity * 0.22, amount, raw_budget - total_added if raw_budget >= 0 else -1)
+	if raw_budget < 0 or total_added < raw_budget:
+		total_added += _stamp_disc_budgeted(world_position, 1.5 + intensity * 0.45, clampi(roundi(118.0 + intensity * 48.0), 80, 255), raw_budget - total_added if raw_budget >= 0 else -1)
+	return total_added
 
 func start_pool(world_position: Vector2, intensity: float, direction: Vector2, surface_profile := {}, violence_profile := {}) -> void:
-	var spread := clampf(float(surface_profile.get("spread", 1.0)), 0.78, 1.55)
-	var pool_bias := clampf(float(violence_profile.get("pool_bias", 1.0)), 0.75, 1.6)
-	var target_radius := (5.0 + intensity * 4.2) * spread * pool_bias
-	var flow := direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
-	growing_pools.append({
-		"position": world_position,
-		"direction": flow,
-		"elapsed": 0.0,
-		"duration": lerpf(7.5, 4.2, clampf(intensity / 2.2, 0.0, 1.0)),
-		"radius": target_radius,
-		"last_step": -1,
-		"amount": clampi(roundi(150.0 + intensity * 38.0), 130, 255),
-	})
-	_stamp_disc(world_position, 2.0, 210)
+	# Compatibility entry point for existing impact profiles: deaths leave one
+	# immediate finite stain. They never seep, grow, recolor or emit more blood.
+	var spread := clampf(float(surface_profile.get("spread", 1.0)), 0.78, 1.35)
+	var pool_bias := clampf(float(violence_profile.get("pool_bias", 1.0)), 0.70, 1.35)
+	var radius := clampf((2.2 + intensity * 1.25) * spread * pool_bias, 2.0, 6.5)
+	_stamp_disc(world_position, radius, 255)
 
 func settle_all_pools() -> void:
-	# Cleanup must operate on stable evidence. Finish any remaining seep in one
-	# deterministic pass so a freshly wiped strip cannot refill behind the cursor.
-	for pool in growing_pools:
-		var center: Vector2 = pool["position"]
-		var direction: Vector2 = pool["direction"]
-		var radius := float(pool["radius"])
-		var amount := int(pool["amount"])
-		var side := direction.orthogonal()
-		var extent := ceili(radius * 1.38)
-		for y in range(-extent, extent + 1):
-			for x in range(-extent, extent + 1):
-				var offset := Vector2(x, y)
-				var forward_distance := offset.dot(direction) / maxf(1.0, radius * 1.28)
-				var side_distance := offset.dot(side) / maxf(1.0, radius * 0.82)
-				var normalized_distance := forward_distance * forward_distance + side_distance * side_distance
-				if normalized_distance > 1.0: continue
-				# Sparse one-pixel holes keep the puddle organic without fragmenting its core.
-				if normalized_distance > 0.55 and posmod(x * 13 + y * 7, 11) == 0: continue
-				var point := center + offset
-				if not _blocked_by_solid(center, point): add_blood_pixel(point, roundi(float(amount) * lerpf(1.0, 0.48, normalized_distance)))
 	growing_pools.clear()
 
 func stamp_drag_smear(world_position: Vector2, direction: Vector2, strength := 0.65) -> void:
@@ -536,10 +522,101 @@ func has_blood_near(world_position: Vector2, radius: float) -> bool:
 			if chunk.blood[index] > 28: return true
 	return false
 
-func add_blood_pixel(world_position: Vector2, amount: int) -> void:
+func absorb_circle(world_position: Vector2, radius: float, removal_per_pixel: int, maximum_samples := 48, maximum_total := 255) -> Dictionary:
+	# Traverse only sparse occupied pixels in overlapping chunks, then consume the
+	# nearest candidates. The previous >28px stride skipped one coordinate parity
+	# forever while the actor stood still, leaving visibly permanent blood cells.
+	var total := 0
+	var positions := PackedVector2Array()
+	var touched_chunks: Dictionary = {}
+	var candidates: Array[Dictionary] = []
+	var min_chunk := _chunk_coordinate(Vector2i(floori(world_position.x - radius), floori(world_position.y - radius)))
+	var max_chunk := _chunk_coordinate(Vector2i(ceili(world_position.x + radius), ceili(world_position.y + radius)))
+	var radius_squared := radius * radius
+	for chunk_y in range(min_chunk.y, max_chunk.y + 1):
+		for chunk_x in range(min_chunk.x, max_chunk.x + 1):
+			var chunk := chunks.get(Vector2i(chunk_x, chunk_y)) as PixelBloodChunk
+			if not is_instance_valid(chunk): continue
+			for index in chunk.active_pixels:
+				if chunk.active_flags[index] == 0 or chunk.blood[index] <= 0: continue
+				var local_cell := Vector2i(index % CHUNK_SIZE, floori(float(index) / float(CHUNK_SIZE)))
+				var cell := chunk.chunk_coordinate * CHUNK_SIZE + local_cell
+				var sample_position := Vector2(cell) + Vector2(0.5, 0.5)
+				var distance_squared := sample_position.distance_squared_to(world_position)
+				if distance_squared <= radius_squared:
+					candidates.append({"distance": distance_squared, "cell": cell, "chunk": chunk})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.distance) < float(b.distance))
+	var visited := 0
+	for candidate in candidates:
+		if visited >= maximum_samples or total >= maximum_total: break
+		var chunk: PixelBloodChunk = candidate.chunk
+		var cell: Vector2i = candidate.cell
+		var removed := chunk.absorb_local_pixel(_local_cell(cell), mini(removal_per_pixel, maximum_total - total))
+		if removed <= 0: continue
+		total += removed
+		visited += 1
+		touched_chunks[chunk.get_instance_id()] = chunk
+		if positions.size() < 12: positions.append(Vector2(cell) + Vector2(0.5, 0.5))
+	for chunk in touched_chunks.values():
+		if is_instance_valid(chunk): (chunk as PixelBloodChunk).dispose_if_empty()
+	if total > 0: _consume_intersecting_pool_growth(positions)
+	return {"amount": total, "positions": positions}
+
+func _consume_intersecting_pool_growth(absorbed_positions: PackedVector2Array) -> void:
+	if absorbed_positions.is_empty() or growing_pools.is_empty(): return
+	var survivors: Array[Dictionary] = []
+	for pool in growing_pools:
+		var consumed := false
+		var pool_position: Vector2 = pool.position
+		var capture_radius := maxf(4.0, float(pool.radius) * 1.08)
+		for source in absorbed_positions:
+			if source.distance_squared_to(pool_position) <= capture_radius * capture_radius:
+				consumed = true
+				break
+		if not consumed: survivors.append(pool)
+	growing_pools = survivors
+
+func absorb_cone(world_position: Vector2, direction: Vector2, reach: float, half_angle: float, removal_per_pixel: int, maximum_samples := 48, maximum_total := 255) -> Dictionary:
+	# Combat siphoning is intentionally aim-driven. Sampling the cone from near to
+	# far makes the nearest visible blood peel away first and prevents blood behind
+	# the player from being collected simply because it shares the same radius.
+	var total := 0
+	var positions := PackedVector2Array()
+	var touched_chunks: Dictionary = {}
+	var visited_cells: Dictionary = {}
+	var forward := direction.normalized() if direction.length_squared() > 0.001 else Vector2.RIGHT
+	var reach_i := maxi(3, ceili(reach))
+	var clamped_half_angle := clampf(half_angle, 0.08, PI * 0.48)
+	var visited_blood_samples := 0
+	for distance_step in range(3, reach_i + 1):
+		var arc_samples := maxi(3, ceili(float(distance_step) * clamped_half_angle * 1.35))
+		for arc_index in range(arc_samples + 1):
+			if visited_blood_samples >= maximum_samples or total >= maximum_total: break
+			var weight := float(arc_index) / float(arc_samples)
+			var angle := lerpf(-clamped_half_angle, clamped_half_angle, weight)
+			var sample_position := world_position + forward.rotated(angle) * float(distance_step)
+			var cell := Vector2i(floori(sample_position.x), floori(sample_position.y))
+			if visited_cells.has(cell): continue
+			visited_cells[cell] = true
+			var chunk := _find_chunk_for_cell(cell)
+			if not is_instance_valid(chunk): continue
+			var removed := chunk.absorb_local_pixel(_local_cell(cell), mini(removal_per_pixel, maximum_total - total))
+			if removed <= 0: continue
+			total += removed
+			visited_blood_samples += 1
+			touched_chunks[chunk.get_instance_id()] = chunk
+			if positions.size() < 16: positions.append(Vector2(cell) + Vector2(0.5, 0.5))
+		if visited_blood_samples >= maximum_samples or total >= maximum_total: break
+	for chunk in touched_chunks.values():
+		if is_instance_valid(chunk): (chunk as PixelBloodChunk).dispose_if_empty()
+	if total > 0: _consume_intersecting_pool_growth(positions)
+	return {"amount": total, "positions": positions}
+
+func add_blood_pixel(world_position: Vector2, amount: int) -> int:
+	if amount <= 0: return 0
 	var cell := Vector2i(floori(world_position.x), floori(world_position.y))
 	var chunk := _get_or_create_chunk(_chunk_coordinate(cell))
-	chunk.add_local_pixel(_local_cell(cell), amount)
+	return chunk.add_local_pixel(_local_cell(cell), amount)
 
 func apply_external_water(world_position: Vector2, amount: int, flow_direction := Vector2.ZERO) -> void:
 	var flow := flow_direction.normalized() if flow_direction.length_squared() > 0.01 else Vector2.RIGHT
@@ -565,23 +642,37 @@ func apply_external_water(world_position: Vector2, amount: int, flow_direction :
 				chunk.add_local_pixel(_local_cell(cell), maxi(4, lifted_total / (step + 2)), 255, 0)
 
 func _stamp_disc(center: Vector2, radius: float, amount: int) -> void:
+	_stamp_disc_budgeted(center, radius, amount, -1)
+
+func _stamp_disc_budgeted(center: Vector2, radius: float, amount: int, raw_budget: int) -> int:
+	var total_added := 0
 	var min_x := floori(center.x - radius)
 	var max_x := ceili(center.x + radius)
 	var min_y := floori(center.y - radius)
 	var max_y := ceili(center.y + radius)
 	for y in range(min_y, max_y + 1):
 		for x in range(min_x, max_x + 1):
+			if raw_budget >= 0 and total_added >= raw_budget: return total_added
 			var distance := Vector2(x, y).distance_to(center)
 			if distance <= radius:
-				add_blood_pixel(Vector2(x, y), roundi(float(amount) * lerpf(1.0, 0.42, distance / maxf(1.0, radius))))
+				var pixel_amount := roundi(float(amount) * lerpf(1.0, 0.42, distance / maxf(1.0, radius)))
+				total_added += add_blood_pixel(Vector2(x, y), mini(pixel_amount, raw_budget - total_added) if raw_budget >= 0 else pixel_amount)
+	return total_added
 
 func _stamp_sparse_line(start: Vector2, finish: Vector2, amount: int, density: float) -> void:
+	_stamp_sparse_line_budgeted(start, finish, amount, density, -1)
+
+func _stamp_sparse_line_budgeted(start: Vector2, finish: Vector2, amount: int, density: float, raw_budget: int) -> int:
+	var total_added := 0
 	var distance := start.distance_to(finish)
 	var steps := maxi(1, ceili(distance))
 	for step in range(steps + 1):
+		if raw_budget >= 0 and total_added >= raw_budget: break
 		if step > 0 and step < steps and randf() > density: continue
 		var point := start.lerp(finish, float(step) / float(steps))
-		add_blood_pixel(point, roundi(float(amount) * lerpf(1.0, 0.44, float(step) / float(steps))))
+		var pixel_amount := roundi(float(amount) * lerpf(1.0, 0.44, float(step) / float(steps)))
+		total_added += add_blood_pixel(point, mini(pixel_amount, raw_budget - total_added) if raw_budget >= 0 else pixel_amount)
+	return total_added
 
 func _update_pools(delta: float) -> void:
 	var active: Array[Dictionary] = []
@@ -610,7 +701,7 @@ func _update_pools(delta: float) -> void:
 						if previous_forward * previous_forward + previous_side * previous_side <= 1.0: continue
 					if normalized_distance > 0.60 and posmod(x * 13 + y * 7 + growth_step * 3, 17) == 0: continue
 					var point := pool_position + offset
-					if not _blocked_by_solid(pool_position, point): add_blood_pixel(point, roundi(float(pool.amount) * lerpf(1.0, 0.5, normalized_distance)))
+					if _pool_point_allowed(pool, point): add_blood_pixel(point, roundi(float(pool.amount) * lerpf(1.0, 0.5, normalized_distance)))
 		if progress < 1.0: active.append(pool)
 	growing_pools = active
 
@@ -622,14 +713,16 @@ func _local_cell(cell: Vector2i) -> Vector2i:
 
 func _find_chunk_for_cell(cell: Vector2i) -> PixelBloodChunk:
 	var coordinate := _chunk_coordinate(cell)
-	var chunk := chunks.get(coordinate) as PixelBloodChunk
-	if not is_instance_valid(chunk): return null
-	return chunk
+	var candidate: Variant = chunks.get(coordinate)
+	if not is_instance_valid(candidate) or candidate.is_queued_for_deletion(): return null
+	return candidate as PixelBloodChunk
 
 func _get_or_create_chunk(coordinate: Vector2i) -> PixelBloodChunk:
-	var chunk := chunks.get(coordinate) as PixelBloodChunk
-	if is_instance_valid(chunk): return chunk
-	chunk = PixelBloodChunk.new()
+	var candidate: Variant = chunks.get(coordinate)
+	if is_instance_valid(candidate) and not candidate.is_queued_for_deletion(): return candidate as PixelBloodChunk
+	# A new hit can repaint a just-drained cell in the same frame. Never deposit
+	# into the retired chunk: queue_free would otherwise discard that fresh blood.
+	var chunk := PixelBloodChunk.new()
 	chunks[coordinate] = chunk
 	add_child(chunk)
 	chunk.configure(self, coordinate)
@@ -643,6 +736,42 @@ func _blocked_by_solid(start: Vector2, finish: Vector2) -> bool:
 	var query := PhysicsRayQueryParameters2D.create(start, finish, 4)
 	query.collide_with_areas = false
 	return not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
+
+func _build_pool_occlusion(center: Vector2, reach: float) -> PackedFloat32Array:
+	var result := PackedFloat32Array()
+	result.resize(POOL_OCCLUSION_RAYS)
+	if evidence_layer != "ground":
+		result.fill(reach)
+		return result
+	var world := get_tree().get_first_node_in_group("pathfinding_world")
+	var space := get_world_2d().direct_space_state
+	for index in POOL_OCCLUSION_RAYS:
+		var direction := Vector2.RIGHT.rotated(TAU * float(index) / float(POOL_OCCLUSION_RAYS))
+		if is_instance_valid(world) and world.has_method("is_navigation_position_walkable"):
+			var allowed := reach
+			for distance_step in range(1, ceili(reach) + 1):
+				if not world.is_navigation_position_walkable(center + direction * float(distance_step)):
+					allowed = maxf(0.0, float(distance_step) - 0.8)
+					break
+			result[index] = allowed
+			continue
+		var query := PhysicsRayQueryParameters2D.create(center, center + direction * reach, 4)
+		query.collide_with_areas = false
+		var hit := space.intersect_ray(query)
+		result[index] = maxf(0.0, center.distance_to(hit.position) - 0.8) if not hit.is_empty() else reach
+	return result
+
+func _pool_point_allowed(pool: Dictionary, point: Vector2) -> bool:
+	var center: Vector2 = pool.position
+	var offset := point - center
+	if offset.length_squared() <= 1.0: return true
+	var occlusion: PackedFloat32Array = pool.get("occlusion", PackedFloat32Array())
+	if occlusion.size() != POOL_OCCLUSION_RAYS: return not _blocked_by_solid(center, point)
+	var ray_position := wrapf(offset.angle(), 0.0, TAU) / TAU * float(POOL_OCCLUSION_RAYS)
+	var low := floori(ray_position) % POOL_OCCLUSION_RAYS
+	var high := (low + 1) % POOL_OCCLUSION_RAYS
+	var allowed := lerpf(occlusion[low], occlusion[high], ray_position - floorf(ray_position))
+	return offset.length() <= allowed
 
 func get_debug_pixel_count() -> int:
 	var total := 0

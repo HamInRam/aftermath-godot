@@ -5,7 +5,6 @@
 level_title = "COLD STORAGE"
 enemy_spawns = PackedVector2Array(52,44, 52,180, 164,52, 212,100, 164,188, 292,52, 348,92, 292,188, 348,188, 212,188)
 enemy_types = PackedStringArray("dog","melee","assault","heavy","gunner","dog","assault","heavy","melee","gunner")
-fixed_sentry_indices = PackedInt32Array(3,7)
 mission_profile = ExtResource("2")
 visual_theme = "ice"
 ammo_pickup_positions = PackedVector2Array(52,92, 188,92, 284,116, 348,196)

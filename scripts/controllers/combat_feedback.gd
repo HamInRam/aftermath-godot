@@ -8,6 +8,15 @@ var hit_stop_active := false
 var flash_intensity := 1.0
 var base_time_scale := 1.0
 var focus_audio: AudioStreamPlayer
+var hit_audio: AudioStreamPlayer
+var last_hit_audio_msec := -1000
+var last_lethal_audio_msec := -1000
+var audio_priority := -1
+var audio_priority_until_msec := 0
+var next_hit_stop_msec := 0
+var flash_tween: Tween
+const MAX_HIT_STOP_SECONDS := 0.028
+const HIT_STOP_REFRACTORY_MSEC := 75
 
 func configure(flash_rect: ColorRect, intensity := 1.0) -> void:
 	flash = flash_rect
@@ -19,6 +28,11 @@ func configure(flash_rect: ColorRect, intensity := 1.0) -> void:
 		focus_audio.volume_db = -10.0
 		focus_audio.stream = ProceduralAudioLibrary.get_sfx("focus_enter")
 		add_child(focus_audio)
+	if not is_instance_valid(hit_audio):
+		hit_audio = AudioStreamPlayer.new()
+		hit_audio.name = "HitConfirmationAudio"
+		hit_audio.bus = "SFX"
+		add_child(hit_audio)
 
 func trigger_focus_enter() -> void:
 	# Focus is communicated by the persistent screen grade and HUD for its whole
@@ -26,11 +40,33 @@ func trigger_focus_enter() -> void:
 	# flash that could be mistaken for the complete state feedback.
 	if is_instance_valid(focus_audio): focus_audio.play()
 
+func trigger_hit_confirmation(kind: String, lethal := false) -> void:
+	if not is_instance_valid(hit_audio): return
+	var now := Time.get_ticks_msec()
+	var priority := 3 if lethal else (2 if kind == "head" else 1)
+	# A later pellet must not replace a confirmed kill with a weaker flesh tick.
+	if now < audio_priority_until_msec and priority < audio_priority: return
+	if lethal and now - last_lethal_audio_msec < 65: return
+	if lethal: last_lethal_audio_msec = now
+	if not lethal and now - last_hit_audio_msec < 38: return
+	last_hit_audio_msec = now
+	audio_priority = priority
+	audio_priority_until_msec = now + (100 if lethal else 45)
+	var effect_id := "hit_lethal" if lethal else ("hit_armour" if kind == "armour" else ("hit_head" if kind == "head" else "hit_flesh"))
+	hit_audio.stream = ProceduralAudioLibrary.get_sfx(effect_id)
+	hit_audio.volume_db = -5.0 if lethal else (-7.0 if kind == "armour" else (-5.5 if kind == "head" else -6.0))
+	hit_audio.pitch_scale = randf_range(0.96, 1.04)
+	hit_audio.play()
+
 func trigger_hit_stop(duration: float) -> void:
 	if duration <= 0.0: return
-	hit_stop_deadline_msec = maxi(hit_stop_deadline_msec, Time.get_ticks_msec() + roundi(duration * 1000.0))
-	Engine.time_scale = 0.05
-	if hit_stop_active: return
+	var now := Time.get_ticks_msec()
+	# One compact impact beat per trigger encounter. Nine shotgun pellets or a
+	# stream of SMG hits must never extend the global stop into sustained sludge.
+	if hit_stop_active or now < next_hit_stop_msec: return
+	hit_stop_deadline_msec = now + roundi(minf(duration, MAX_HIT_STOP_SECONDS) * 1000.0)
+	next_hit_stop_msec = now + HIT_STOP_REFRACTORY_MSEC
+	Engine.time_scale = 0.08
 	hit_stop_active = true
 	hit_stop_generation += 1
 	var generation := hit_stop_generation
@@ -49,15 +85,27 @@ func set_base_time_scale(_value: float) -> void:
 
 func show_flash(color: Color, duration: float) -> void:
 	if not is_instance_valid(flash): return
-	var adjusted := Color(color.r, color.g, color.b, color.a * flash_intensity)
+	if is_instance_valid(flash_tween): flash_tween.kill()
+	var adjusted := Color(color.r, color.g, color.b, minf(color.a, 0.20) * flash_intensity)
 	flash.color = adjusted
-	var tween := create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS).set_ignore_time_scale(true)
-	tween.tween_property(flash, "color", Color(adjusted.r, adjusted.g, adjusted.b, 0.0), duration)
+	flash_tween = create_tween().set_ignore_time_scale(true)
+	flash_tween.tween_property(flash, "color", Color(adjusted.r, adjusted.g, adjusted.b, 0.0), duration)
 
 func reset() -> void:
 	hit_stop_generation += 1
 	hit_stop_active = false
 	hit_stop_deadline_msec = 0
+	next_hit_stop_msec = 0
+	last_hit_audio_msec = -1000
+	last_lethal_audio_msec = -1000
+	audio_priority = -1
+	audio_priority_until_msec = 0
 	base_time_scale = 1.0
 	Engine.time_scale = 1.0
 	if is_instance_valid(focus_audio): focus_audio.stop()
+	if is_instance_valid(hit_audio): hit_audio.stop()
+	if is_instance_valid(flash_tween): flash_tween.kill()
+	if is_instance_valid(flash): flash.color.a = 0.0
+
+func _exit_tree() -> void:
+	reset()

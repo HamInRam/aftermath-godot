@@ -75,7 +75,7 @@ func _apply_electric_damage() -> void:
 		var id := body.get_instance_id()
 		if float(damage_cooldowns.get(id, 0.0)) > 0.0: continue
 		damage_cooldowns[id] = 1.2
-		body.take_damage(1, global_position)
+		body.take_damage(34, global_position)
 		Events.publish_combat_noise(global_position, 72.0, "electrical_arc")
 
 func set_source_active(active: bool) -> void:
@@ -135,4 +135,5 @@ func _draw() -> void:
 			var reach := radius * (0.55 + float((index + int(pulse * 7.0)) % 3) * 0.2)
 			var end := Vector2(roundi(cos(angle) * reach), roundi(sin(angle) * reach))
 			var midpoint := Vector2(roundi(end.x * 0.5), roundi(end.y * 0.5 + (2.0 if index % 2 == 0 else -2.0)))
-			PIXELS.polyline(self, PackedVector2Array([Vector2.ZERO, Vector2(midpoint.x, 0), midpoint, Vector2(end.x, midpoint.y), end]), Color("d9ffff"))
+			var arc_color := Color("fffafa") if index == 0 else Color("d20b2a")
+			PIXELS.polyline(self, PackedVector2Array([Vector2.ZERO, Vector2(midpoint.x, 0), midpoint, Vector2(end.x, midpoint.y), end]), arc_color)

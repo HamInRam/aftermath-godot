@@ -13,7 +13,6 @@ ammo_pickup_positions = PackedVector2Array(116, 120, 264, 120, 318, 188, 420, 12
 ammo_pickup_weapon_ids = PackedStringArray("pistol", "smg", "lmg", "shotgun", "shotgun")
 ammo_pickup_rounds = PackedInt32Array(12, 24, 30, 8, 8)
 enemy_types = PackedStringArray("melee", "gunner", "assault", "melee", "heavy", "melee", "gunner", "assault", "gunner", "dog", "heavy", "melee", "gunner", "dog", "assault", "gunner", "melee")
-fixed_sentry_indices = PackedInt32Array(2, 6, 8, 12)
 disposal_positions = PackedVector2Array(500, 252, 52, 60)
 disposal_types = PackedStringArray("dumpster", "incinerator")
 cleanup_secret_positions = PackedVector2Array(84, 72, 300, 200, 468, 88)
@@ -39,7 +38,7 @@ position = Vector2(280, 116)
 rotation = -1.5708
 
 [node name="CanvasModulate" parent="." index="1"]
-color = Color(0.62, 0.57, 0.68, 1)
+color = Color(0.95, 0.95, 0.95, 1)
 
 [node name="TraumaCamera" parent="." index="8"]
 camera_center_bounds = Rect2(160, 90, 192, 108)

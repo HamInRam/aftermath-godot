@@ -13,10 +13,12 @@ static func get_cleanup_guidance(counts: Dictionary) -> String:
 
 static func get_kit_aftermath(gun_slots: Array) -> Dictionary:
 	if gun_slots.is_empty(): return {"score": 0, "label": "MINIMAL"}
-	var gun_ids := ["pistol", "smg", "lmg", "shotgun"]
 	var score := 0.0
 	for slot in gun_slots:
-		var profile := AttackCatalog.get_aftermath_profile(gun_ids[clampi(int(slot), 0, gun_ids.size() - 1)])
+		var weapon_id := str(slot)
+		if slot is int:
+			weapon_id = ["pistol", "smg", "lmg", "shotgun"][clampi(int(slot), 0, 3)]
+		var profile := AttackCatalog.get_aftermath_profile(weapon_id)
 		score += float(profile.get("cleanup_load", 1.0))
 	score /= float(gun_slots.size())
 	return {"score": score, "label": "LOW" if score < 2.5 else ("HIGH" if score >= 5.0 else "MED")}

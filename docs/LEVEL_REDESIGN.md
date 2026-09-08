@@ -12,7 +12,7 @@ All campaign floors use an 8x8 tile grid, 8x8/16x16 props, hard pixel edges and 
 | Penthouse | lounge, private suite, glass gallery, bar, service rooms | open luxury spaces versus narrow service flank | fragile glass, valuables and furniture restoration |
 | Cold Storage | west freezer, cold core, east storage, machinery bays | three parallel refrigerated lanes | drains, freezer racks and industrial grime |
 | Casino Floor | entry cage, gaming floor, central roulette, VIP cage | circular cover clusters and guarded cage exits | machines, glass, paper/chips and bar fixtures |
-| Police Archive | records, archive hub, evidence lockup | shelf lanes, cameras and fixed sentry positions | case files, evidence cabinets and restricted disposal route |
+| Police Archive | records, archive hub, evidence lockup | shelf lanes, cameras and cross-room mobile patrol pressure | case files, evidence cabinets and restricted disposal route |
 | Slaughterhouse | intake, processing, packing and cold room | horizontal production lanes and conveyor choke points | drains, machinery, grime and incinerator routing |
 | Broadcast Tower | service hall, studio, control room and equipment bay | camera-covered studio approaches and control-room flank | cables, consoles, equipment cabinets and recording evidence |
 | Last Call | entry, ruined main club, final stage, VIP and back service | a compressed remix of campaign lessons with multiple breach routes | shattered club equipment, finale evidence and long return path |

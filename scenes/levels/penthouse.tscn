@@ -5,7 +5,6 @@
 level_title = "GLASS HOUSE"
 enemy_spawns = PackedVector2Array(52,52, 132,76, 52,184, 132,184, 220,52, 300,68, 348,116, 236,188, 340,188)
 enemy_types = PackedStringArray("gunner","assault","gunner","heavy","gunner","dog","assault","melee","heavy")
-fixed_sentry_indices = PackedInt32Array(3,8)
 mission_profile = ExtResource("2")
 visual_theme = "gold"
 ammo_pickup_positions = PackedVector2Array(60,116, 172,76, 284,116, 348,188)

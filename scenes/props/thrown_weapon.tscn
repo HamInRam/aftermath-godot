@@ -2,8 +2,8 @@
 
 [ext_resource path="res://scripts/props/thrown_weapon.gd" type="Script" id="1_script"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape_weapon"]
-size = Vector2(10, 5)
+[sub_resource type="CircleShape2D" id="RectangleShape_weapon"]
+radius = 3.0
 
 [node name="ThrownWeapon" type="CharacterBody2D" groups=["thrown_weapon"]]
 collision_layer = 0

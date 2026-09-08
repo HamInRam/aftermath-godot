@@ -5,7 +5,6 @@
 level_title = "BLUE FILES"
 enemy_spawns = PackedVector2Array(52,52, 92,180, 164,52, 220,92, 164,188, 228,188, 292,52, 348,92, 292,188, 348,188)
 enemy_types = PackedStringArray("heavy","gunner","assault","heavy","gunner","melee","assault","heavy","gunner","dog")
-fixed_sentry_indices = PackedInt32Array(0,3,7)
 mission_profile = ExtResource("2")
 visual_theme = "police"
 ammo_pickup_positions = PackedVector2Array(60,108, 180,76, 276,164, 348,108)

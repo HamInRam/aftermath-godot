@@ -9,7 +9,7 @@ func _ready() -> void:
 	overlay = ColorRect.new()
 	overlay.name = "FadeOverlay"
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.015, 0.008, 0.025, 0.0)
+	overlay.color = Color(0.01, 0.01, 0.01, 0.0)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
 

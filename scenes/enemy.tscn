@@ -21,7 +21,7 @@ move_speed = 29.0
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape_enemy")
 
-[node name="LegsVisual" type="Node2D" parent="."]
+[node name="Legs" type="Node2D" parent="."]
 z_index = -1
 script = ExtResource("8_actor_part")
 part = "legs"
@@ -29,14 +29,18 @@ actor_kind = "enemy"
 body_color = Color(0.49, 0.14, 0.36, 1)
 accent_color = Color(0.95, 0.25, 0.5, 1)
 
-[node name="LifecycleRig" type="Node2D" parent="."]
+[node name="UpperBody" type="Node2D" parent="."]
+z_index = 1
+
+[node name="LifecycleRig" type="Node2D" parent="UpperBody"]
 z_index = 1
 script = ExtResource("9_lifecycle_rig")
 rig_kind = "enemy"
 body_color = Color(0.49, 0.14, 0.36, 1)
 accent_color = Color(0.95, 0.25, 0.5, 1)
+external_legs = true
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="UpperBody"]
 z_index = 1
 texture_filter = 1
 modulate = Color(1.18, 0.92, 1.06, 1)
@@ -47,7 +51,7 @@ texture_filter = 1
 modulate = Color(0.04, 0.025, 0.06, 0.48)
 script = ExtResource("7_shadow")
 
-[node name="Gun" parent="." instance=ExtResource("2_gun")]
+[node name="Gun" parent="UpperBody" instance=ExtResource("2_gun")]
 position = Vector2(3.5, 0)
 scale = Vector2(1, 1)
 gun_data = ExtResource("3_smg")

@@ -1,6 +1,48 @@
-# AFTERMATH — Neon Crime Prototype
+# AFTERMATH — Monochrome Blood Roguelike
 
-An original Godot 4 top-down shooter inspired by the visual language and pacing of neon crime thrillers.
+An original Godot 4 room-combat roguelike built around hard-boiled monochrome violence, persistent crimson blood and modular firearms.
+
+## Current presentation: The Descent rebuild
+
+The world, six actor roles, corpse anatomy, eight firearm classes, title menu and corner HUD have been redrawn in native monochrome pixels. Direct mouse aim, mechanically staged reloads, bounded directional recoil and non-stacking hit stop emphasize fast, readable room combat. This is original OTXO-informed work, not a copy of its assets or full content catalog. See [implementation and reference decisions](docs/OTXO_REDESIGN.md).
+
+## Current build: a complete six-floor run loop
+
+- A descent draws six different venues from twelve authored shells. Each floor contains four or five combat rooms; health, armor, magazines, reserves, fitted parts, blood, skill cooldowns and Focus carry into the next floor.
+- The first floor offers the entry loadout bench. Death retries restore that floor's entry checkpoint without reopening the bench or issuing free resources; retries are counted in the final report. The sixth floor ends the run and offers a new descent.
+- Buildings now occupy 768×448 native world pixels rather than 384×224. Actors, furniture, 8px tiles and 24px doors retain their original scale. This expands physical combat space, not the art pixels or camera alone.
+- 48 authored enemy/cover formations with eight safe transformations supply room variation. Standard floors have 16–20 hostiles. Seeded layouts remain identical on a death retry and change on a new run.
+- Empty magazine plus a fresh left click reloads if reserves remain. A completely empty gun dry-fires; only Q throws it. Throws rotate, sweep against thin walls, rebound, knock down enemies and remain recoverable without duplicating ammunition.
+- Grayscale detached anatomy matches the corpse's missing parts. Limbs and ragdolls collide with walls, preserve angular motion, settle, and remain readable above crimson blood. Blood-enhanced shots retain a strictly lossy resource return budget.
+- Active cleanup transitions, tool handlers, extraction scoring and title-menu links to the retired cleaning workshop are removed. Old save fields and isolated legacy resources remain compatible; they do not gate the current run.
+- HOW TO PLAY is a scrollable page with a fixed Back action. Death/clear actions stay onscreen rather than disappearing with transient HUD hints. See [runtime design and verification](docs/ROGUELIKE_RUNTIME.md).
+
+## v1.3.0 modular armory foundation
+
+- All twelve venues now use four to five broad hand-authored combat chambers instead of dense realistic-building mazes. Short links, wide movement lanes, alternate thresholds and restrained destructible cover keep the next threat readable at full combat speed.
+- Forty-eight complete authored tactical modules bind hostile positions, patrol intent, role order and destructible cover into coherent room puzzles. Eight safe rotations/reflections create 384 spatial variants; a stable floor seed avoids repeats, death retries reproduce the same board and a new run reshuffles it.
+- The former sequential Case Files screen is gone. `START NEW RUN` enters a nonlinear roguelike floor immediately, and every cleared floor advances to a newly selected venue without repeating the previous one.
+- Blood reserve and `X` Focus use separate compact HUD cards and update paths, so neither resource can cover or overwrite the other.
+- Standard venues field 16–20 mixed enemies. Every hostile patrols, dormant rooms remain visible without attacking early, and entrance/doorway safety checks prevent unfair spawn pressure or blocked traversal.
+- Ballistic blood remains weapon-, penetration-, range-, hit-zone- and energy-sensitive, but ordinary ground spray, airborne mist, terminal bursts and wound trails are now more legible and forceful. Empowered crimson rounds retain their lossy mass budget, so stronger presentation cannot create infinite blood.
+- The entire application now passes through one persistent noir presentation layer: title screens, loadout benches, HUD, world art and reports are quantized to pure grayscale, while deep crimson is reserved for blood, muzzle violence, lethal hazards and crisis feedback.
+- High-contrast practical lighting, pure-black occlusion, restrained glow, native-pixel grain, monochrome print-registration echo, scanlines and a stronger vignette create a legible lo-fi film-noir image without softening the 320x180 pixel grid.
+- Door impacts throw white/gray splinters; wall strikes pair hard white sparks with concrete dust. Ordinary muzzle flashes are white/gray, and only paid blood-enhanced shots receive crimson flash. Persistent blood remains the dominant colour memory of a cleared room.
+- Replaced the four abstract gun identities with 64 distinct real-world platforms across handguns, PDWs, SMGs, shotguns, carbines, DMRs, sniper rifles and machine guns—eight authored choices in every class.
+- Added a dedicated Armory and Gunsmith flow before deployment. Primary and secondary slots, unlock progression, platform specifications, signature traits and saved personal builds now live on separate native-resolution screens.
+- A new descent starts outside the venue. Walking to the white equipment case opens a paused, image-first entry bench; enemies and mission timing remain dormant until the loadout is confirmed. Later floors inherit equipment.
+- The entry bench is a contained 312x170 workbench over the still-visible level rather than a replacement full-screen page. Five pictured preset cards and five pictured inventory cards sit beside a paginated weapon table; every row leads with a side-profile firearm render and follows with icon-only damage, accuracy, magazine, report, mobility and weight cells. Pictured modification hardpoints, part feedback, segmented signature/mobility and one confirm action occupy a fixed lower strip.
+- The roster has clearly named handgun, PDW, SMG, shotgun, carbine, DMR, sniper and machine-gun filters. Right-click either an equipped card or any available weapon row to enter its independent modification workbench; locked future requisitions remain visible but cannot be equipped or modified.
+- The modification workbench keeps the current firearm large and central, shows live stat trade-offs, and presents compatible muzzle, optic, underbarrel, magazine/ammunition and stock/grip choices as unique 32x20 pixel pictures rather than a text-only list.
+- Click a roster row to equip, `Tab` changes primary/secondary, arrows browse platforms or selected parts, and `Enter` deploys. Closing a required loadout cannot release the player into a frozen encounter.
+- All 64 firearms and every compatible part receive strict nearest-filtered pixel renders. Receiver, stock, feed system, barrel length, optic, muzzle, underbarrel and magazine changes remain visible in the same preview used by presets, the Armory and the Gunsmith.
+- Added five compatibility-aware attachment slots covering real muzzle devices, optics, underbarrel equipment, magazines/ammunition and stocks/grip modules. Calibre, rail, magazine-family and proprietary-mount restrictions are enforced rather than cosmetic.
+- Every platform now carries individual calibre, action, feed, capacity, weight, length, cadence, handling, spread, recoil, report, penetration, property damage and aftermath values derived from its real role and tuned for readable top-down play.
+- Attachments alter the live simulation: suppressors change report, muzzle flash and overall length; optics alter accuracy, handling and camera reach; magazines preserve actual capacity; stocks change doorway length and mobility; ammunition changes penetration and cleanup consequences.
+- Player issue, enemy equipment, dropped and thrown guns, pickups, reload caches and old-save aliases preserve stable platform IDs plus installed parts. Weapon-scaled corpse damage now recognizes every new class.
+- The current CI suite includes 51 regression scenes, including real floor-to-floor resource inheritance, actual death/retry, native-pixel art, gun handling, weapon inventory, collisions, room geometry, UI and blood economy. Further legacy tests remain available individually.
+
+The version sections below are historical notes, not the current gameplay contract. Cleanup, UV inspection, linear case selection and their old controls are retired. Use the current loop above and [runtime guide](docs/ROGUELIKE_RUNTIME.md) for active behavior.
 
 ## v1.2.9 tactical sites and unified pixel feedback
 
@@ -12,7 +54,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - The first doorway casualty marks a temporary fatal funnel. Responders contain, stage, reserve narrow thresholds or use another entrance instead of walking into the same ambush one by one.
 - All twelve sites now carry a distinct acoustic/response profile, from nightclub music masking and cold-storage machinery to penthouse glass transmission and coordinated police/broadcast searches.
 - Enlarged doors keep a fixed portal coordinate after opening, while compact procedural weapons, readable bullets, top-down ragdolls, sparse blood/liquids, pressure washing and restoration feedback share the same one-pixel visual language.
-- The current build is protected by 43 Godot regression scenes covering the complete combat-to-cleanup loop, campaign geometry, AI, UI and performance-sensitive effects.
+- That historical build used 48 Godot regression scenes covering the former combat-to-cleanup loop, campaign geometry, AI, UI and performance-sensitive effects.
 
 ## v1.2.8 responsive hostile-local Focus
 
@@ -32,7 +74,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Missions default to an exterior arrival aligned with the real front/service door. A per-level `player_spawn_context` switch preserves authored indoor starts for later story beats without another coordinate rewrite.
 - Existing indoor plans, enemies, patrols, ammunition, security, lights, landmarks, cleanup secrets, disposal points and restoration props are translated together into the building coordinate space, keeping all systems synchronized.
 - Each façade gains a physical exterior threshold with actor-width clearance. Offset entrances avoid internal partitions in asymmetric motel and penthouse layouts, and every hostile remains reachable from the outdoor start.
-- The camera now runs at a closer 1.35x exploration scale and derives its clamps from the complete site. At the native 320x180 viewport it shows about 237x133 world pixels: a room cluster and connected sightline rather than most of a 384x224 building.
+- The camera uses a wider 1.18x arcade framing and derives its clamps from the complete site. At the native 320x180 viewport it shows about 271x153 world pixels: enough floor for rapid lateral combat while still revealing the venue one chamber at a time.
 - Interior rooms retain functional floor zoning and perimeter furniture, while the new exterior-to-lobby-to-restricted-area sequence gives each contract a believable architectural hierarchy and a clearer first breach decision.
 - Regression coverage now validates exterior spawning, explicit outdoor room identity, partial-building camera coverage, connected entry routes and real-collider passage through every exterior and interior door.
 
@@ -265,24 +307,18 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 
 - `WASD` or arrow keys — move
 - Mouse — aim
-- `1` gun; press repeatedly to cycle pistol/SMG/LMG / `2` fists / `3` knife / `4` bat
-- The player starts with only a pistol; armed enemies drop their current gun and remaining magazine, and `E` collects it
-- The starting pistol has 24 reserve rounds; cyan ammunition boxes replenish only their marked weapon reserve
+- `1` gun; press repeatedly to cycle owned guns / `2` fists / `3` knife / `4` bat
+- The starting kit is selected at the first entry bench; armed enemies drop their actual gun and remaining magazine, and `E` collects it
+- Ammunition boxes replenish only their marked weapon reserve
 - Each owned gun preserves its own partially used magazine when cycling weapons
-- Left mouse — fire or melee attack; during cleanup, hold and move the cursor to scrub along a real stroke (holding still does not clean)
-- Hold right mouse during cleanup — inspect residue with a forward ultraviolet lamp
-- `Tab` during cleanup — trigger the cooldown-based circular residue scan pulse
+- Left mouse — fire or melee attack; a fresh click with an empty magazine starts reloading when reserve ammunition exists
+- Hold right mouse while armed — siphon nearby enemy blood along the cursor direction; firing during the stance spends reserve on empowered crimson ammunition
+- `X` — spend one finite Focus charge; Focus and blood reserve are tracked independently in the compact HUD
+- `Q`, `E`, `R` while holding right mouse — blood-powered active abilities; `B` converts stored blood into health
 - Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails
-- `R` — reload during combat; restart after death or completion
+- `R` — reload during combat; retry this floor's entry checkpoint after death
 - `Space` — execute a nearby knocked-down enemy
-- `E` — context action: pick up, drag/drop a body, rinse a mop at a sink, use security or extract
-- Cleanup mode disables new bloody footprints, reports named room cleanliness, and renders diluted wet mop trails that dry over time
-- Career cleanup pays credits after every case; press `H` for the Safehouse, `U` for the five-route Workshop and `T` to switch Normal/Professional cleaner guidance
-- On Case Files, use `A/D` to page through twelve cases, `L` for Tactical Lab and—after completing Last Call—`M` to cycle Standard, Score Attack, New Game+, Daily Challenge and Gauntlet
-- Cleanup scenes contain two story clues, one valuable with secure/steal choice, and three pieces of furniture that can be restored with `E`
-- During cleanup, `1` equips the Mop and `2` equips the broad Pressure Washer; `E` automatically handles rinsing, loose evidence, body bags, corpse dragging and nearby scene interactions
-- A dirty mop gradually loses efficiency but never stops working; rinse it at a sink to restore full cleaning speed
-- Detailed cleanup counts appear during the active `Tab` scan; clues, valuables and furniture are optional score opportunities
+- `E` — context action such as picking up a dropped weapon or using the entry loadout case
 - `Q` — throw the equipped gun; the weapon remains recoverable with its current magazine
 - Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
 - Hold `Shift` — extend the camera toward the cursor
@@ -291,21 +327,20 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - `F5` — toggle exterior hue cycling
 - `F6` — toggle the performance diagnostics overlay
 - All other presentation options are available from the title-screen Settings menu
-- `Esc` — pause/resume; press `Enter` on the pause screen to return to the case menu
+- `Esc` — pause/resume; press `Enter` on the pause screen to return to the run launcher
 
 ## Game loop
 
-1. Select a contract, replay condition and one of twelve escalating multi-room cases.
-2. Eliminate the authored or seeded armed roster while managing weapon-specific ammunition and movement accuracy.
-3. Chain kills before the combo timer expires.
-4. Survive the one-hit lethality.
-5. When combat ends, switch to cleanup mode.
-6. Reach 90% scene certification or pursue 100% cleanup, optional clues, mastery medals and a stronger ending.
+1. Start a new run; the game chooses a venue and a non-repeating set of authored room modules.
+2. Confirm the first-floor loadout at the entrance, then clear combat rooms while managing ammunition, wounds, Focus and stored blood.
+3. Siphon enemy blood and spend it on empowered rounds, active abilities or healing. Room clears never interrupt combat with upgrade choices.
+4. Clear the floor, review the result and advance with your remaining resources. After six different venues, view the complete run report. Death retries preserve the current floor and its entry loadout/resources.
 
 ## Levels and AI
 
-- Paged Case Files expose twelve sequential campaign cases; Tactical Lab remains an unrestricted stress sandbox
-- Tactical Lab menu entry provides an expanded 64x36-tile, 17-enemy combat stress puzzle for door breaches, glass crossfire, blind corners, patrol baiting and fixed-sentry counterplay
+- Forty-eight validated combat-room modules, each with eight safe transforms, are distributed without repeats across the active floor; enemy and cover placement remain authored together rather than independently randomized
+- Twelve venue shells supply distinct architecture and presentation while roguelike progression selects them nonlinearly and avoids immediate venue repetition
+- Tactical Lab menu entry provides an expanded 64x36-tile, 17-enemy combat stress puzzle for door breaches, glass crossfire, blind corners, mobile patrol baiting and room-by-room response
 - Every campaign case has a named TileWorld signature, palette, divider/accent geometry, furnishings, enemy composition and cleanup pressure configuration
 - Enemy routes use an AStarGrid2D generated from solid wall cells
 - Enemy vision uses distance/angle broad-phase checks followed by an opaque-only 2D raycast; `debug_draw_vision` exposes the tuning cone
@@ -314,7 +349,7 @@ An original Godot 4 top-down shooter inspired by the visual language and pacing 
 - Melee hits and executions create their own alert radii, making committed close-range actions audible risks
 - Unalerted enemies follow two-point patrol routes; alerted enemies switch to frequently refreshed diagonal A* paths around walls and solid furniture
 - Patrol routes span 48–64px, use A* instead of blind straight-line motion, and pause 0.5–1.5 seconds at each waypoint
-- Unroutable guards become stationary sentries that smoothly scan ±45 degrees; soft obstacle costs reduce furniture and corner rubbing
+- Patrol endpoints are validated against navigation and room boundaries; deterministic local fallbacks keep every guard mobile while soft obstacle costs reduce furniture and corner rubbing
 - Human/dog AI profiles support faster dog reaction and direct open-room pursuit when dedicated dog content is added
 - Fixed sentries ignore sound bait but still acquire and attack visible players; opening door sweeps knock enemies down without a lethal tier
 - Enemies outside detection range decelerate to rest instead of jittering toward the player

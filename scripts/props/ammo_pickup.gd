@@ -11,7 +11,7 @@ func _ready() -> void:
 	queue_redraw()
 
 func setup(new_weapon_id: String, new_rounds: int) -> void:
-	weapon_id = new_weapon_id
+	weapon_id = WeaponPlatformCatalog.canonical_id(new_weapon_id)
 	rounds = maxi(1, new_rounds)
 	queue_redraw()
 

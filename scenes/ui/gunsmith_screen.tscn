@@ -1,0 +1,148 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource path="res://scripts/ui/gunsmith_screen.gd" type="Script" id="1"]
+
+[node name="GunsmithScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.022, 0.024, 0.038, 1)
+
+[node name="Panel" type="PanelContainer" parent="."]
+offset_left = 8.0
+offset_top = 5.0
+offset_right = 312.0
+offset_bottom = 175.0
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Kicker" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.97, 0.89, 1)
+theme_override_font_sizes/font_size = 7
+text = "GUNSMITH"
+horizontal_alignment = 1
+
+[node name="Weapon" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.24, 0.48, 1)
+theme_override_font_sizes/font_size = 9
+text = "WEAPON"
+horizontal_alignment = 1
+
+[node name="VisualDeck" type="HBoxContainer" parent="Panel/Layout"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 8
+
+[node name="WeaponPreview" type="TextureRect" parent="Panel/Layout/VisualDeck"]
+custom_minimum_size = Vector2(214, 34)
+layout_mode = 2
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PartPreview" type="TextureRect" parent="Panel/Layout/VisualDeck"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 2
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 5
+
+[node name="SlotNav" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+alignment = 1
+
+[node name="PreviousSlot" type="Button" parent="Panel/Layout/SlotNav"]
+layout_mode = 2
+text = "<"
+
+[node name="Slot" type="Label" parent="Panel/Layout/SlotNav"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.73, 0.35, 1)
+theme_override_font_sizes/font_size = 7
+text = "SLOT"
+horizontal_alignment = 1
+
+[node name="NextSlot" type="Button" parent="Panel/Layout/SlotNav"]
+layout_mode = 2
+text = ">"
+
+[node name="PartNav" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+alignment = 1
+
+[node name="PreviousPart" type="Button" parent="Panel/Layout/PartNav"]
+layout_mode = 2
+text = "<"
+
+[node name="Part" type="Label" parent="Panel/Layout/PartNav"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "NO ATTACHMENT"
+horizontal_alignment = 1
+
+[node name="NextPart" type="Button" parent="Panel/Layout/PartNav"]
+layout_mode = 2
+text = ">"
+
+[node name="Summary" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.51, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 6
+text = "FACTORY CONFIGURATION"
+horizontal_alignment = 1
+vertical_alignment = 1
+text_overrun_behavior = 3
+
+[node name="Stats" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.91, 0.67, 1)
+theme_override_font_sizes/font_size = 5
+text = "STATS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Build" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.71, 0.52, 1, 1)
+theme_override_font_sizes/font_size = 6
+text = "BUILD // FACTORY"
+horizontal_alignment = 1
+text_overrun_behavior = 3
+
+[node name="Actions" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 4
+
+[node name="Back" type="Button" parent="Panel/Layout/Actions"]
+layout_mode = 2
+text = "BACK"
+
+[node name="Armory" type="Button" parent="Panel/Layout/Actions"]
+layout_mode = 2
+text = "ARMS"
+
+[node name="Apply" type="Button" parent="Panel/Layout/Actions"]
+layout_mode = 2
+text = "FIT"
+
+[node name="Range" type="Button" parent="Panel/Layout/Actions"]
+layout_mode = 2
+text = "RANGE"

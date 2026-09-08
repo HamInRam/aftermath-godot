@@ -9,6 +9,11 @@ const WEAPON_CHARACTER := {
 	"smg": {"linear": 0.82, "limb": 1.32, "spin": 1.15, "close": 1.18, "far": 0.68},
 	"lmg": {"linear": 1.38, "limb": 1.62, "spin": 1.28, "close": 1.30, "far": 0.78},
 	"shotgun": {"linear": 1.72, "limb": 2.05, "spin": 1.55, "close": 1.48, "far": 0.48},
+	"handgun": {"linear": 1.0, "limb": 1.05, "spin": 0.75, "close": 1.15, "far": 0.72},
+	"pdw": {"linear": 0.78, "limb": 1.24, "spin": 1.08, "close": 1.16, "far": 0.7},
+	"carbine": {"linear": 1.08, "limb": 1.26, "spin": 0.94, "close": 1.16, "far": 0.76},
+	"dmr": {"linear": 1.24, "limb": 1.44, "spin": 1.02, "close": 1.22, "far": 0.82},
+	"sniper": {"linear": 1.42, "limb": 1.7, "spin": 1.16, "close": 1.28, "far": 0.88},
 	"fist": {"linear": 0.52, "limb": 0.72, "spin": 0.65, "close": 1.0, "far": 1.0},
 	"knife": {"linear": 0.34, "limb": 0.76, "spin": 0.72, "close": 1.0, "far": 1.0},
 	"bat": {"linear": 1.28, "limb": 1.42, "spin": 1.75, "close": 1.0, "far": 1.0},
@@ -21,6 +26,8 @@ const WEAPON_CHARACTER := {
 
 static func resolve(attack_id: String, travel_distance: float, hit_zone: String, rig_kind := "human") -> Dictionary:
 	var resolved_id := attack_id if WEAPON_CHARACTER.has(attack_id) else ("execution" if attack_id.begins_with("execution") else "pistol")
+	if WeaponPlatformCatalog.has_weapon(attack_id):
+		resolved_id = AttackCatalog.get_gun_data(attack_id).weapon_class
 	var character: Dictionary = WEAPON_CHARACTER[resolved_id]
 	var impact := AttackCatalog.get_impact_profile(attack_id)
 	var base_force := maxf(7.0, float(impact.get("knockback", 18.0)))

@@ -1,3 +1,4 @@
+@static_unload
 class_name ProceduralAudioLibrary
 extends RefCounted
 
@@ -28,7 +29,20 @@ static func get_sfx(effect_id: String) -> AudioStreamWAV:
 	return stream
 
 static func _build_sfx(effect_id: String) -> AudioStreamWAV:
-	var duration := 0.48 if effect_id == "shotgun_shot" else (0.32 if effect_id == "area_clean" else (0.18 if effect_id == "focus_enter" else (0.22 if effect_id.begins_with("impact_") else 0.34)))
+	var duration := 0.48 if effect_id == "shotgun_shot" else (0.32 if effect_id == "area_clean" else (0.18 if effect_id == "focus_enter" else (0.105 if effect_id.begins_with("hit_") else (0.22 if effect_id.begins_with("impact_") else 0.34))))
+	# Duration, body frequency, noise bandwidth and crack weight. These are
+	# arcade voices, not simulations of the named real-world firearms.
+	var voices := {
+		"handgun": Vector4(0.19, 150.0, 0.65, 0.40),
+		"pdw": Vector4(0.10, 210.0, 0.78, 0.48),
+		"smg": Vector4(0.13, 165.0, 0.58, 0.38),
+		"carbine": Vector4(0.20, 118.0, 0.64, 0.48),
+		"dmr": Vector4(0.28, 88.0, 0.48, 0.46),
+		"sniper": Vector4(0.40, 64.0, 0.36, 0.52),
+		"lmg": Vector4(0.22, 94.0, 0.42, 0.36),
+	}
+	var voice: Vector4 = voices.get(effect_id.trim_prefix("weapon_"), Vector4.ZERO) if effect_id.begins_with("weapon_") else Vector4.ZERO
+	if voice.x > 0.0: duration = voice.x
 	var sample_count := roundi(MIX_RATE * duration)
 	var bytes := PackedByteArray()
 	bytes.resize(sample_count * 2)
@@ -39,7 +53,12 @@ static func _build_sfx(effect_id: String) -> AudioStreamWAV:
 		var time := float(index) / MIX_RATE
 		var progress := time / duration
 		var sample := 0.0
-		if effect_id == "shotgun_shot":
+		if voice.x > 0.0:
+			filtered_noise = lerpf(filtered_noise, rng.randf_range(-1.0, 1.0), voice.z)
+			var body := sin(TAU * voice.y * time) * exp(-progress * 12.0)
+			var crack := rng.randf_range(-1.0, 1.0) * exp(-progress * 32.0)
+			sample = filtered_noise * exp(-progress * 9.0) * 0.42 + body * 0.32 + crack * voice.w
+		elif effect_id == "shotgun_shot":
 			filtered_noise = lerpf(filtered_noise, rng.randf_range(-1.0, 1.0), 0.38)
 			var blast := filtered_noise * exp(-progress * 8.5)
 			var body := sin(TAU * (72.0 - progress * 34.0) * time) * exp(-progress * 10.0)
@@ -54,6 +73,17 @@ static func _build_sfx(effect_id: String) -> AudioStreamWAV:
 			var local_phase := progress / 0.48 if progress < 0.48 else (progress - 0.48) / 0.52
 			var envelope := sin(clampf(local_phase, 0.0, 1.0) * PI) * (1.0 - progress * 0.28)
 			sample = (sin(TAU * note * time) * 0.34 + sin(TAU * note * 2.0 * time) * 0.09) * envelope
+		elif effect_id.begins_with("hit_"):
+			var envelope := exp(-progress * 13.0)
+			var noise := rng.randf_range(-1.0, 1.0)
+			if effect_id == "hit_armour":
+				sample = (sin(TAU * 680.0 * time) * 0.38 + sin(TAU * 1040.0 * time) * 0.20 + noise * 0.12) * envelope
+			elif effect_id == "hit_head":
+				sample = (sin(TAU * 920.0 * time) * 0.34 + sin(TAU * 1420.0 * time) * 0.18 + noise * 0.16) * envelope
+			elif effect_id == "hit_lethal":
+				sample = (sin(TAU * 82.0 * time) * 0.48 + noise * 0.34) * envelope
+			else:
+				sample = (sin(TAU * 118.0 * time) * 0.38 + noise * 0.26) * envelope
 		elif effect_id.begins_with("impact_"):
 			var material := effect_id.trim_prefix("impact_")
 			var envelope := exp(-progress * (18.0 if material in ["glass", "ceramic"] else 10.0))
@@ -71,6 +101,9 @@ static func _build_sfx(effect_id: String) -> AudioStreamWAV:
 			var click := rng.randf_range(-1.0, 1.0) * exp(-pump_phase * 24.0)
 			var mechanical := sin(TAU * (180.0 + pump_index * 55.0) * time) * exp(-pump_phase * 18.0)
 			sample = (click * 0.44 + mechanical * 0.28) * (1.0 - progress * 0.35)
+		# A one-millisecond edge ramp prevents waveform discontinuity clicks;
+		# fixed headroom retains relative dynamics without per-shot normalization.
+		sample *= minf(1.0, time / 0.001) * minf(1.0, (duration - time) / 0.003) * 0.78
 		bytes.encode_s16(index * 2, clampi(roundi(clampf(sample, -1.0, 1.0) * 32767.0), -32768, 32767))
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS

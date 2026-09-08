@@ -6,16 +6,19 @@ const WEAPON_ART := preload("res://utility/weapon_pixel_art.gd")
 
 var weapon_id := "pistol"
 var rounds := 1
+var attachment_ids := PackedStringArray()
 var cleanup_amount := 1.0
+var collected := false
 @onready var weapon_sprite: Sprite2D = $WeaponSprite
 
 func _ready() -> void:
 	CleanupRegistry.register_target(self)
 	_apply_visual()
 
-func setup(new_weapon_id: String, new_rounds: int) -> void:
-	weapon_id = new_weapon_id
+func setup(new_weapon_id: String, new_rounds: int, new_attachment_ids := PackedStringArray()) -> void:
+	weapon_id = WeaponPlatformCatalog.canonical_id(new_weapon_id)
 	rounds = maxi(0, new_rounds)
+	attachment_ids = new_attachment_ids.duplicate()
 	if is_node_ready(): _apply_visual()
 
 func absorb_rounds(extra_rounds: int) -> void:
@@ -25,15 +28,17 @@ func absorb_rounds(extra_rounds: int) -> void:
 	queue_redraw()
 
 func collect(player: Node) -> bool:
-	if not is_instance_valid(player) or not player.has_method("acquire_gun"): return false
-	if not player.acquire_gun(weapon_id, rounds): return false
+	if collected or is_queued_for_deletion() or not is_instance_valid(player) or not player.has_method("acquire_gun"): return false
+	if not player.acquire_gun(weapon_id, rounds, attachment_ids): return false
+	collected = true
 	CleanupRegistry.unregister_target(self)
 	queue_free()
 	return true
 
 func collect_enemy(enemy: Node) -> bool:
-	if rounds <= 0 or not is_instance_valid(enemy) or not enemy.has_method("equip_dropped_weapon"): return false
-	if not enemy.equip_dropped_weapon(weapon_id, rounds): return false
+	if collected or is_queued_for_deletion() or rounds <= 0 or not is_instance_valid(enemy) or not enemy.has_method("equip_dropped_weapon"): return false
+	if not enemy.equip_dropped_weapon(weapon_id, rounds, attachment_ids): return false
+	collected = true
 	CleanupRegistry.unregister_target(self)
 	queue_free()
 	return true
@@ -68,4 +73,4 @@ func _draw() -> void:
 	# Keep only four quiet cyan locator pixels instead of the old dominant ring.
 	for marker in [Vector2(-8, -5), Vector2(8, -5), Vector2(-8, 5), Vector2(8, 5)]:
 		PIXELS.pixel(self, marker, Color(0.35, 1.0, 0.9, 0.34))
-	WEAPON_ART.draw_weapon(self, weapon_id, Vector2.ZERO, Vector2.RIGHT, true)
+	WEAPON_ART.draw_weapon(self, weapon_id, Vector2.ZERO, Vector2.RIGHT, true, attachment_ids)

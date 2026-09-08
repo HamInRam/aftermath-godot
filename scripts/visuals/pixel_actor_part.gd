@@ -46,31 +46,29 @@ func _draw() -> void:
 	else: _draw_upper()
 
 func _draw_legs() -> void:
-	if actor_kind == "dog":
-		var dog_step := sin(stride_phase * 2.0) * 2.0 * movement_ratio
-		_block(Rect2(-4 + roundf(dog_step), -4, 4, 2), Color("271b2b"), 3)
-		_block(Rect2(-4 - roundf(dog_step), 2, 4, 2), Color("271b2b"), 5)
+	# Living legs are deliberately absent at rest in a strict overhead view. When
+	# moving, two compact shoes peek out from below the torso and alternate over a
+	# four-frame cycle. Every cell is authored as one world pixel.
+	if movement_ratio <= 0.12 or knocked_down:
 		return
-	# Legs deliberately extend beyond the 16 px upper-body core. The previous
-	# five-pixel blocks were almost completely hidden and read as body jitter.
-	var step: float = roundf(sin(stride_phase * 2.0) * 2.5 * movement_ratio)
-	var plant := 1.0 if movement_ratio < 0.08 else 0.0
-	var trouser := body_color.darkened(0.46)
-	var shoe := Color("17141b")
-	# Rear-facing top-down anatomy: hips connect beneath the torso while the two
-	# feet remain separated by a full pixel channel even when standing still.
-	_block(Rect2(-8 + step, -5, 7, 3), shoe, 7)
-	_block(Rect2(-8 - step, 2, 7, 3), shoe, 11)
-	_block(Rect2(-6 + step, -4, 5, 2), trouser, 13)
-	_block(Rect2(-6 - step, 2, 5, 2), trouser, 17)
-	_block(Rect2(-9 + step, -5, 2, 3), accent_color.darkened(0.22 + plant * 0.08), 19)
-	_block(Rect2(-9 - step, 2, 2, 3), accent_color.darkened(0.22 + plant * 0.08), 23)
-	# One bright heel pixel makes alternating motion readable over dark floors.
-	if movement_ratio > 0.12:
-		PIXELS.pixel(self, Vector2(-9 + step, -5), accent_color)
-		PIXELS.pixel(self, Vector2(-9 - step, 4), accent_color)
-	if movement_ratio > 0.82:
-		PIXELS.line(self, Vector2(-10 - step, 5), Vector2(-12 - step, 5), Color(accent_color, 0.32))
+	if actor_kind == "dog":
+		var dog_step := _four_frame_step() * 1.5
+		_draw_flat_foot(Vector2(-3.0 + dog_step, -3.0), Color("090909"), Color("c7c7c7"))
+		_draw_flat_foot(Vector2(-3.0 - dog_step, 2.0), Color("090909"), Color("919191"))
+		return
+	var step := _four_frame_step() * 1.7
+	var shoe_fill := Color("f0f0f0") if actor_kind == "player" else Color("585858")
+	_draw_flat_foot(Vector2(-3.0 + step, -2.0), Color("080808"), shoe_fill)
+	_draw_flat_foot(Vector2(-3.0 - step, 2.0), Color("080808"), shoe_fill.darkened(0.20))
+
+func _draw_flat_foot(center: Vector2, outline: Color, fill: Color) -> void:
+	var origin := center.round() - Vector2(1, 1)
+	PIXELS.rect(self, Rect2(origin, Vector2(3, 2)), outline)
+	PIXELS.rect(self, Rect2(origin + Vector2(1, 0), Vector2(2, 1)), fill)
+
+func _four_frame_step() -> float:
+	var frame := wrapi(floori(stride_phase * 0.9), 0, 4)
+	return [-1.0, 0.0, 1.0, 0.0][frame]
 
 func _draw_upper() -> void:
 	if actor_kind == "dog":

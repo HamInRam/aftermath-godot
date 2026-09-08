@@ -3,6 +3,20 @@ extends Resource
 
 @export var weapon_id := "pistol"
 @export var display_name := "PISTOL"
+@export var manufacturer := ""
+@export var weapon_class := "handgun"
+@export var caliber := "9x19mm"
+@export var action_type := "semi_auto"
+@export var feed_type := "detachable_magazine"
+@export var magazine_family := "generic"
+@export var fire_modes := PackedStringArray(["semi"])
+@export var interface_tags := PackedStringArray()
+@export var signature_trait := ""
+@export var installed_attachments := PackedStringArray()
+@export_range(100.0, 15000.0, 10.0) var empty_weight_grams := 700.0
+@export_range(100.0, 1600.0, 1.0) var overall_length_mm := 200.0
+@export_range(6, 30, 1) var visual_length_pixels := 9
+@export var visual_profile := "handgun"
 @export var automatic := false
 @export var weapon_texture: Texture2D
 @export var shot_stream: AudioStream
@@ -13,7 +27,10 @@ extends Resource
 @export_range(0.4, 1.6, 0.01) var mechanical_pitch := 1.0
 @export_range(0.4, 1.6, 0.01) var punch_pitch := 0.73
 @export_range(1, 999, 1) var ammo_capacity := 12
-@export_range(1, 100, 1) var damage := 1
+@export_range(1, 200, 1) var damage := 43
+@export_range(0.0, 500.0, 1.0) var damage_falloff_start := 65.0
+@export_range(1.0, 700.0, 1.0) var damage_falloff_end := 170.0
+@export_range(0.2, 1.0, 0.01) var minimum_damage_ratio := 0.62
 @export_range(0.03, 2.0, 0.01) var fire_interval := 0.1
 @export_range(0.0, 0.2, 0.001) var fire_interval_variance := 0.018
 @export_range(0.0, 12.0, 0.1) var spread_degrees := 0.0
@@ -43,3 +60,9 @@ extends Resource
 @export_range(0.0, 80.0, 1.0) var knockback := 24.0
 @export_range(0.0, 800.0, 5.0) var hearing_radius := 190.0
 @export_range(0.0, 0.1, 0.005) var hit_stop := 0.035
+@export_range(0.0, 3.0, 0.05) var penetration_power := 0.8
+@export_range(0.0, 3.0, 0.05) var property_damage := 0.8
+@export_range(0.0, 3.0, 0.05) var cleanup_burden := 1.0
+@export_range(0.2, 2.0, 0.01) var aim_convergence_multiplier := 1.0
+@export_range(0.2, 2.0, 0.01) var weapon_length_multiplier := 1.0
+@export_range(0.75, 1.75, 0.01) var camera_look_ahead_multiplier := 1.0

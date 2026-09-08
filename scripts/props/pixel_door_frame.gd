@@ -7,7 +7,7 @@ func _ready() -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var ink := Color("17131b")
-	var trim := Color("4b3446")
+	var ink := Color("171717")
+	var trim := Color("777777")
 	PIXELS.material_panel(self, Rect2(-3, -3, 6, 3), ink, trim, trim.lightened(0.2), trim.darkened(0.2), 25, &"metal")
 	PIXELS.material_panel(self, Rect2(-3, 24, 6, 3), ink, trim, trim.lightened(0.2), trim.darkened(0.2), 26, &"metal")

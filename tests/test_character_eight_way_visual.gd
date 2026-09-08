@@ -76,17 +76,17 @@ func _validate_hands(rig, sector: int, stance: String, role: String) -> void:
 	var forward: Vector2 = Vector2.RIGHT.rotated(float(sector) * PI / 4.0)
 	var side := Vector2(-forward.y, forward.x)
 	var hands: Array[Vector2] = rig._standing_hand_positions(Vector2.ZERO, forward, side, 0.0)
-	var away_hand_drop := clampf(-forward.y, 0.0, 1.0) * 1.2 if stance == "gun" else 0.0
-	var hand_height := Vector2(0, -2.0 + away_hand_drop)
-	var hand_a_ground := hands[0] - hand_height
-	var hand_b_ground := hands[1] - hand_height
+	# Strict overhead anatomy keeps hands, shoulders and weapon on the same floor
+	# plane. A fixed screen-up hand offset would reintroduce a side-view pose.
+	var hand_a_ground := hands[0]
+	var hand_b_ground := hands[1]
 	var minimum_forward := 2.5 if stance == "gun" else 1.0
 	_expect(hand_a_ground.dot(forward) > minimum_forward, "%s sector %d primary hand must remain in front" % [role, sector])
 	_expect(hand_b_ground.dot(forward) > minimum_forward, "%s sector %d support hand must remain in front" % [role, sector])
 	if stance == "gun":
 		_expect(hand_a_ground.dot(side) > 0.2 and hand_b_ground.dot(side) < -0.2, "%s sector %d gun hands must straddle the barrel" % [role, sector])
 		if forward.y < -0.35:
-			var head_center := forward * 2.2 + Vector2(0, -4.0)
+			var head_center := forward * 3.35
 			var distance_a := hands[0].distance_to(head_center)
 			var distance_b := hands[1].distance_to(head_center)
 			if sector == 6:

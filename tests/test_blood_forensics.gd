@@ -53,7 +53,7 @@ func _ready() -> void:
 	residue_stain.set_ultraviolet_visible(true)
 	_expect(residue_stain.ultraviolet_visible, "UV illumination should reveal cleaned biological residue")
 	var shotgun := AttackCatalog.get_gun_data("shotgun")
-	_expect(shotgun.pellet_count == 7, "shotgun should emit seven pellets")
+	_expect(shotgun.pellet_count == 9, "the starter shotgun should emit a dense nine-pellet buckshot pattern")
 	_expect(shotgun.blood_pattern == "radial", "shotgun should use radial blood geometry")
 	var lmg := AttackCatalog.get_gun_data("lmg")
 	_expect(shotgun.hearing_radius > lmg.hearing_radius and shotgun.hearing_radius <= 320.0, "shotgun should be the loudest firearm without becoming a full-map alarm")
@@ -70,6 +70,10 @@ func _ready() -> void:
 	_expect(shotgun_context.violence_profile == shotgun_violence, "DamageContext should carry the shared violence profile without re-deriving it downstream")
 	blood_system.emit_context(shotgun_context)
 	_expect(blood_system.violence_scale == 1.0, "blood intensity scaling should remain an explicit run modifier")
+	var death_pixels_before := int(blood_system.ground_canvas.get_debug_pixel_count())
+	blood_system.spawn_death_burst(Vector2(24, 24), 1.8, Vector2.ZERO, Vector2.RIGHT, "shotgun")
+	_expect(int(blood_system.ground_canvas.get_debug_pixel_count()) > death_pixels_before, "death should add one immediate weapon-authored pixel burst")
+	_expect(blood_system.ground_canvas.growing_pools.is_empty(), "death must never register a timed expanding blood pool")
 	var mist = BLOOD_MIST_SCRIPT.new()
 	mist.setup(Vector2.RIGHT, 2.2, NeonPalette.BLOOD_FRESH, 0.72, 16)
 	add_child(mist)
@@ -120,16 +124,9 @@ func _ready() -> void:
 	add_child(fallback_corpse)
 	fallback_corpse.setup(0.0, Vector2.RIGHT, 40.0, 2.25, "firearm_gib", "torso")
 	_expect(fallback_corpse.attack_id == "shotgun" and fallback_corpse.dismemberment_state != "intact", "high-energy legacy death paths must not silently fall back to an intact pistol corpse")
-	var blood_count_before_bag_test := get_tree().get_nodes_in_group("micro_blood_drop").size()
-	corpse.apply_cleanup_tool("body_bag")
-	corpse._spawn_blood_drop(corpse.global_position, 1.0, Vector2.RIGHT)
-	await get_tree().process_frame
-	_expect(corpse.is_bagged() and corpse.bleed_time == 0.0, "body bagging must seal the corpse immediately")
-	_expect(get_tree().get_nodes_in_group("micro_blood_drop").size() == blood_count_before_bag_test, "bagged corpses must reject every later blood emission path")
-	var drag_pixels_before := int(blood_system.ground_canvas.get_debug_pixel_count())
-	blood_system.spawn_drag_smear(Vector2(80, 80), Vector2.RIGHT, 0.7)
-	await get_tree().process_frame
-	_expect(int(blood_system.ground_canvas.get_debug_pixel_count()) > drag_pixels_before, "dragging a bloody corpse should paint a continuous directional pixel smear")
+	# Cleanup/body-bag behavior was intentionally retired with the OTXO-style
+	# room-run conversion. Corpse coverage ends at persistent anatomy, ragdoll and
+	# overkill behavior so this active test cannot resurrect obsolete mechanics.
 	drop.queue_free()
 	later_drop.queue_free()
 	wall_stain.queue_free()

@@ -4,8 +4,8 @@ extends RigidBody2D
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 var debris_material := "wood"
-var primary := Color("8f572f")
-var secondary := Color("d99a55")
+var primary := Color("858585")
+var secondary := Color("b8b8b8")
 var cleanup_steps := 1
 var settle_time := 1.4
 var launch_delay := 0.0
@@ -43,7 +43,6 @@ func setup(material_name: String, profile: Dictionary, direction: Vector2, inten
 	call_deferred("_configure_launch_state")
 	body_entered.connect(_on_body_entered)
 	add_to_group("environment_debris")
-	CleanupRegistry.register_target(self)
 	z_index = 2
 	queue_redraw()
 
@@ -112,6 +111,6 @@ func clean_step() -> void:
 func _draw() -> void:
 	var points := [Vector2(-2,-1), Vector2(-1,-1), Vector2(0,0), Vector2(1,0), Vector2(2,1)]
 	for index in points.size():
-		PIXELS.pixel(self, points[index], Color("17131b") if index in [0,4] else primary)
+		PIXELS.pixel(self, points[index], Color("111111") if index in [0,4] else primary)
 	PIXELS.pixel(self, Vector2(-1,0), secondary)
 	PIXELS.pixel(self, Vector2(1,-1), primary.lightened(0.18))

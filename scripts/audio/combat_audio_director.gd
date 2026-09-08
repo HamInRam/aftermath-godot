@@ -19,6 +19,7 @@ var combat_intensity := 0.12
 var target_intensity := 0.12
 var event_pressure := 0.0
 var threat_sample_timer := 0.0
+var gunfire_duck := 0.0
 
 func _ready() -> void:
 	if DisplayServer.get_name() == "headless": autoplay = false
@@ -48,6 +49,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if mix_state != MixState.COMBAT: return
+	# Repeated shots refresh a bounded dip; they never stack into silence.
+	gunfire_duck = move_toward(gunfire_duck, 0.0, delta * 16.0)
 	event_pressure = maxf(0.0, event_pressure - delta * 0.16)
 	threat_sample_timer -= delta
 	if threat_sample_timer <= 0.0:
@@ -55,10 +58,10 @@ func _process(delta: float) -> void:
 		_sample_active_threat()
 	var desired_intensity := maxf(0.1, maxf(event_pressure, target_intensity))
 	combat_intensity = move_toward(combat_intensity, desired_intensity, delta * (1.8 if desired_intensity > combat_intensity else 0.42))
-	combat_player.volume_db = lerpf(combat_volume_db - 18.0, combat_volume_db, combat_intensity)
+	combat_player.volume_db = lerpf(combat_volume_db - 18.0, combat_volume_db, combat_intensity) - gunfire_duck
 	combat_player.pitch_scale = lerpf(0.94, 1.05, combat_intensity)
 	var danger_mix := clampf((combat_intensity - 0.42) / 0.58, 0.0, 1.0)
-	danger_player.volume_db = lerpf(-60.0, -5.0, danger_mix)
+	danger_player.volume_db = lerpf(-60.0, -5.0, danger_mix) - gunfire_duck
 	ambience_player.volume_db = lerpf(combat_ambience_volume_db, combat_ambience_volume_db - 7.0, combat_intensity)
 
 func configure_music(combat_music: AudioStream, room_ambience: AudioStream = null) -> void:
@@ -82,6 +85,7 @@ func _sample_active_threat() -> void:
 
 func _on_weapon_fired(_origin: Vector2, _direction: Vector2, enemy_owned: bool, _weapon_id: String) -> void:
 	event_pressure = maxf(event_pressure, 0.58 if enemy_owned else 0.72)
+	gunfire_duck = maxf(gunfire_duck, 2.0 if enemy_owned else 4.0)
 
 func _on_combat_noise(_world_position: Vector2, _radius: float, source_kind: String) -> void:
 	if source_kind == "security_alarm": event_pressure = 1.0

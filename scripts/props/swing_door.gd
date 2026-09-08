@@ -33,15 +33,27 @@ func _ready() -> void:
 	simulated_rotation = rotation
 	$PanelCollision.disabled = false
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_add_rotating_light_occluder()
 	queue_redraw()
+
+func _add_rotating_light_occluder() -> void:
+	var polygon := OccluderPolygon2D.new()
+	polygon.polygon = PackedVector2Array([
+		Vector2(-2, 0), Vector2(2, 0),
+		Vector2(2, LEAF_LENGTH), Vector2(-2, LEAF_LENGTH),
+	])
+	var light_occluder := LightOccluder2D.new()
+	light_occluder.name = "LightOccluder2D"
+	light_occluder.occluder = polygon
+	add_child(light_occluder)
 
 func _draw() -> void:
 	# The leaf and its shadow are built from individual snapped cells. The old
 	# Polygon2D presentation remains hidden in the scene only for compatibility.
 	PIXELS.stipple_rect(self, Rect2(0, 2, 4, LEAF_LENGTH), Color(0.035, 0.02, 0.05, 0.48), 29, 3)
-	PIXELS.material_panel(self, Rect2(-2, 0, 4, LEAF_LENGTH), Color("17131b"), Color("843f2b"), Color("c07340"), Color("4b251f"), 29, &"wood")
-	for y in range(3, 22, 5): PIXELS.pixel(self, Vector2(0, y), Color("c07340"))
-	PIXELS.pixel(self, Vector2(0, 21), Color("f2bf4c"))
+	PIXELS.material_panel(self, Rect2(-2, 0, 4, LEAF_LENGTH), Color("080808"), Color("595959"), Color("d8d8d8"), Color("242424"), 29, &"wood")
+	for y in range(3, 22, 5): PIXELS.pixel(self, Vector2(0, y), Color("a8a8a8"))
+	PIXELS.pixel(self, Vector2(0, 21), Color("f4f4f4"))
 
 func get_tactical_door_id() -> String:
 	return "door:%d:%d" % [roundi(global_position.x / 8.0), roundi(global_position.y / 8.0)]

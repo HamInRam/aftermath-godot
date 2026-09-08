@@ -8,6 +8,7 @@ archetype_id = "dog"
 combat_type = "melee"
 actor_type = "dog"
 display_name = "HOUND"
+max_health = 65
 move_speed = 76.0
 chase_speed_multiplier = 1.72
 preferred_distance = 13.0

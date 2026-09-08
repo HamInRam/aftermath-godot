@@ -2,6 +2,7 @@ class_name PixelRagdoll2D
 extends Node2D
 
 const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+const ACTOR_ART := preload("res://utility/pixel_actor_art.gd")
 const FIXED_STEP := 1.0 / 60.0
 const SETTLE_TIME := 2.15
 const WALL_MASK := 4
@@ -12,17 +13,27 @@ var missing_modules := PackedStringArray()
 var active_time := 0.0
 var accumulated_time := 0.0
 var frozen := false
-var cloth_color := Color("d8e2df")
-var accent_color := Color("8e244f")
+var cloth_color := Color("dedede")
+var accent_color := Color("666666")
 var rig_kind := "human"
 var impact_profile: Dictionary = {}
+var wound_state := "intact"
+var wound_variant := 0
+var visual_role := "gunner"
 
 func setup(impact_direction: Vector2, intensity: float, missing: PackedStringArray, corpse_variant := 0, new_rig_kind := "human", new_impact_profile := {}, initial_pose := {}) -> void:
 	missing_modules = missing.duplicate()
 	rig_kind = "hound" if new_rig_kind == "hound" or new_rig_kind == "dog" else "human"
+	# Appearance rides beside the existing joint snapshot, never in place of a
+	# joint. Old callers without a snapshot still receive a neutral enemy outfit.
+	var owner_role := "player" if is_instance_valid(get_parent()) and str(get_parent().get("victim_role")) == "player" else "gunner"
+	visual_role = "hound" if rig_kind == "hound" else str(initial_pose.get("_visual_role", owner_role))
+	cloth_color = ACTOR_ART.palette(visual_role).c
+	accent_color = ACTOR_ART.palette(visual_role).s
 	impact_profile = (new_impact_profile as Dictionary).duplicate()
 	if rig_kind == "hound": _build_hound_rig(corpse_variant)
 	else: _build_human_rig(corpse_variant)
+	_configure_wound_constraints()
 	if initial_pose is Dictionary and not initial_pose.is_empty():
 		for name in points:
 			if not initial_pose.has(name): continue
@@ -31,6 +42,17 @@ func setup(impact_direction: Vector2, intensity: float, missing: PackedStringArr
 			point.previous = initial_pose[name]
 			points[name] = point
 	_apply_initial_impulse(impact_direction, float(impact_profile.get("limb_force", intensity)))
+	# A living pose can have a hand very close to a wall. Seed each joint from
+	# the safe body origin, then remember world positions so root translation and
+	# rotation cannot carry its local simulation through solid room geometry.
+	for name in points:
+		var point: Dictionary = points[name]
+		var impulse: Vector2 = point.position - point.previous
+		point.position = _resolve_wall_collision(Vector2.ZERO, point.position)
+		point.previous = (point.position as Vector2) - impulse
+		point.world_position = to_global(point.position)
+		points[name] = point
+	accumulated_time = 0.0
 	active_time = SETTLE_TIME + clampf(float(impact_profile.get("linear_force", intensity)) / 145.0, 0.0, 1.0) * 0.65 + clampf(float(impact_profile.get("settle_bonus", 0.0)), 0.0, 1.2)
 	frozen = false
 	set_physics_process(true)
@@ -51,6 +73,19 @@ func _build_human_rig(corpse_variant: int) -> void:
 		"knee_b": _point(Vector2(-7, 3)),
 		"foot_b": _point(Vector2(-11, 5)),
 	}
+	# Four readable layouts rather than two mirrored seeds repeated four times.
+	# These only seed the fall; joints remain free once the impulse is applied.
+	if corpse_variant % 4 == 1:
+		points.hand_a = _point(Vector2(5, 8))
+		points.hand_b = _point(Vector2(6, -7))
+	elif corpse_variant % 4 == 2:
+		points.knee_a = _point(Vector2(-6, -5))
+		points.foot_a = _point(Vector2(-3, -8))
+		points.hand_b = _point(Vector2(6, 5))
+	elif corpse_variant % 4 == 3:
+		points.knee_b = _point(Vector2(-5, -4))
+		points.foot_b = _point(Vector2(-9, -7))
+		points.hand_a = _point(Vector2(6, 5))
 	constraints = [
 		_constraint("pelvis", "chest", 5.0),
 		_constraint("chest", "head", 5.0),
@@ -63,6 +98,15 @@ func _build_human_rig(corpse_variant: int) -> void:
 		_constraint("pelvis", "knee_b", 4.8),
 		_constraint("knee_b", "foot_b", 4.8),
 	]
+
+func _configure_wound_constraints() -> void:
+	# A bisected corpse must have two physically independent masses. Previously
+	# only the non-ragdoll fallback knew this wound state; the visible rig kept a
+	# perfectly intact pelvis/chest connection after a shotgun bisection.
+	if wound_state not in ["bisected", "torso_split"]: return
+	for index in range(constraints.size() - 1, -1, -1):
+		if constraints[index].a == "pelvis" and constraints[index].b == "chest":
+			constraints.remove_at(index)
 
 func _build_hound_rig(corpse_variant: int) -> void:
 	var pose_sign := -1.0 if corpse_variant % 2 == 0 else 1.0
@@ -165,7 +209,7 @@ func _simulate_step(delta: float) -> void:
 		var motion: Vector2 = (position - (point.previous as Vector2)) * 0.93
 		point.previous = position
 		var candidate := position + motion
-		point.position = _resolve_wall_collision(position, candidate)
+		point.position = candidate
 		points[name] = point
 	# Three early passes preserve readable elbow/knee lag. Tighten the final pose
 	# only after the energetic phase, so the body never looks like one rigid tile.
@@ -173,11 +217,26 @@ func _simulate_step(delta: float) -> void:
 	for iteration in range(solve_iterations):
 		for constraint in constraints:
 			_satisfy_constraint(constraint)
+	# Enforce walls after constraints as well as after momentum. Constraint
+	# corrections can be larger than the free motion, so doing this beforehand
+	# allowed knees/hands to be dragged through thin walls at the end of a step.
+	for name in points:
+		if _module_missing_for_point(name): continue
+		var point: Dictionary = points[name]
+		var previous_local := to_local(point.get("world_position", to_global(point.previous)))
+		var desired: Vector2 = point.position
+		var resolved := _resolve_wall_collision(previous_local, desired)
+		point.position = resolved
+		if resolved.distance_squared_to(desired) > 0.01:
+			point.previous = resolved
+		point.world_position = to_global(resolved)
+		points[name] = point
 
 func _resolve_wall_collision(from_local: Vector2, to_local: Vector2) -> Vector2:
 	if not is_inside_tree(): return to_local
 	var from_world := to_global(from_local)
 	var to_world := to_global(to_local)
+	if from_world.distance_squared_to(to_world) < 0.0001: return to_local
 	var query := PhysicsRayQueryParameters2D.create(from_world, to_world, WALL_MASK)
 	var result := get_world_2d().direct_space_state.intersect_ray(query)
 	if result.is_empty(): return to_local
@@ -244,64 +303,86 @@ func _module_missing_for_point(point_name: String) -> bool:
 
 func _draw() -> void:
 	if points.is_empty(): return
+	draw_set_transform(Vector2.ZERO, -global_rotation, Vector2.ONE)
+	for at: Vector2 in get_art_pixels():
+		PIXEL_PAINTER.pixel(self, at, _art_pixels_cache[at].color)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+var _art_pixels_cache: Dictionary = {}
+
+func get_art_pixels() -> Dictionary:
+	var cells := {}
+	if points.is_empty(): return cells
+	var colors := ACTOR_ART.palette(visual_role)
+	var pelvis: Vector2 = points.pelvis.position
+	var chest: Vector2 = points.chest.position
 	if rig_kind == "hound":
-		_draw_hound()
+		for suffix in ["a", "b"]:
+			_art_bone(cells, "chest", "front_knee_" + suffix, colors.c, 1, "arm_front" if suffix == "a" else "arm_back")
+			_art_bone(cells, "front_knee_" + suffix, "front_paw_" + suffix, colors.g, 1, "arm_front" if suffix == "a" else "arm_back")
+			_art_bone(cells, "pelvis", "rear_knee_" + suffix, colors.c, 1, "leg_front" if suffix == "a" else "leg_back")
+			_art_bone(cells, "rear_knee_" + suffix, "rear_paw_" + suffix, colors.g, 1, "leg_front" if suffix == "a" else "leg_back")
+		_art_bone(cells, "chest", "neck", colors.c, 3, "neck")
+		_art_bone(cells, "neck", "head", colors.g, 2, "head")
+	else:
+		for suffix in ["a", "b"]:
+			var arm := "arm_front" if suffix == "a" else "arm_back"
+			var leg := "leg_front" if suffix == "a" else "leg_back"
+			_art_bone(cells, "pelvis", "knee_" + suffix, colors.b, 2, leg)
+			_art_bone(cells, "knee_" + suffix, "foot_" + suffix, colors.b, 2, leg)
+			_art_bone(cells, "chest", "elbow_" + suffix, colors.u, 2, arm)
+			_art_bone(cells, "elbow_" + suffix, "hand_" + suffix, colors.h if visual_role == "melee" else colors.u, 1, arm)
+			if not _module_missing_for_point("hand_" + suffix):
+				var hand: Vector2 = points["hand_" + suffix].position
+				ACTOR_ART._stamp(cells, [".ii", "ihh", ".ii"], hand, colors, arm)
+			if not _module_missing_for_point("foot_" + suffix):
+				ACTOR_ART._stamp(cells, ["iii.", "ibbi", "iii."], points["foot_" + suffix].position, colors, leg)
+	# Narrow waist, broader shoulders, attached sleeve chains. A cut torso has
+	# separated masses and an open gap; no visual bridge joins the two halves.
+	if wound_state in ["bisected", "torso_split"]:
+		_art_segment(cells, pelvis, pelvis.lerp(chest, 0.12), colors.b, 3, "pelvis")
+		_art_segment(cells, chest.lerp(pelvis, 0.12), chest, colors.c, 4, "torso")
+	elif wound_state == "upper_destroyed":
+		_art_segment(cells, pelvis, pelvis.lerp(chest, 0.4), colors.c, 3, "torso")
+	else:
+		_art_segment(cells, pelvis, pelvis.lerp(chest, 0.55), colors.c, 3, "torso")
+		_art_segment(cells, pelvis.lerp(chest, 0.5), chest, colors.c, 4, "torso")
+		var side := pelvis.direction_to(chest).orthogonal()
+		ACTOR_ART._segment(cells, pelvis + side, chest + side, 1, colors.s, "seam")
+	if not _module_missing_for_point("head"):
+		var head: Vector2 = points.head.position
+		if rig_kind != "hound":
+			_art_segment(cells, chest, head, colors.h, 1, "neck")
+		var head_rows := ACTOR_ART.HOUND_HEAD if rig_kind == "hound" else (ACTOR_ART.MASK if visual_role == "player" else (ACTOR_ART.HELMET if visual_role == "heavy" else ACTOR_ART.CROWN))
+		ACTOR_ART._stamp(cells, head_rows, head, colors, "head")
+	for missing in missing_modules:
+		var cut := _wound_point_for_module(missing).round()
+		ACTOR_ART._put(cells, cut, colors.i, "cut")
+		ACTOR_ART._put(cells, cut + Vector2(1, 0), colors.n, "cut")
+	_art_wound(cells, colors)
+	_art_pixels_cache = ACTOR_ART.rotate_pixels(cells, global_rotation)
+	return _art_pixels_cache
+
+func _art_bone(cells: Dictionary, start_name: String, end_name: String, color: Color, width: int, part: String) -> void:
+	if _module_missing_for_point(start_name) or _module_missing_for_point(end_name): return
+	_art_segment(cells, points[start_name].position, points[end_name].position, color, width, part)
+
+func _art_segment(cells: Dictionary, start: Vector2, finish: Vector2, color: Color, width: int, part: String) -> void:
+	ACTOR_ART._segment(cells, start, finish, width + 2, Color("090909"), part)
+	ACTOR_ART._segment(cells, start, finish, width, color, part)
+
+func _art_wound(cells: Dictionary, colors: Dictionary) -> void:
+	if wound_state == "intact": return
+	var anchor: Vector2 = (points.pelvis.position as Vector2).lerp(points.chest.position, 0.58)
+	if "head" in wound_state and not _module_missing_for_point("head"): anchor = points.head.position
+	elif wound_state == "limb_puncture": anchor = points.elbow_b.position if rig_kind == "human" else points.front_knee_b.position
+	elif wound_state == "shoulder_puncture": anchor = (points.chest.position as Vector2) + Vector2(0, -2)
+	if wound_state in ["bisected", "torso_split", "upper_destroyed"]:
+		for joint in ["pelvis", "chest"]:
+			ACTOR_ART._put(cells, (points[joint].position as Vector2).round(), colors.n, "cut")
 		return
-	_draw_bone("pelvis", "chest", cloth_color, 5.0)
-	_draw_bone("chest", "head", accent_color, 3.0)
-	_draw_bone("chest", "elbow_a", cloth_color, 2.0)
-	_draw_bone("elbow_a", "hand_a", Color("e1a07f"), 2.0)
-	_draw_bone("chest", "elbow_b", cloth_color, 2.0)
-	_draw_bone("elbow_b", "hand_b", Color("e1a07f"), 2.0)
-	_draw_bone("pelvis", "knee_a", Color("17141b"), 3.0)
-	_draw_bone("knee_a", "foot_a", Color("17141b"), 3.0)
-	_draw_bone("pelvis", "knee_b", Color("17141b"), 3.0)
-	_draw_bone("knee_b", "foot_b", Color("17141b"), 3.0)
-	if not _module_missing_for_point("head"):
-		var head := _snap_pixel(points.head.position)
-		PIXEL_PAINTER.material_circle(self, head, 3, Color("17141b"), Color("30242d"), Color("09070c"), 31)
-		PIXEL_PAINTER.material_block(self, head, Vector2(3, 3), Color("e1a07f"), 37, &"grain")
-	for missing in missing_modules:
-		var wound_point := _snap_pixel(_wound_point_for_module(missing))
-		PIXEL_PAINTER.material_circle(self, wound_point, 1, Color("7b001b"), Color("c31338"), Color("34000b"), str(missing).hash())
-		PIXEL_PAINTER.pixel(self, wound_point, Color("f2a3a8"))
-
-func _draw_hound() -> void:
-	var fur := Color("6e4a37")
-	var fur_light := Color("a36c45")
-	_draw_bone("pelvis", "chest", fur, 5.0)
-	_draw_bone("chest", "neck", fur_light, 4.0)
-	_draw_bone("neck", "head", fur_light, 3.0)
-	_draw_bone("chest", "front_knee_a", fur, 2.0)
-	_draw_bone("front_knee_a", "front_paw_a", fur_light, 2.0)
-	_draw_bone("chest", "front_knee_b", fur, 2.0)
-	_draw_bone("front_knee_b", "front_paw_b", fur_light, 2.0)
-	_draw_bone("pelvis", "rear_knee_a", fur, 2.0)
-	_draw_bone("rear_knee_a", "rear_paw_a", fur_light, 2.0)
-	_draw_bone("pelvis", "rear_knee_b", fur, 2.0)
-	_draw_bone("rear_knee_b", "rear_paw_b", fur_light, 2.0)
-	if not _module_missing_for_point("head"):
-		var head := _snap_pixel(points.head.position)
-		PIXEL_PAINTER.material_block(self, head, Vector2(6, 5), Color("17141b"), 41, &"grain")
-		PIXEL_PAINTER.material_block(self, head, Vector2(4, 3), fur_light, 43, &"fabric")
-		PIXEL_PAINTER.material_block(self, head + Vector2(2, 0), Vector2(2, 1), Color("d8e2df"), 47, &"grain")
-	for missing in missing_modules:
-		var wound_point := _snap_pixel(_wound_point_for_module(missing))
-		PIXEL_PAINTER.material_circle(self, wound_point, 1, Color("7b001b"), Color("c31338"), Color("34000b"), str(missing).hash())
-		PIXEL_PAINTER.pixel(self, wound_point, Color("f2a3a8"))
-
-func _draw_bone(a_name: String, b_name: String, color: Color, width: float) -> void:
-	if _module_missing_for_point(a_name) or _module_missing_for_point(b_name): return
-	var start := _snap_pixel(points[a_name].position)
-	var finish := _snap_pixel(points[b_name].position)
-	# The simulation remains sub-pixel and smooth, but its presentation is a
-	# hard-edged chain of integer pixel blocks. This prevents both line AA and
-	# fractional joint coordinates from contaminating the final 3x image.
-	_draw_pixel_segment(start, finish, Color("17141b"), roundi(width) + 2)
-	_draw_pixel_segment(start, finish, color, roundi(width))
-
-func _draw_pixel_segment(start: Vector2, finish: Vector2, color: Color, pixel_width: int) -> void:
-	PIXEL_PAINTER.material_line(self, _snap_pixel(start), _snap_pixel(finish), color, maxi(1, pixel_width), roundi(start.x) * 11 + roundi(start.y) * 17 + pixel_width, &"fabric")
+	var heavy_wound := wound_state in ["torso_torn", "torso_cavity", "side_torn", "cluster_torso", "cluster_low"]
+	ACTOR_ART._stamp(cells, ["i.i", "ini", ".si"] if heavy_wound else ["in", ".i"], anchor, colors, "wound")
 
 func _snap_pixel(value: Vector2) -> Vector2:
 	return Vector2(roundi(value.x), roundi(value.y))

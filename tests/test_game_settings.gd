@@ -77,18 +77,33 @@ func _ready() -> void:
 	add_child(feedback)
 	feedback.configure(flash, Settings.flash_intensity)
 	feedback.show_flash(Color(1.0, 0.0, 0.0, 0.5), 0.2)
-	_expect(is_equal_approx(flash.color.a, 0.15), "flash intensity should scale the actual full-screen flash alpha")
+	_expect(is_equal_approx(flash.color.a, 0.06), "flash accessibility strength must scale the 0.20 readability cap, not bypass it")
+	feedback.show_flash(Color(1.0, 1.0, 1.0, 0.1), 0.2)
+	_expect(is_equal_approx(flash.color.a, 0.03), "flashes below the cap should still scale proportionally with accessibility strength")
+	feedback.configure(flash, 0.0)
+	feedback.show_flash(Color(1.0, 0.0, 0.0, 1.0), 0.2)
+	_expect(is_zero_approx(flash.color.a), "zero flash intensity must fully suppress the screen flash")
+	feedback.configure(flash, 1.0)
+	feedback.show_flash(Color(1.0, 0.0, 0.0, 1.0), 0.2)
+	_expect(is_equal_approx(flash.color.a, 0.20), "full flash intensity must retain the maximum readability cap")
+	feedback.configure(flash, Settings.flash_intensity)
 	feedback.trigger_hit_stop(0.03)
 	var first_deadline := feedback.hit_stop_deadline_msec
+	_expect(first_deadline - Time.get_ticks_msec() <= 28, "a single hit-stop must be capped at 28 monotonic milliseconds")
 	feedback.trigger_hit_stop(0.08)
-	_expect(feedback.hit_stop_deadline_msec > first_deadline and feedback.hit_stop_active, "overlapping hit-stop should preserve the longest remaining deadline")
+	_expect(feedback.hit_stop_deadline_msec == first_deadline and feedback.hit_stop_active, "overlapping pellets must not extend the original bounded hit-stop")
 	feedback.reset()
 	feedback.set_base_time_scale(0.42)
 	_expect(is_equal_approx(feedback.base_time_scale, 1.0) and is_equal_approx(Engine.time_scale, 1.0), "sustained Focus must not be able to slow the global player clock")
 	feedback.trigger_hit_stop(0.02)
-	await get_tree().create_timer(0.04, true, false, true).timeout
-	await get_tree().process_frame
+	# Match the real-time clock used by CombatFeedback. Fast headless simulated
+	# delta can advance a SceneTreeTimer ahead of Time.get_ticks_msec().
+	var recover_by := Time.get_ticks_msec() + 100
+	while Time.get_ticks_msec() < recover_by: await get_tree().process_frame
 	_expect(is_equal_approx(feedback.base_time_scale, 1.0) and is_equal_approx(Engine.time_scale, 1.0), "hit-stop should restore the real-time player clock")
+	feedback.next_hit_stop_msec = Time.get_ticks_msec() + 75
+	feedback.trigger_hit_stop(0.02)
+	_expect(not feedback.hit_stop_active and is_equal_approx(Engine.time_scale, 1.0), "the hit-stop refractory window must keep follow-up gunfire fluid")
 	feedback.reset()
 	settings_ui.queue_free()
 	effects_ui.queue_free()

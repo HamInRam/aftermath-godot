@@ -10,6 +10,9 @@ const DEFAULT_LIMITS := {
 	"blood_stain": 128,
 	"blood_pool": 48,
 	"gore": 128,
+	# Matching severed anatomy persists with its corpse and sleeps after flight.
+	# Tracked separately so cosmetic chunk saturation cannot delete a body part.
+	"anatomy": 128,
 	# Footprints are permanent cleanup evidence. A normal mission can exceed the
 	# old 96-node ceiling through repeated contamination, which silently stopped
 	# all later footprints. Keep a generous mission-wide ceiling instead.

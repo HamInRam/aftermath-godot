@@ -34,6 +34,7 @@ func _ready() -> void:
 	player.global_position = Vector2(40, 40)
 	corpse.global_position = Vector2(200, 200)
 	var emitter := player.get_node("BloodFootprintEmitter") as BloodFootprintEmitter
+	_expect(not emitter.generation_enabled, "the roguelike player must never manufacture blood by walking through pools or corpses")
 	# Simulate the exact reported case rather than only checking group metadata:
 	# an old footprint under clean shoes must never create a new contamination charge.
 	var old_footprint := FOOTPRINT_SCENE.instantiate() as BloodFootprint
@@ -60,34 +61,10 @@ func _ready() -> void:
 	_expect(get_tree().get_nodes_in_group("footprint").is_empty(), "walking across a corpse during cleanup must not create new evidence")
 	player.set_cleanup_mode(false)
 	player.global_position = corpse.global_position
-	emitter.last_position = player.global_position
-	emitter._scan_blood_sources()
-	player.global_position += Vector2(9, 0)
-	emitter._physics_process(0.08)
-	await get_tree().process_frame
-	_expect(get_tree().get_nodes_in_group("footprint").size() >= 1, "combat traversal should retain bloody-footprint gameplay")
-	for node in get_tree().get_nodes_in_group("footprint"): node.queue_free()
-	await get_tree().process_frame
-	# A frame-to-frame sweep must detect a corpse even when neither endpoint is
-	# inside the old 12px point-sampling radius.
-	emitter.touching_sources.clear()
-	emitter.contamination_time = 0.0
-	emitter.prints_remaining = 0
-	emitter.last_position = corpse.global_position - Vector2(24, 0)
-	player.global_position = corpse.global_position + Vector2(24, 0)
+	emitter.last_position = player.global_position - Vector2(24, 0)
 	emitter.source_scan_cooldown = 0.0
 	emitter._physics_process(0.2)
-	_expect(emitter.prints_remaining > 0, "fast traversal across a corpse must contaminate shoes via swept contact")
-	# Remaining on the same corpse must refresh a nearly exhausted contamination
-	# charge instead of requiring the player to leave and re-enter.
-	player.global_position = corpse.global_position
-	emitter.last_position = player.global_position
-	emitter.touching_sources = {corpse.get_instance_id(): true}
-	emitter.contamination_time = 0.1
-	emitter.prints_remaining = 1
-	emitter.source_scan_cooldown = 0.0
-	emitter._physics_process(0.11)
-	_expect(emitter.contamination_time > 1.0 and emitter.prints_remaining > 2, "continued corpse contact must replenish shoe contamination")
+	_expect(emitter.prints_remaining == 0 and get_tree().get_nodes_in_group("footprint").is_empty(), "combat traversal across blood or corpses must not create a renewable blood source")
 	player.queue_free()
 	corpse.queue_free()
 	for node in get_tree().get_nodes_in_group("footprint"): node.queue_free()

@@ -2,11 +2,31 @@ extends Node2D
 
 signal droplet_settled(world_position: Vector2, strength: float, direction: Vector2)
 
+const MAX_PARTICLES := 76
+const MAX_DRAW_PIXELS := MAX_PARTICLES * 4
+
 var particles: Array[Dictionary] = []
 var max_lifetime := 0.34
 var deposits_remaining := 16
 var trajectories_prepared := false
 var trajectory_raycast_count := 0
+var particle_batch: MultiMeshInstance2D
+
+func _ready() -> void:
+	particle_batch = MultiMeshInstance2D.new()
+	particle_batch.name = "BloodMistBatch"
+	particle_batch.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE
+	var instances := MultiMesh.new()
+	instances.transform_format = MultiMesh.TRANSFORM_2D
+	instances.use_colors = true
+	instances.mesh = quad
+	instances.instance_count = MAX_DRAW_PIXELS
+	instances.visible_instance_count = 0
+	particle_batch.multimesh = instances
+	add_child(particle_batch)
+	_refresh_particle_batch()
 
 func setup(spray_direction: Vector2, intensity: float, color := NeonPalette.BLOOD_FRESH, cone := 0.72, deposit_count := 16) -> void:
 	var direction := spray_direction.normalized()
@@ -22,11 +42,11 @@ func setup(spray_direction: Vector2, intensity: float, color := NeonPalette.BLOO
 			"velocity": velocity,
 			"size": randf_range(0.45, 1.25),
 			"life": randf_range(0.18, max_lifetime),
-			"color": color.darkened(randf_range(0.0, 0.38)),
+			"color": NeonPalette.BLOOD_CRIMSON,
 			"impact_distance": INF,
 			"impact_position": Vector2.INF,
 		})
-	queue_redraw()
+	if is_instance_valid(particle_batch): _refresh_particle_batch()
 
 func _process(delta: float) -> void:
 	if not trajectories_prepared: _prepare_trajectories()
@@ -51,7 +71,7 @@ func _process(delta: float) -> void:
 			droplet_settled.emit(to_global(particle.position), clampf(float(particle.size) / 1.25, 0.25, 1.0), travel_direction)
 			deposits_remaining -= 1
 	particles = alive_particles
-	queue_redraw()
+	_refresh_particle_batch()
 	if particles.is_empty(): queue_free()
 
 func _prepare_trajectories() -> void:
@@ -78,7 +98,10 @@ func _prepare_trajectories() -> void:
 func get_debug_trajectory_raycast_count() -> int:
 	return trajectory_raycast_count
 
-func _draw() -> void:
+func _refresh_particle_batch() -> void:
+	if not is_instance_valid(particle_batch): return
+	var instances := particle_batch.multimesh
+	var instance_index := 0
 	for particle in particles:
 		var alpha: float = clampf(particle.life / max_lifetime, 0.0, 1.0)
 		var color: Color = particle.color
@@ -87,6 +110,13 @@ func _draw() -> void:
 		var trail_direction: Vector2 = -particle.velocity.normalized() if particle.velocity.length_squared() > 0.01 else Vector2.ZERO
 		var trail_length := clampi(roundi(minf(3.0, particle.velocity.length() * 0.045)), 0, 3)
 		for step in range(1, trail_length + 1):
+			if instance_index >= MAX_DRAW_PIXELS: break
 			var trail_pixel := Vector2(roundi(pixel_position.x + trail_direction.x * step), roundi(pixel_position.y + trail_direction.y * step))
-			draw_rect(Rect2(trail_pixel, Vector2.ONE), Color(color, color.a * (1.0 - float(step) / float(trail_length + 1))))
-		draw_rect(Rect2(pixel_position, Vector2.ONE), color)
+			instances.set_instance_transform_2d(instance_index, Transform2D(0.0, trail_pixel + Vector2(0.5, 0.5)))
+			instances.set_instance_color(instance_index, Color(color, color.a * (1.0 - float(step) / float(trail_length + 1))))
+			instance_index += 1
+		if instance_index >= MAX_DRAW_PIXELS: break
+		instances.set_instance_transform_2d(instance_index, Transform2D(0.0, pixel_position + Vector2(0.5, 0.5)))
+		instances.set_instance_color(instance_index, color)
+		instance_index += 1
+	instances.visible_instance_count = instance_index

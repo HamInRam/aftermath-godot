@@ -11,30 +11,36 @@ const WEAPON_PICKUP_SCENE := preload("res://scenes/props/weapon_pickup.tscn")
 const AMMO_PICKUP_SCENE := preload("res://scenes/props/ammo_pickup.tscn")
 const PLAYTEST_TELEMETRY := preload("res://scripts/controllers/playtest_telemetry.gd")
 const THROWN_WEAPON_SCENE := preload("res://scenes/props/thrown_weapon.tscn")
-const EXTRACTION_ZONE_SCENE := preload("res://scenes/props/extraction_zone.tscn")
 const UI_DEFAULTS := preload("res://utility/scripts/ui_defaults.gd")
-const CLEANING_WET_MARK := preload("res://scripts/effects/cleaning_wet_mark.gd")
-const SCENE_SECRET := preload("res://scripts/props/scene_secret.gd")
-const RESETTABLE_FURNITURE := preload("res://scripts/props/resettable_furniture.gd")
-const CORPSE_DISPOSAL := preload("res://scripts/props/corpse_disposal.gd")
 const NOISE_LURE := preload("res://scripts/props/noise_lure.gd")
 const LEVEL_LANDMARK := preload("res://scripts/world/level_landmark.gd")
 const SWING_DOOR_SCENE := preload("res://scenes/props/swing_door.tscn")
 const WORLD_CONTEXT_MARKER := preload("res://scripts/ui/world_context_marker.gd")
 const GAMEPLAY_RULES := preload("res://utility/gameplay_design_rules.gd")
 const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
+const ENTRY_LOADOUT_OVERLAY_SCENE := preload("res://scenes/ui/entry_loadout_overlay.tscn")
+const ENTRY_LOADOUT_ZONE_SCENE := preload("res://scenes/props/entry_loadout_zone.tscn")
+const PIXEL_LIGHTS := preload("res://utility/pixel_light_texture_factory.gd")
+const PIXEL_VOLUMETRIC_BEAM := preload("res://scripts/effects/pixel_volumetric_beam.gd")
+const PIXEL_LIGHT_FIXTURE := preload("res://scripts/effects/pixel_light_fixture.gd")
+const BLOOD_RESOURCE_CONTROLLER := preload("res://scripts/roguelike/blood_resource_controller.gd")
+const ROOM_RUN_CONTROLLER := preload("res://scripts/roguelike/room_run_controller.gd")
 
 @export var level_title := "FLOOR 01"
 @export var player_spawn := Vector2(44, 100)
 @export_enum("exterior", "authored_interior") var player_spawn_context := "exterior"
-@export var enemy_spawns := PackedVector2Array([Vector2(52, 52), Vector2(52, 180), Vector2(132, 52), Vector2(204, 76), Vector2(236, 132), Vector2(300, 52), Vector2(340, 92), Vector2(140, 188), Vector2(228, 188), Vector2(340, 188)])
-@export var enemy_patrol_offsets := PackedVector2Array([Vector2(0, 40), Vector2(48, 0), Vector2(0, 40), Vector2(-48, 0), Vector2(48, 0), Vector2(0, 48), Vector2(0, 40), Vector2(56, 0), Vector2(0, -48), Vector2(-48, 0)])
+@export var enemy_spawns := PackedVector2Array([Vector2(52,68), Vector2(60,188), Vector2(124,36), Vector2(196,36), Vector2(148,92), Vector2(268,156), Vector2(332,36), Vector2(324,100), Vector2(324,164), Vector2(332,188)])
+@export var enemy_patrol_offsets := PackedVector2Array([Vector2(0,48), Vector2(32,0), Vector2(24,0), Vector2(40,0), Vector2(48,0), Vector2(-48,0), Vector2(32,0), Vector2(0,40), Vector2(0,-32), Vector2(32,0)])
 @export var enemy_types := PackedStringArray(["melee", "gunner", "melee", "assault", "gunner", "gunner", "dog", "melee", "gunner", "heavy"])
+# Deprecated authoring field retained so older scenes still deserialize. The
+# current encounter doctrine gives every enemy a two-point patrol route.
 @export var fixed_sentry_indices := PackedInt32Array()
-@export var ammo_pickup_positions := PackedVector2Array([Vector2(76, 108), Vector2(164, 132), Vector2(300, 132), Vector2(340, 204)])
+@export var ammo_pickup_positions := PackedVector2Array([Vector2(116,92), Vector2(220,116), Vector2(324,116), Vector2(324,188)])
 @export var ammo_pickup_weapon_ids := PackedStringArray(["pistol", "smg", "lmg", "shotgun"])
 @export var ammo_pickup_rounds := PackedInt32Array([12, 24, 30, 8])
 @export var doors_enabled := true
+# Deprecated cleanup serialization fields. They remain temporarily so old level
+# scenes load safely; the Roguelike runtime never reads or spawns them.
 @export var extraction_position := Vector2.ZERO
 @export var disposal_positions := PackedVector2Array()
 @export var disposal_types := PackedStringArray()
@@ -45,6 +51,7 @@ const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd
 @export var mission_profile: MissionProfile
 @export var record_progress := true
 @export_enum("neon", "industrial", "ice", "gold", "police", "crimson", "broadcast", "finale") var visual_theme := "neon"
+const roguelike_mode := true
 
 var phase := "combat"
 var player: CharacterBody2D
@@ -61,6 +68,7 @@ var remaining_enemies := 0
 var run_over := false
 var elapsed := 0.0
 var combo := 0
+var best_combo := 0
 var combo_timer := 0.0
 var pending_death_direction := Vector2.RIGHT
 var pending_death_knockback := 20.0
@@ -70,21 +78,20 @@ var pending_death_hit_zone := "torso"
 var pending_death_hit_position := Vector2.ZERO
 var pending_death_attack_id := "pistol"
 var pending_death_travel_distance := 0.0
+var pending_death_blood_enhanced := false
+var pending_death_blood_budget_raw := -1
 var pending_player_death_context: Dictionary = {}
 var player_death_corpse: Node2D
-var transitioning_cleanup := false
+var player_muzzle_flash: WeakRef
 var vision_debug_enabled := false
 var screen_effects_enabled := true
-var hue_cycle_enabled := true
-var extraction_zone: ExtractionZone
-var corpse_disposals: Array[CorpseDisposal] = []
 var tactical_lures: Array[NoiseLure] = []
 var mission_tracker := MissionTracker.new()
 var final_score := 0
 var final_grade := ""
 var interaction_scan_timer := 0.0
-var cleanup_scan_timer := 0.0
 var combat_hud_timer := 0.0
+var performance_hud_timer := 0.0
 var security_devices: Array[SecurityCamera] = []
 var security_devices_cached := false
 var performance_debug_enabled := false
@@ -96,32 +103,18 @@ var player_shot_records: Dictionary = {}
 var precision_reward_bonus := 0
 var combat_glass_broken := 0
 var combat_doors_slammed := 0
-var cleanup_footprints_created := 0
-var combat_completion_hold := 0.0
-var last_cleanup_risk := -1
-var scene_certified_announced := false
 var last_player_death_cause := "CONTACT"
-var clues_collected := 0
-var valuables_secured := 0
-var valuables_stolen := 0
-var furniture_restored := 0
-var cleanup_opportunities_spawned := false
-var cleanup_time_remaining := 0.0
-var cleanup_pressure_active := false
-var cleanup_timed_out := false
-var ultraviolet_was_active := false
-var ultraviolet_materials: Dictionary = {}
-var ultraviolet_shader_material: ShaderMaterial
 var pause_layer: CanvasLayer
+var run_end_layer: CanvasLayer
+var entry_loadout_overlay: CanvasLayer
+var entry_loadout_zone: Node2D
+var entry_loadout_active := false
+var deployment_started := true
 var active_modifier: Dictionary = {}
 var route_anchor := Vector2.ZERO
 var combat_route_distance := 0.0
-var cleanup_route_distance := 0.0
 var combat_phase_elapsed := 0.0
-var cleanup_phase_elapsed := 0.0
 var playtest_telemetry: Node
-var verified_cleanup_rooms: Dictionary = {}
-var cleanup_layer_feedback_cooldown := 0.0
 var world_context_marker: WorldContextMarker
 var combat_focus_energy := 1.0
 var combat_focus_active := false
@@ -132,6 +125,8 @@ var combat_focus_visual_amount := 0.0
 var combat_focus_input_was_down := false
 var hostile_combat_time_scale := 1.0
 var frame_real_delta := 0.0
+var blood_resource: Node2D
+var room_run: Node
 const COMBAT_FOCUS_TIME_SCALE := 0.42
 const COMBAT_FOCUS_MAX_CHARGES := 3
 const COMBAT_FOCUS_DURATION := 2.2
@@ -143,8 +138,28 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	randomize()
 	CombatDirector.reset_kill_zones()
-	RenderingServer.set_default_clear_color(Color("0e0c10"))
+	RenderingServer.set_default_clear_color(Color("020202"))
 	_create_ui()
+	if roguelike_mode:
+		blood_resource = BLOOD_RESOURCE_CONTROLLER.new() as Node2D
+		blood_resource.name = "BloodResource"
+		add_child(blood_resource)
+		blood_resource.resource_changed.connect(_on_blood_resource_changed)
+		blood_resource.skill_triggered.connect(_on_blood_skill_triggered)
+		room_run = ROOM_RUN_CONTROLLER.new() as Node
+		room_run.name = "RoomRun"
+		add_child(room_run)
+		room_run.room_entered.connect(_on_rogue_room_entered)
+		room_run.room_cleared.connect(_on_rogue_room_cleared)
+		room_run.run_cleared.connect(_on_rogue_run_cleared)
+		var offer := preload("res://scripts/roguelike/safe_build_offer.gd").new()
+		offer.name = "SafeBuildOffer"
+		offer.blood = blood_resource
+		offer.rooms = room_run
+		add_child(offer)
+		offer.perk_selected.connect(func(id: String): hud.show_banner("ACQUIRED // " + id.replace("_", " ").to_upper(), Color.WHITE))
+		room_run.room_cleared.connect(func(_id: String, index: int): offer.offer(index))
+		hud.set_roguelike_mode(true)
 	world_context_marker = WORLD_CONTEXT_MARKER.new() as WorldContextMarker
 	add_child(world_context_marker)
 	combat_feedback = CombatFeedback.new()
@@ -153,15 +168,17 @@ func _ready() -> void:
 	playtest_telemetry = PLAYTEST_TELEMETRY.new()
 	add_child(playtest_telemetry)
 	screen_effects_enabled = Settings.screen_effects_enabled
-	($RetroTreatment/Scanlines.material as ShaderMaterial).set_shader_parameter("enable_effect", screen_effects_enabled)
-	($RetroTreatment/Scanlines.material as ShaderMaterial).set_shader_parameter("chromatic_aberration", 0.00025 * Settings.chromatic_aberration_strength)
+	var screen_material := _get_screen_effect_material()
+	if is_instance_valid(screen_material):
+		screen_material.set_shader_parameter("enable_effect", screen_effects_enabled)
+		screen_material.set_shader_parameter("chromatic_aberration", 0.0)
 	_connect_events()
-	if blood_system.has_signal("cleaning_layer_changed"): blood_system.cleaning_layer_changed.connect(_on_blood_cleaning_layer_changed)
-	if blood_system.has_signal("cleaning_region_completed"): blood_system.cleaning_region_completed.connect(_on_blood_cleaning_region_completed)
 	trauma_camera.impact_flash_requested.connect(_on_impact_flash_requested)
 	_configure_level_lighting()
+	_extend_tactical_lab_lighting()
 	_apply_visual_theme()
 	_apply_pixel_light_textures()
+	_configure_nightclub_volume_lighting()
 	_start_run()
 	call_deferred("_sync_ammo_ui")
 
@@ -171,7 +188,7 @@ func _extend_tactical_lab_lighting() -> void:
 	var lighting := get_node_or_null("Lighting")
 	if not is_instance_valid(lighting) or lighting.get_child_count() == 0: return
 	var positions := [Vector2(420, 62), Vector2(462, 178), Vector2(304, 250), Vector2(454, 250)]
-	var colors := [Color(0.12, 0.78, 1.0), Color(1.0, 0.16, 0.46), Color(0.95, 0.48, 0.12), Color(0.35, 1.0, 0.58)]
+	var colors := [Color("dedede"), Color("9b9b9b"), Color("f2f2f2"), Color("b8b8b8")]
 	for index in range(positions.size()):
 		var source := lighting.get_child(index % lighting.get_child_count())
 		var light := source.duplicate() as PointLight2D
@@ -209,32 +226,63 @@ func _apply_pixel_light_textures() -> void:
 		if node is not PointLight2D: continue
 		var light := node as PointLight2D
 		light.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		light.texture = PIXEL_LIGHTS.create_texture()
 		light.texture_scale = 1.0
+		light.shadow_enabled = true
+		light.shadow_filter = Light2D.SHADOW_FILTER_NONE
+		light.shadow_color = Color(0.0, 0.0, 0.0, 0.72)
+		var fixture := light.get_node_or_null("PixelEmitter") as PixelLightFixture
+		if not is_instance_valid(fixture):
+			fixture = PIXEL_LIGHT_FIXTURE.new() as PixelLightFixture
+			fixture.name = "PixelEmitter"
+			light.add_child(fixture)
+		fixture.configure(light.color, light.get_index() * 29 + 7)
+
+func _configure_nightclub_volume_lighting() -> void:
+	var world := get_node_or_null("TileMap")
+	if not is_instance_valid(world) or str(world.get("layout_variant")) != "nightclub": return
+	var volume_layer := Node2D.new()
+	volume_layer.name = "PixelVolumeLighting"
+	add_child(volume_layer)
+	var authored_beams := [
+		[Vector2(168, 52), Color("d8d8d8"), 116.0, 0.22, PI * 0.5, 17],
+		[Vector2(236, 52), Color("a8a8a8"), 116.0, 0.22, PI * 0.5, 43],
+		[Vector2(332, 112), Color("eeeeee"), 76.0, 0.18, PI, 71],
+	]
+	for data: Array in authored_beams:
+		var beam := PIXEL_VOLUMETRIC_BEAM.new() as PixelVolumetricBeam
+		volume_layer.add_child(beam)
+		beam.global_position = world.map_authored_position(data[0])
+		beam.configure(data[1], data[2], data[3], data[4], data[5])
 
 func _apply_visual_theme() -> void:
 	var world := get_node_or_null("TileMap")
 	var variant := str(world.get("layout_variant")) if is_instance_valid(world) else visual_theme
 	var palettes := {
-		"nightclub": [Color("d7ced0"), Color("bd294b"), Color("328f89"), Color("e6e1dc")],
-		"sandwich_shop": [Color("ddd3c2"), Color("b85e35"), Color("4a8c79"), Color("ebe5d9")],
-		"tactical_lab": [Color("ced7da"), Color("466f9d"), Color("b33448"), Color("e2e7e5")],
-		"harbor_exchange": [Color("d1cdc3"), Color("aa673d"), Color("3e8188"), Color("e7e2d8")],
-		"motel_witness": [Color("d8c9cd"), Color("b73b6b"), Color("428e88"), Color("e9e1e3")],
-		"penthouse": [Color("ddd2bd"), Color("b98b43"), Color("b84060"), Color("ebe5d7")],
-		"cold_storage": [Color("cfdbde"), Color("4e91aa"), Color("83b4b9"), Color("e5eaea")],
-		"casino_floor": [Color("d9cdc2"), Color("b1843f"), Color("ae314b"), Color("e9e1da")],
-		"police_archive": [Color("ced4dc"), Color("496b9a"), Color("ad3545"), Color("e3e6e7")],
-		"slaughterhouse": [Color("d8cac7"), Color("b6293a"), Color("a97638"), Color("e9dedb")],
-		"broadcast_tower": [Color("cad8ce"), Color("4d9569"), Color("76528d"), Color("e1e8e2")],
-		"last_call": [Color("d7c7cd"), Color("b71f45"), Color("398b91"), Color("e8dfe2")],
+		# OTXO-style readability: the room is a bright field, architecture is the
+		# dark silhouette, and blood/danger retain the only saturated hue.
+		"nightclub": [Color("f7f7f7"), Color("ffffff"), Color("c2c2c2"), Color("ffffff")],
+		"sandwich_shop": [Color("f5f5f5"), Color("f0f0f0"), Color("bcbcbc"), Color("fdfdfd")],
+		"tactical_lab": [Color("f3f3f3"), Color("dedede"), Color("ffffff"), Color("fbfbfb")],
+		"harbor_exchange": [Color("f1f1f1"), Color("e8e8e8"), Color("b6b6b6"), Color("fafafa")],
+		"motel_witness": [Color("f6f6f6"), Color("fafafa"), Color("c8c8c8"), Color("ffffff")],
+		"penthouse": [Color("fafafa"), Color("ffffff"), Color("cecece"), Color("ffffff")],
+		"cold_storage": [Color("f2f2f2"), Color("ffffff"), Color("d2d2d2"), Color("f9f9f9")],
+		"casino_floor": [Color("f4f4f4"), Color("eeeeee"), Color("bababa"), Color("fdfdfd")],
+		"police_archive": [Color("f0f0f0"), Color("e4e4e4"), Color("c0c0c0"), Color("fafafa")],
+		"slaughterhouse": [Color("eeeeee"), Color("f8f8f8"), Color("b0b0b0"), Color("f7f7f7")],
+		"broadcast_tower": [Color("f8f8f8"), Color("f2f2f2"), Color("c6c6c6"), Color("ffffff")],
+		"last_call": [Color("ededed"), Color("ffffff"), Color("acacac"), Color("f6f6f6")],
 	}
 	var palette: Array = palettes.get(variant, palettes.nightclub)
 	var canvas := get_node_or_null("CanvasModulate") as CanvasModulate
 	if is_instance_valid(canvas): canvas.color = palette[0]
 	if is_instance_valid(world):
 		world.floor_layer.modulate = palette[3]
-		world.wall_layer.modulate = Color(0.98, 0.97, 0.94, 1.0)
-		world.decoration_layer.modulate = Color(0.72, 0.73, 0.72, 1.0)
+		if is_instance_valid(world.material_detail_sprite): world.material_detail_sprite.modulate = palette[3]
+		world.wall_layer.modulate = Color.WHITE
+		if is_instance_valid(world.wall_detail_sprite): world.wall_detail_sprite.modulate = Color.WHITE
+		world.decoration_layer.modulate = Color(0.84, 0.84, 0.84, 1.0)
 	var lighting := get_node_or_null("Lighting")
 	if is_instance_valid(lighting):
 		for index in range(lighting.get_child_count()):
@@ -243,19 +291,29 @@ func _apply_visual_theme() -> void:
 
 func _process(delta: float) -> void:
 	if get_tree().paused: return
+	# Focus and the real-time clock must be advanced from the live frame loop.
+	# This call was previously orphaned, leaving focus charges inert and every
+	# mission timer permanently at 0.0 despite otherwise successful gameplay.
 	_update_combat_focus(delta)
+	if not deployment_started: return
+	# A result screen must not keep draining the floor or cooling down abilities.
+	# Effects/physics have their own processors and may finish settling normally.
+	if run_over: return
 	elapsed += frame_real_delta
-	if phase == "combat": combat_phase_elapsed += frame_real_delta
-	elif phase == "cleanup": cleanup_phase_elapsed += frame_real_delta
+	combat_phase_elapsed += frame_real_delta
 	if is_instance_valid(player):
+		if roguelike_mode and is_instance_valid(blood_resource):
+			blood_resource.global_position = player.global_position
+			blood_resource.update_system(delta, player, blood_system)
+			player.set_blood_stance_movement_multiplier(blood_resource.get_movement_multiplier())
+			player.set_blood_siphon_visual(blood_resource.get_siphon_visual_amount())
+		if roguelike_mode and is_instance_valid(room_run): room_run.update_room(player)
 		if route_anchor == Vector2.ZERO: route_anchor = player.global_position
 		var route_step := player.global_position.distance_to(route_anchor)
 		if route_step <= 24.0:
-			if phase == "combat": combat_route_distance += route_step
-			elif phase == "cleanup": cleanup_route_distance += route_step
+			combat_route_distance += route_step
 		route_anchor = player.global_position
 	combo_timer -= delta
-	cleanup_layer_feedback_cooldown = maxf(0.0, cleanup_layer_feedback_cooldown - delta)
 	if combo_timer <= 0.0: combo = 0
 	hud.set_combo(combo)
 	if is_instance_valid(player) and is_instance_valid(player.gun):
@@ -264,65 +322,21 @@ func _process(delta: float) -> void:
 	if interaction_scan_timer <= 0.0:
 		interaction_scan_timer = 0.08
 		_update_interaction_prompt()
-	if performance_debug_enabled: hud.set_performance(PerformanceMonitor.get_debug_line())
+	if performance_debug_enabled:
+		performance_hud_timer -= frame_real_delta
+		if performance_hud_timer <= 0.0:
+			performance_hud_timer = 0.25
+			hud.set_performance(PerformanceMonitor.get_debug_line())
 	if run_over: return
-	_update_ultraviolet_mode()
-	if phase == "combat":
-		combat_hud_timer -= delta
-		if combat_hud_timer <= 0.0:
-			combat_hud_timer = 0.1
-			_update_combat_objective_hud()
-	if phase == "combat" and not transitioning_cleanup and mission_tracker.are_combat_objectives_complete():
-		combat_completion_hold += delta
-		if combat_completion_hold >= 0.22: _begin_cleanup_transition()
-	elif phase == "combat":
-		combat_completion_hold = 0.0
-	elif phase == "cleanup":
-		if cleanup_pressure_active:
-			cleanup_time_remaining = maxf(0.0, cleanup_time_remaining - delta)
-			if cleanup_time_remaining <= 0.0:
-				cleanup_timed_out = true
-				cleanup_pressure_active = false
-				_finish_run(true)
-				return
-		hud.set_cleanup_tool(player.current_cleanup_tool, player.get_mop_saturation_ratio(), player.get_cleanup_flow_ratio(), player.get_pressure_washer_mode(), player.get_pressure_washer_focus(), player.get_pressure_washer_stability())
-		cleanup_scan_timer -= delta
-		if cleanup_scan_timer <= 0.0:
-			cleanup_scan_timer = 0.1
-			_deposit_bagged_corpses()
-			var remaining_cleanup := CleanupRegistry.get_remaining_count()
-			if remaining_cleanup == 0:
-				_finish_run(false)
-			else:
-				var risk := CleanupRegistry.get_remaining_value()
-				var tile_world := get_node_or_null("TileMap")
-				var area := CleanupRegistry.get_room_summary(tile_world, player.global_position)
-				var room_name := str(area.get("room_id", "area")).to_upper().replace("_", " ")
-				var scene_cleanliness := CleanupRegistry.get_cleanup_ratio()
-				hud.set_cleanup_summary(scene_cleanliness, risk, cleanup_time_remaining if cleanup_pressure_active else -1.0)
-				var counts := CleanupRegistry.get_type_counts()
-				var cleanup_tier: Dictionary = GAMEPLAY_RULES.get_cleanup_tier(scene_cleanliness)
-				var scan_active: bool = player.ultraviolet_scan_time > 0.0 and Progression.get_cleaner_mode() == "normal"
-				hud.set_cleanup_context(room_name, float(area.cleanliness), bool(cleanup_tier.can_extract), scan_active, counts, GAMEPLAY_RULES.get_cleanup_guidance(counts))
-				if bool(cleanup_tier.can_extract) and not scene_certified_announced:
-					scene_certified_announced = true
-					hud.show_banner("SCENE CERTIFIED // EXIT AVAILABLE", Color("73f7e4"))
-					detail_label.text = "90% SECURED // CONTINUE FOR PERFECT"
-					_play_area_clean_feedback()
-				# A room is complete at the same forgiving threshold used by modern
-				# cleaning games: the last nearly invisible pixels are not busywork.
-				if float(area.cleanliness) >= 0.95:
-					if not verified_cleanup_rooms.has(room_name):
-						verified_cleanup_rooms[room_name] = true
-						combat_feedback.show_flash(Color(0.18, 1.0, 0.78, 0.16), 0.12)
-						hud.set_objective("ROOM VERIFIED // %s" % room_name)
-						hud.show_banner("AREA CLEAN // %s" % room_name)
-						_play_area_clean_feedback()
-				if last_cleanup_risk >= 0 and risk < last_cleanup_risk:
-					combat_feedback.show_flash(Color(0.2, 0.9, 0.72, 0.08), 0.07)
-				last_cleanup_risk = risk
+	combat_hud_timer -= delta
+	if combat_hud_timer <= 0.0:
+		combat_hud_timer = 0.1
+		_update_combat_objective_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# The entry bench owns keyboard/gamepad input while the mission is paused.
+	# Without this guard, Enter could also trigger the generic pause-menu action.
+	if entry_loadout_active: return
 	if get_tree().paused:
 		if event.is_action_pressed("ui_cancel"):
 			_toggle_pause(false)
@@ -336,9 +350,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F4:
 		_toggle_screen_effects()
 		return
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F5:
-		_toggle_hue_cycle()
-		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F6:
 		performance_debug_enabled = not performance_debug_enabled
 		hud.set_performance(PerformanceMonitor.get_debug_line() if performance_debug_enabled else "")
@@ -346,11 +357,79 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		_toggle_pause(true)
 		return
-	if run_over and event.is_action_pressed("reload"):
-		get_tree().reload_current_scene()
+	if run_over and final_grade.is_empty() and event.is_action_pressed("reload"):
+		_retry_floor()
 		return
 	if run_over and not final_grade.is_empty() and event.is_action_pressed("ui_accept"):
 		SceneTransition.transition_to("res://scenes/ui/debrief_screen.tscn")
+
+func _retry_floor() -> void:
+	if not run_over or not final_grade.is_empty(): return
+	if Progression.run_session.active: Progression.run_session.totals.retries += 1
+	Progression.prepare_mission_restart(scene_file_path)
+	get_tree().reload_current_scene()
+
+var new_run_requested := false
+
+func _new_random_run() -> void:
+	if not run_over or not final_grade.is_empty(): return
+	if new_run_requested: return
+	new_run_requested = true
+	var profile = Progression.begin_roguelike_run()
+	if profile == null:
+		new_run_requested = false
+		return
+	Progression.prepare_mission_restart(profile.scene_path)
+	SceneTransition.transition_to(profile.scene_path)
+
+func _show_run_end_prompt(message: String, won: bool) -> void:
+	if has_node("SafeBuildOffer"):
+		get_node("SafeBuildOffer").pending = false
+		get_node("SafeBuildOffer").label.hide()
+	if is_instance_valid(run_end_layer): return
+	run_end_layer = CanvasLayer.new()
+	run_end_layer.layer = 90
+	add_child(run_end_layer)
+	var panel := PanelContainer.new()
+	run_end_layer.add_child(panel)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("0b0b0b")
+	style.border_color = Color("a8a8a8")
+	style.set_border_width_all(1)
+	style.set_content_margin_all(4)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	panel.offset_left = -110
+	panel.offset_right = 110
+	panel.offset_top = -43
+	panel.offset_bottom = -8
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 3)
+	panel.add_child(column)
+	var label := Label.new()
+	label.text = message
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	UI_DEFAULTS.apply_label(label, 7, Color("eeeeee"))
+	column.add_child(label)
+	var action := Button.new()
+	action.text = "ENTER // CONTINUE" if won else "R // RETRY FLOOR"
+	UI_DEFAULTS.apply_button(action)
+	column.add_child(action)
+	if won: action.pressed.connect(func(): SceneTransition.transition_to("res://scenes/ui/debrief_screen.tscn"))
+	else: action.pressed.connect(_retry_floor)
+	if not won:
+		var fresh := Button.new()
+		fresh.text = "NEW RANDOM RUN"
+		UI_DEFAULTS.apply_button(fresh)
+		column.add_child(fresh)
+		fresh.pressed.connect(_new_random_run)
+		panel.offset_top = -66
+	# Keyboard Enter is handled by main; avoid a focused retry also consuming it.
+	action.focus_mode = Control.FOCUS_NONE
+	interaction_label.text = ""
+	if is_instance_valid(hud.reticle): hud.reticle.hide()
+	if is_instance_valid(world_context_marker): world_context_marker.hide_target()
 
 func _create_ui() -> void:
 	hud = HudController.new()
@@ -369,7 +448,7 @@ func _toggle_pause(enabled: bool) -> void:
 			pause_layer.layer = 100
 			pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 			var shade := ColorRect.new()
-			shade.color = Color(0.02, 0.01, 0.035, 0.86)
+			shade.color = Color(0.02, 0.02, 0.02, 0.86)
 			shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 			pause_layer.add_child(shade)
 			var pause_text := Label.new()
@@ -377,7 +456,7 @@ func _toggle_pause(enabled: bool) -> void:
 			pause_text.position = Vector2(64, 54)
 			pause_text.size = Vector2(192, 80)
 			pause_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			UI_DEFAULTS.apply_label(pause_text, 11, Color("fff1f7"))
+			UI_DEFAULTS.apply_label(pause_text, 11, Color("f4f4f4"))
 			pause_layer.add_child(pause_text)
 			add_child(pause_layer)
 		pause_layer.visible = true
@@ -388,35 +467,6 @@ func _update_interaction_prompt() -> void:
 	if run_over: return
 	if not is_instance_valid(interaction_label) or not is_instance_valid(player) or player.is_executing:
 		if is_instance_valid(interaction_label): interaction_label.text = ""
-		if is_instance_valid(world_context_marker): world_context_marker.hide_target()
-		return
-	if phase == "cleanup":
-		if is_instance_valid(player.dragged_restoration_prop): interaction_label.text = "[ E ] DROP OBJECT // ALIGN WITH CYAN OUTLINE"
-		elif is_instance_valid(player.dragged_corpse) and is_instance_valid(_get_nearby_disposal()): interaction_label.text = _get_nearby_disposal().get_interaction_prompt()
-		elif is_instance_valid(player.dragged_corpse): interaction_label.text = "[ E ] DROP BODY"
-		elif is_instance_valid(player.get_nearby_draggable_corpse()):
-			var corpse: Node2D = player.get_nearby_draggable_corpse()
-			interaction_label.text = "[ E ] DRAG BAG" if corpse.is_bagged() else "[ E ] BAG BODY // %d%%" % roundi(corpse.get_cleanup_progress() * 100.0)
-		elif is_instance_valid(extraction_zone) and extraction_zone.contains_position(player.global_position): interaction_label.text = "[ E ] LEAVE SCENE // RISK %d" % CleanupRegistry.get_remaining_value()
-		elif _is_player_near_sink(): interaction_label.text = "[ E ] RINSE MOP // DIRTY %d%%" % roundi(player.get_mop_saturation_ratio() * 100.0)
-		elif is_instance_valid(player.get_nearby_restoration_prop()): interaction_label.text = player.get_nearby_restoration_prop().get_interaction_prompt()
-		elif is_instance_valid(_get_nearby_loose_evidence()):
-			var batch_count := CleanupRegistry.get_targets_in_radius(player.global_position, 30.0, 12, PackedStringArray(["shell", "dropped_weapon", "debris"])).size()
-			interaction_label.text = "[ E ] SECURE NEARBY EVIDENCE x%d" % batch_count
-		elif is_instance_valid(_get_nearby_scene_secret()): interaction_label.text = _get_nearby_scene_secret().get_interaction_prompt() + " // OPTIONAL"
-		elif is_instance_valid(_get_nearby_furniture()): interaction_label.text = _get_nearby_furniture().get_interaction_prompt() + " // OPTIONAL"
-		else:
-			var nearby_cleanup := CleanupRegistry.get_nearest_target(player.global_position, 24.0)
-			if is_instance_valid(nearby_cleanup):
-				var cleanup_type := str(nearby_cleanup.get_cleanup_type()) if nearby_cleanup.has_method("get_cleanup_type") else "unknown"
-				var required_tool := _required_cleanup_tool(cleanup_type)
-				var progress := float(nearby_cleanup.get_cleanup_progress()) if nearby_cleanup.has_method("get_cleanup_progress") else 0.0
-				interaction_label.text = "[ LMB ] %s %d%%" % [required_tool.to_upper().replace("_", " "), roundi(progress * 100.0)]
-			else: interaction_label.text = ""
-		_update_world_context_marker()
-		return
-	if phase != "combat":
-		interaction_label.text = ""
 		if is_instance_valid(world_context_marker): world_context_marker.hide_target()
 		return
 	if is_instance_valid(player.peek_nearby_execution_target()):
@@ -431,7 +481,7 @@ func _update_interaction_prompt() -> void:
 			else:
 				var lure := _get_nearby_noise_lure()
 				if is_instance_valid(lure): interaction_label.text = lure.get_interaction_prompt()
-				else: interaction_label.text = "[ Q ] THROW %s" % player.get_equipped_weapon_name() if player.equipped_mode == "gun" else ""
+				else: interaction_label.text = ""
 	_update_world_context_marker()
 
 func _update_world_context_marker() -> void:
@@ -440,41 +490,15 @@ func _update_world_context_marker() -> void:
 	var kind := "interact"
 	var color := Color("fff0a8")
 	var progress := -1.0
-	if phase == "combat":
-		target = player.peek_nearby_execution_target()
-		if is_instance_valid(target): kind = "execute"; color = Color("ff536e")
-		else:
-			target = player.get_nearby_weapon_pickup()
-			if is_instance_valid(target): kind = "weapon"; color = Color("ffe5a8")
-			else:
-				target = _get_nearby_security_device()
-				if is_instance_valid(target): kind = "target"; color = Color("82d8ff")
-				else: target = _get_nearby_noise_lure()
+	target = player.peek_nearby_execution_target()
+	if is_instance_valid(target): kind = "execute"; color = Color("ff536e")
 	else:
-		if is_instance_valid(player.dragged_restoration_prop):
-			target = player.dragged_restoration_prop.get_restoration_anchor()
-			kind = "target"
-			color = Color("73f7e4")
-		else: target = player.get_nearby_restoration_prop()
-		if is_instance_valid(target) and (is_instance_valid(player.dragged_restoration_prop) or target.is_in_group("displaced_prop")):
-			kind = "target"
-			color = Color("73f7e4")
+		target = player.get_nearby_weapon_pickup()
+		if is_instance_valid(target): kind = "weapon"; color = Color("ffe5a8")
 		else:
-			target = player.get_nearby_draggable_corpse()
-		if is_instance_valid(target):
-			if target.is_in_group("corpse"):
-				kind = "bag" if target.is_bagged() else "body"
-				progress = target.get_cleanup_progress()
-		else:
-			target = _get_nearby_loose_evidence()
-			if is_instance_valid(target): kind = "evidence"; color = Color("82d8ff")
-			else:
-				target = CleanupRegistry.get_nearest_target(player.global_position, 24.0)
-				if is_instance_valid(target):
-					var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else "blood"
-					kind = "blood" if cleanup_type in ["blood", "blood_pool", "blood_footprint", "gore", "spill"] else "clean"
-					color = Color("c77dff") if player.ultraviolet_scan_time > 0.0 else Color("73f7e4")
-					progress = target.get_cleanup_progress() if target.has_method("get_cleanup_progress") else -1.0
+			target = _get_nearby_security_device()
+			if is_instance_valid(target): kind = "target"; color = Color("82d8ff")
+			else: target = _get_nearby_noise_lure()
 	if is_instance_valid(target): world_context_marker.show_target(target.global_position, kind, color, progress)
 	else: world_context_marker.hide_target()
 
@@ -488,7 +512,6 @@ func _connect_events() -> void:
 	Events.door_impact.connect(_on_door_impact)
 	Events.glass_shattered.connect(_on_glass_shattered)
 	Events.prop_destroyed.connect(_on_prop_destroyed)
-	Events.prop_restored.connect(_on_prop_restored)
 	Events.prop_impacted.connect(_on_prop_impacted)
 	Events.hazard_spawned.connect(_on_hazard_spawned)
 	Events.setpiece_triggered.connect(_on_setpiece_triggered)
@@ -514,13 +537,11 @@ func _on_prop_destroyed(_world_position: Vector2, prop_kind: String) -> void:
 	trauma_camera.add_trauma(0.1 if prop_kind in ["plant", "toilet", "sink"] else 0.16)
 	_show_scene_consequence("PROPERTY +1 // %s" % prop_kind.to_upper().replace("_", " "))
 
-func _on_prop_restored(_world_position: Vector2, prop_kind: String) -> void:
-	if phase != "cleanup": return
-	furniture_restored += 1
-	detail_label.text = "%s RESET // OBJECTS RESTORED %d" % [prop_kind.to_upper().replace("_", " "), furniture_restored]
-
 func _show_scene_consequence(text: String) -> void:
 	if phase != "combat" or run_over: return
+	# Property/evidence accounting is retained for old save compatibility, not
+	# broadcast over a rapid-fire roguelike encounter after every bullet.
+	if roguelike_mode: return
 	detail_label.text = "SCENE COST // " + text
 
 func _on_prop_impacted(_world_position: Vector2, material: String, energy: float, structural_stage: int) -> void:
@@ -533,6 +554,7 @@ func _on_prop_impacted(_world_position: Vector2, material: String, energy: float
 func _play_material_impact(world_position: Vector2, material: String, energy: float) -> void:
 	if DisplayServer.get_name() == "headless": return
 	var player_2d := AudioStreamPlayer2D.new()
+	player_2d.bus = "SFX"
 	player_2d.stream = ProceduralAudioLibrary.get_sfx("impact_%s" % material)
 	player_2d.volume_db = lerpf(-12.0, -2.0, clampf(energy / 2.0, 0.0, 1.0))
 	player_2d.pitch_scale = randf_range(0.9, 1.1)
@@ -552,7 +574,7 @@ func _play_area_clean_feedback() -> void:
 	feedback.play()
 
 func _on_hazard_spawned(_world_position: Vector2, hazard_kind: String) -> void:
-	detail_label.text = "%s HAZARD // ISOLATE SOURCE BEFORE CLEANING" % hazard_kind.to_upper()
+	detail_label.text = "%s HAZARD // KEEP CLEAR" % hazard_kind.to_upper()
 
 func _on_setpiece_triggered(_world_position: Vector2, setpiece_kind: String, hazard_kind: String) -> void:
 	_trigger_hit_stop(0.045)
@@ -585,6 +607,7 @@ func _on_reload_started(_duration: float) -> void:
 	if phase != "cleanup": detail_label.text = "RELOADING..."
 
 func _on_reload_finished(_current: int, _maximum: int) -> void:
+	if roguelike_mode and is_instance_valid(blood_resource): blood_resource.perks.on_reload()
 	if phase != "cleanup": detail_label.text = "NO WITNESSES."
 
 func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, weapon_id: String) -> void:
@@ -594,7 +617,7 @@ func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, we
 		_show_scene_consequence("BALLISTIC +1 // %s" % weapon_id.to_upper())
 		var shot_id: int = player.gun.current_shot_id if is_instance_valid(player) and is_instance_valid(player.gun) else -1
 		if shot_id >= 0:
-			var shot_data := AttackCatalog.get_gun_data(weapon_id)
+			var shot_data: GunData = player.gun.gun_data if is_instance_valid(player) and is_instance_valid(player.gun) and player.gun.weapon_id == weapon_id else AttackCatalog.get_gun_data(weapon_id)
 			player_shot_records[shot_id] = {
 				"expected": maxi(1, shot_data.pellet_count),
 				"resolved": 0,
@@ -603,8 +626,10 @@ func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, we
 				"reported": false,
 				"weapon_id": weapon_id,
 			}
-	var data := AttackCatalog.get_gun_data(weapon_id)
-	trauma_camera.add_trauma(data.camera_shake * (0.1 if enemy_owned else 0.14))
+	var data: GunData = player.gun.gun_data if not enemy_owned and is_instance_valid(player) and is_instance_valid(player.gun) and player.gun.weapon_id == weapon_id else AttackCatalog.get_gun_data(weapon_id)
+	# Incoming fire is legible in world space; it must not shake the player's aim
+	# simply because an unseen enemy pulled a trigger.
+	if not enemy_owned: trauma_camera.add_trauma(data.camera_shake * 0.14)
 	var casing = SHELL_CASING_SCENE.instantiate()
 	if RuntimeBudget.try_add("shell", casing, self):
 		var perpendicular := direction.rotated(PI * 0.5)
@@ -614,7 +639,8 @@ func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, we
 	var flash = MUZZLE_FLASH_SCENE.instantiate()
 	flash.position = to_local(origin)
 	flash.setup(direction, data.muzzle_flash_size, data.muzzle_flash_duration)
-	RuntimeBudget.try_add("transient_fx", flash, self)
+	if RuntimeBudget.try_add("transient_fx", flash, self) and not enemy_owned:
+		player_muzzle_flash = weakref(flash)
 
 func _on_precision_reward(weapon_id: String, streak: int) -> void:
 	if phase != "combat" or run_over: return
@@ -623,8 +649,17 @@ func _on_precision_reward(weapon_id: String, streak: int) -> void:
 	detail_label.text = "%s PRECISION x%d // EMPTY MAG RELOAD BOOST" % [weapon_id.to_upper(), streak]
 
 func _start_run() -> void:
-	CleanupRegistry.reset()
 	CorpseIncidentRegistry.reset()
+	# Cleanup is retired from the active Roguelike, but legacy evidence-capable
+	# props still register for save compatibility. Clear their autoload history at
+	# every run boundary so repeated retries cannot accumulate stale WeakRefs.
+	CleanupRegistry.reset()
+	# Headless regressions enter combat immediately. A rendered campaign begins
+	# outside the building and arms the encounter only at its physical entry case.
+	var is_death_restart := Progression.consume_mission_restart(scene_file_path)
+	var entry_state := Progression.run_session.get_entry_state(Progression.get_roguelike_floor(), is_death_restart)
+	deployment_started = DisplayServer.get_name() == "headless" or is_death_restart or not entry_state.is_empty()
+	entry_loadout_active = false
 	combat_focus_active = false
 	combat_focus_charges = COMBAT_FOCUS_MAX_CHARGES
 	combat_focus_time_remaining = 0.0
@@ -636,7 +671,6 @@ func _start_run() -> void:
 	_update_focus_screen_effect()
 	player_shot_records.clear()
 	precision_reward_bonus = 0
-	scene_certified_announced = false
 	last_player_death_cause = "CONTACT"
 	pending_player_death_context.clear()
 	player_death_corpse = null
@@ -661,29 +695,35 @@ func _start_run() -> void:
 		if candidate != Vector2.INF: resolved_player_spawn = candidate
 	player.global_position = resolved_player_spawn
 	player.projectile_requested.connect(_on_projectile_requested)
-	player.clean_requested.connect(_on_clean_requested)
-	player.cleaner_requested.connect(_on_cleaner_requested)
 	player.died.connect(_on_player_died)
 	player.execution_impact.connect(_on_execution_impact)
 	player.melee_impact.connect(_on_melee_impact)
 	player.weapon_throw_requested.connect(_on_weapon_throw_requested)
-	player.extraction_requested.connect(_on_extraction_requested)
 	player.world_interaction_requested.connect(_on_world_interaction_requested)
+	if roguelike_mode:
+		player.blood_stance_changed.connect(_on_blood_stance_changed)
+		player.blood_skill_requested.connect(_on_blood_skill_requested)
+		player.blood_heal_requested.connect(_on_blood_heal_requested)
 	add_child(player)
+	player.health_changed.connect(hud.set_player_health)
+	player.armor_changed.connect(hud.set_player_armor)
 	player.configure_field_kit(LoadoutCatalog.get_kit(Progression.get_current_kit_id()))
+	if Progression.run_session.restore(entry_state, player, blood_resource):
+		var focus: Dictionary = entry_state.get("focus", {})
+		combat_focus_charges = clampi(int(focus.get("charges", COMBAT_FOCUS_MAX_CHARGES)), 0, COMBAT_FOCUS_MAX_CHARGES)
+		combat_focus_recharge_progress = clampf(float(focus.get("recharge", 0.0)), 0.0, 1.0)
+	hud.set_player_health(player.hp, player.max_hp)
+	hud.set_player_armor(player.armor_durability, player.max_armor_durability)
 	_spawn_level_landmarks(world)
 	route_anchor = player.global_position
-	extraction_zone = EXTRACTION_ZONE_SCENE.instantiate() as ExtractionZone
-	var resolved_extraction := resolved_player_spawn if extraction_position == Vector2.ZERO else _map_authored_position(extraction_position)
-	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-		var extraction_candidate: Vector2 = world.get_nearest_walkable_position(resolved_extraction, 8)
-		if extraction_candidate != Vector2.INF: resolved_extraction = extraction_candidate
-	extraction_zone.global_position = resolved_extraction
-	add_child(extraction_zone)
-	extraction_zone.set_active(false)
-	_spawn_corpse_disposals()
 	_spawn_tactical_lures()
+	if roguelike_mode and is_instance_valid(world) and world.has_method("get_handcrafted_encounter_layout"):
+		var encounter_layout: Dictionary = world.get_handcrafted_encounter_layout()
+		enemy_spawns = encounter_layout.get("spawns", enemy_spawns)
+		enemy_patrol_offsets = encounter_layout.get("patrols", enemy_patrol_offsets)
+		enemy_types = encounter_layout.get("types", enemy_types)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
+	if roguelike_mode and deployment_started and is_instance_valid(room_run): room_run.configure(world, enemies_container)
 	for index in ammo_pickup_positions.size(): _spawn_ammo_pickup(index)
 	started_enemy_count = enemy_spawns.size()
 	remaining_enemies = started_enemy_count
@@ -697,6 +737,88 @@ func _start_run() -> void:
 	if record_progress: Progression.current_mission_id = mission_tracker.profile.mission_id
 	detail_label.text = mission_tracker.profile.briefing
 	_update_combat_objective_hud()
+	if not deployment_started: _begin_entry_staging(world)
+	elif not is_death_restart:
+		_remember_floor_start()
+	_sync_ammo_ui()
+
+func _capture_run_resources() -> Dictionary:
+	return Progression.run_session.capture(player, blood_resource, {"charges": combat_focus_charges, "recharge": combat_focus_recharge_progress})
+
+func _remember_floor_start() -> void:
+	Progression.run_session.remember_floor_start(Progression.get_roguelike_floor(), _capture_run_resources())
+
+func _begin_entry_staging(world: Node) -> void:
+	if not is_instance_valid(player): return
+	player.set_predeployment_mode(true)
+	_set_deployment_simulation_enabled(false)
+	entry_loadout_zone = ENTRY_LOADOUT_ZONE_SCENE.instantiate() as Node2D
+	var zone_position := player.global_position
+	if is_instance_valid(world) and world.has_method("get_door_specs"):
+		var door_specs: Array[Dictionary] = world.get_door_specs()
+		if not door_specs.is_empty():
+			var exterior_door: Dictionary = door_specs[-1]
+			var passage: Vector2 = exterior_door.passage_center
+			var building: Rect2 = world.get_building_world_rect() if world.has_method("get_building_world_rect") else Rect2()
+			var outward := building.get_center().direction_to(passage)
+			if outward.length_squared() < 0.1: outward = player.global_position.direction_to(passage) * -1.0
+			zone_position = passage + outward.normalized() * 18.0
+	entry_loadout_zone.global_position = zone_position
+	entry_loadout_zone.connect("player_arrived", Callable(self, "_show_entry_loadout_overlay"))
+	add_child(entry_loadout_zone)
+	entry_loadout_zone.call("setup", player)
+	status_label.text = "STAGING // " + level_title
+	detail_label.text = "REACH THE WHITE ENTRY CASE"
+	hud.set_objective("ENTRY CASE // CONFIGURE LOADOUT")
+	hud.show_banner("MOVE TO THE ENTRY CASE", Color("73f7e4"))
+
+func _set_deployment_simulation_enabled(enabled: bool) -> void:
+	var mode := Node.PROCESS_MODE_INHERIT if enabled else Node.PROCESS_MODE_DISABLED
+	for enemy in enemies_container.get_children(): enemy.process_mode = mode
+	for device in security_devices: device.process_mode = mode
+
+func _show_entry_loadout_overlay() -> void:
+	if run_over or phase != "combat" or deployment_started or entry_loadout_active: return
+	entry_loadout_active = true
+	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
+	entry_loadout_overlay = ENTRY_LOADOUT_OVERLAY_SCENE.instantiate() as CanvasLayer
+	entry_loadout_overlay.call("configure", mission_tracker.profile.display_name if mission_tracker.profile != null else level_title)
+	entry_loadout_overlay.connect("deployment_confirmed", Callable(self, "_on_entry_loadout_confirmed"))
+	entry_loadout_overlay.connect("deployment_cancelled", Callable(self, "_on_entry_loadout_cancelled"))
+	add_child(entry_loadout_overlay)
+	get_tree().paused = true
+
+func _on_entry_loadout_confirmed(deployment_kit: Dictionary) -> void:
+	deployment_started = true
+	entry_loadout_active = false
+	entry_loadout_overlay = null
+	get_tree().paused = false
+	_set_deployment_simulation_enabled(true)
+	if roguelike_mode and is_instance_valid(room_run): room_run.configure(get_node_or_null("TileMap"), enemies_container)
+	if is_instance_valid(entry_loadout_zone): entry_loadout_zone.call("set_deployed")
+	if not is_instance_valid(player): return
+	# Apply the staged weapon/build selection as a fresh mission issue. This also
+	# guarantees both selected firearms start with full magazines and reserves.
+	player.configure_field_kit(deployment_kit)
+	player.set_predeployment_mode(false)
+	if player.has_method("set_controls_enabled"): player.set_controls_enabled(true)
+	route_anchor = player.global_position
+	_sync_ammo_ui()
+	status_label.text = "AFTERMATH // " + level_title
+	detail_label.text = mission_tracker.profile.briefing if mission_tracker.profile != null else "NO WITNESSES."
+	_update_combat_objective_hud()
+	_remember_floor_start()
+	hud.show_banner("LOADOUT LOCKED // OPERATION LIVE", Color("73f7e4"))
+
+func _on_entry_loadout_cancelled() -> void:
+	# Defensive fallback for older overlays: pre-deployment may never be escaped
+	# into a half-paused mission. Only confirming a loadout releases simulation.
+	entry_loadout_active = true
+	get_tree().paused = true
+	_set_deployment_simulation_enabled(false)
+	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
+	if is_instance_valid(entry_loadout_overlay):
+		entry_loadout_overlay.call("show_deployment_required_hint")
 
 func _configure_level_doors(world: Node) -> void:
 	var doors_root := get_node_or_null("Doors")
@@ -740,6 +862,7 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 		var candidate: Vector2 = world.get_nearest_walkable_position(resolved_position, 8)
 		if candidate != Vector2.INF: resolved_position = candidate
+	resolved_position = _keep_enemy_clear_of_exterior_threshold(world, resolved_position)
 	enemy.global_position = resolved_position
 	enemy.debug_draw_vision = vision_debug_enabled
 	var configured_type := enemy_types[patrol_index] if patrol_index >= 0 and patrol_index < enemy_types.size() else "gunner"
@@ -748,27 +871,85 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	enemy.configure_combat(configured_type)
 	if enemy.has_method("set_combat_time_scale"): enemy.set_combat_time_scale(hostile_combat_time_scale)
 	if enemy.enemy_type == "gunner":
-		var enemy_weapon_ids := ["pistol", "smg", "lmg"]
+		var enemy_weapon_ids := ["glock_17_gen5_mos", "hk_mp5a5", "fn_m249_para"]
 		var enemy_weapon_id: String = enemy.default_weapon_id if not enemy.default_weapon_id.is_empty() else enemy_weapon_ids[patrol_index % enemy_weapon_ids.size()]
-		enemy.gun.set_gun_data(AttackCatalog.get_gun_data(enemy_weapon_id), true)
+		var enemy_build := PackedStringArray()
+		if patrol_index % 5 == 1 and enemy_weapon_id == "hk_mp5a5": enemy_build.append("aimpoint_micro_t2")
+		elif patrol_index % 7 == 3 and enemy_weapon_id == "glock_17_gen5_mos": enemy_build.append("surefire_x300u")
+		elif patrol_index % 6 == 2 and enemy_weapon_id == "fn_m249_para": enemy_build.append("vertical_grip")
+		enemy.gun.set_gun_data(AttackCatalog.get_gun_data(enemy_weapon_id, enemy_build), true)
 	if Progression.get_run_mode() == "new_game_plus":
 		enemy.reaction_time_min = maxf(0.08, enemy.reaction_time_min * 0.68)
 		enemy.reaction_time_max = maxf(enemy.reaction_time_min, enemy.reaction_time_max * 0.72)
 		enemy.reaction_time *= 0.70
 		enemy.chase_speed_multiplier *= 1.12
-	if patrol_index in fixed_sentry_indices:
-		enemy.configure_fixed_sentry()
-	elif patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size():
-		var patrol_offset: Vector2 = enemy_patrol_offsets[patrol_index]
-		if str(active_modifier.get("id", "standard")) != "standard":
-			var route_variant := posmod((Progression.current_mission_id + ":" + str(patrol_index) + ":" + str(active_modifier.id)).hash(), 3)
-			if route_variant == 1: patrol_offset = patrol_offset.rotated(PI * 0.5)
-			elif route_variant == 2: patrol_offset = -patrol_offset
-		var patrol_destination := resolved_position + patrol_offset
+	var patrol_offset := enemy_patrol_offsets[patrol_index] if patrol_index >= 0 and patrol_index < enemy_patrol_offsets.size() else Vector2.RIGHT.rotated(float(posmod(patrol_index, 4)) * PI * 0.5) * 40.0
+	if str(active_modifier.get("id", "standard")) != "standard":
+		var route_variant := posmod((Progression.current_mission_id + ":" + str(patrol_index) + ":" + str(active_modifier.id)).hash(), 3)
+		if route_variant == 1: patrol_offset = patrol_offset.rotated(PI * 0.5)
+		elif route_variant == 2: patrol_offset = -patrol_offset
+	var patrol_destination := _resolve_patrol_destination(world, resolved_position, patrol_offset, patrol_index)
+	enemy.configure_patrol(PackedVector2Array([resolved_position, patrol_destination]))
+
+func _resolve_patrol_destination(world: Node, origin: Vector2, authored_offset: Vector2, patrol_index: int) -> Vector2:
+	var base_offset := authored_offset
+	if base_offset.length() < 24.0: base_offset = base_offset.normalized() * 32.0 if base_offset.length_squared() > 0.01 else Vector2.RIGHT * 40.0
+	var candidates: Array[Vector2] = [base_offset, -base_offset, base_offset.rotated(PI * 0.5), base_offset.rotated(-PI * 0.5)]
+	var fallback_angle := float(posmod(patrol_index * 3 + 1, 8)) * PI * 0.25
+	for distance in [48.0, 40.0, 32.0, 24.0]:
+		candidates.append(Vector2.RIGHT.rotated(fallback_angle) * distance)
+		candidates.append(Vector2.RIGHT.rotated(fallback_angle + PI * 0.5) * distance)
+	var origin_room := str(world.get_tactical_room_id(origin)) if is_instance_valid(world) and world.has_method("get_tactical_room_id") else ""
+	var exterior_passage := Vector2.INF
+	if is_instance_valid(world) and world.has_method("get_door_specs"):
+		var door_specs: Array[Dictionary] = world.get_door_specs()
+		if not door_specs.is_empty(): exterior_passage = door_specs[-1].passage_center
+	for offset in candidates:
+		var candidate := origin + offset
 		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-			var patrol_candidate: Vector2 = world.get_nearest_walkable_position(patrol_destination, 8)
-			if patrol_candidate != Vector2.INF: patrol_destination = patrol_candidate
-		enemy.configure_patrol(PackedVector2Array([resolved_position, patrol_destination]))
+			candidate = world.get_nearest_walkable_position(candidate, 5)
+		if candidate == Vector2.INF: continue
+		if origin.distance_to(candidate) < 16.0: continue
+		if candidate.distance_to(exterior_passage) < 24.0: continue
+		if not origin_room.is_empty() and world.has_method("get_tactical_room_id") and str(world.get_tactical_room_id(candidate)) != origin_room: continue
+		if is_instance_valid(world) and world.has_method("get_navigation_path") and world.get_navigation_path(origin, candidate).is_empty(): continue
+		return candidate
+	# Narrow circulation strips need a grid-local search: snapping a distant
+	# authored offset to its nearest floor can otherwise pull the endpoint through
+	# a wall into the adjacent named room. Search the actor's own connected room
+	# before accepting any legacy fallback.
+	if is_instance_valid(world):
+		for radius_cells in range(2, 11):
+			for cell_offset in [Vector2(radius_cells * 8, 0), Vector2(-radius_cells * 8, 0), Vector2(0, radius_cells * 8), Vector2(0, -radius_cells * 8)]:
+				var local_candidate: Vector2 = origin + cell_offset
+				if world.has_method("is_navigation_position_walkable") and not world.is_navigation_position_walkable(local_candidate): continue
+				if local_candidate.distance_to(exterior_passage) < 24.0: continue
+				if world.has_method("get_tactical_room_id") and str(world.get_tactical_room_id(local_candidate)) != origin_room: continue
+				if world.has_method("get_navigation_path") and world.get_navigation_path(origin, local_candidate).is_empty(): continue
+				return local_candidate
+	# This is a defensive fallback for malformed legacy maps. New campaign maps
+	# are regression-tested to ensure this branch is never reached.
+	return origin + Vector2.RIGHT.rotated(fallback_angle) * 16.0
+
+func _keep_enemy_clear_of_exterior_threshold(world: Node, position: Vector2) -> Vector2:
+	if not is_instance_valid(world) or not world.has_method("get_door_specs"): return position
+	var door_specs: Array[Dictionary] = world.get_door_specs()
+	if door_specs.is_empty(): return position
+	var passage: Vector2 = door_specs[-1].passage_center
+	if position.distance_to(passage) >= 20.0: return position
+	var building: Rect2 = world.get_building_world_rect() if world.has_method("get_building_world_rect") else Rect2()
+	var inward := passage.direction_to(building.get_center())
+	if inward.length_squared() < 0.01: return position
+	for clearance in [28.0, 36.0, 44.0, 52.0]:
+		var candidate: Vector2 = passage + inward.normalized() * clearance
+		if world.has_method("get_nearest_walkable_position"):
+			var walkable: Vector2 = world.get_nearest_walkable_position(candidate, 2)
+			if walkable == Vector2.INF: continue
+			candidate = walkable
+		if candidate.distance_to(passage) < 22.0: continue
+		if world.has_method("is_navigation_position_walkable") and not world.is_navigation_position_walkable(candidate): continue
+		return candidate
+	return position
 
 func _toggle_vision_debug() -> void:
 	vision_debug_enabled = not vision_debug_enabled
@@ -779,33 +960,52 @@ func _toggle_vision_debug() -> void:
 
 func _toggle_screen_effects() -> void:
 	screen_effects_enabled = not screen_effects_enabled
-	var material := $RetroTreatment/Scanlines.material as ShaderMaterial
-	material.set_shader_parameter("enable_effect", screen_effects_enabled)
+	var material := _get_screen_effect_material()
+	if is_instance_valid(material): material.set_shader_parameter("enable_effect", screen_effects_enabled)
 	Settings.update_values({"screen_effects_enabled": screen_effects_enabled})
 	detail_label.text = "SCREEN FX: %s" % ("ON" if screen_effects_enabled else "OFF")
-
-func _toggle_hue_cycle() -> void:
-	hue_cycle_enabled = not hue_cycle_enabled
-	var material := $TileMap/ExteriorBackdrop.material as ShaderMaterial
-	material.set_shader_parameter("enable_cycle", hue_cycle_enabled)
-	detail_label.text = "HUE CYCLE: %s" % ("ON" if hue_cycle_enabled else "OFF")
 
 func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int, weapon_id: String, shooter: CollisionObject2D = null) -> void:
 	if phase != "combat" or run_over: return
 	var data := AttackCatalog.get_gun_data(weapon_id)
+	if is_instance_valid(shooter):
+		var shooter_gun = shooter.get("gun")
+		if is_instance_valid(shooter_gun) and shooter_gun.gun_data != null and shooter_gun.weapon_id == weapon_id: data = shooter_gun.gun_data
 	var bullet = BULLET_SCENE.instantiate()
 	bullet.global_position = origin
 	bullet.damage_impact.connect(_on_damage_impact)
 	if not enemy_owned and is_instance_valid(player) and is_instance_valid(player.gun):
 		bullet.shot_id = player.gun.current_shot_id
 		bullet.shot_resolved.connect(_on_player_shot_resolved)
-	bullet.setup(direction, enemy_owned, damage, weapon_id, origin, data.bullet_speed, shooter)
+	var resolved_damage := damage
+	var resolved_penetration := data.penetration_power
+	var blood_round := false
+	var blood_budget_per_projectile := 0
+	if roguelike_mode and not enemy_owned and is_instance_valid(blood_resource):
+		var shot_id: int = int(player.gun.current_shot_id) if is_instance_valid(player) and is_instance_valid(player.gun) else -1
+		var enhancement: Dictionary = blood_resource.consume_enhanced_round(shot_id, is_instance_valid(player.gun) and player.gun.ammo == 0)
+		blood_round = bool(enhancement.enhanced)
+		if blood_round:
+			resolved_damage = maxi(1, roundi(float(damage) * float(enhancement.damage_multiplier)))
+			resolved_penetration += float(enhancement.penetration_bonus)
+			# One trigger pull owns one finite return budget. Multi-pellet weapons
+			# divide it so a shotgun cannot duplicate blood for every pellet.
+			blood_budget_per_projectile = floori(float(enhancement.raw_blood_budget) / float(maxi(1, data.pellet_count)))
+	bullet.setup(direction, enemy_owned, resolved_damage, weapon_id, origin, data.bullet_speed, shooter, resolved_penetration, data.property_damage, data.damage_falloff_start, data.damage_falloff_end, data.minimum_damage_ratio)
+	# The fire event precedes the projectile event. Color the same-frame muzzle
+	# only after the gameplay ledger actually paid for this trigger pull.
+	if not enemy_owned and player_muzzle_flash != null:
+		var active_flash = player_muzzle_flash.get_ref()
+		if is_instance_valid(active_flash): active_flash.set_blood_enhanced(blood_round)
+	if blood_round and bullet.has_method("set_blood_enhanced"): bullet.set_blood_enhanced(true, blood_budget_per_projectile, 1.38)
 	if enemy_owned and bullet.has_method("set_combat_time_scale"): bullet.set_combat_time_scale(hostile_combat_time_scale)
 	if not RuntimeBudget.try_add("bullet", bullet, self): return
 
 func _on_player_shot_resolved(shot_id: int, outcome: String, lethal: bool, _weapon_id: String) -> void:
 	if not player_shot_records.has(shot_id): return
 	var record: Dictionary = player_shot_records[shot_id]
+	if outcome == "enemy" and lethal and roguelike_mode and is_instance_valid(blood_resource):
+		blood_resource.perks.on_kill(player.gun, blood_resource.skill_cooldowns, str(record.weapon_id))
 	record.resolved = int(record.resolved) + 1
 	if outcome == "enemy":
 		record.hit = true
@@ -827,6 +1027,7 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	remaining_enemies = maxi(0, remaining_enemies - 1)
 	mission_tracker.record_enemy_eliminated()
 	combo += 1
+	best_combo = maxi(best_combo, combo)
 	combo_timer = 2.2
 	_reward_combat_focus(pending_death_attack_id, pending_death_hit_zone, combo)
 	trauma_camera.trigger_kill_effect(0.72, "red")
@@ -838,17 +1039,22 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	RuntimeBudget.add_persistent("corpse", corpse, self)
 	_show_scene_consequence("BODY +25 // BIOLOGICAL LOAD %s" % ("EXTREME" if pending_death_blood_power >= 1.7 else ("HIGH" if pending_death_blood_power >= 1.2 else "STANDARD")))
 	var pool_offset := pending_death_hit_position - pos if pending_death_hit_position != Vector2.ZERO else Vector2.ZERO
-	blood_system.spawn_death_pool(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id)
+	if pending_death_blood_enhanced:
+		blood_system.spawn_death_burst_budgeted(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id, pending_death_blood_budget_raw)
+	else:
+		blood_system.spawn_death_burst(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id)
 	Events.publish_casualty(pos, pending_death_direction)
 	if is_instance_valid(defeated_enemy) and defeated_enemy.enemy_type == "gunner":
 		var remaining_rounds: int = defeated_enemy.gun.ammo
 		# The weapon is physical evidence even when the enemy emptied its magazine.
-		_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, remaining_rounds)
+		_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, remaining_rounds, defeated_enemy.gun.gun_data.installed_attachments if defeated_enemy.gun.gun_data != null else PackedStringArray())
 	pending_death_style = "firearm"
 	pending_death_hit_zone = "torso"
 	pending_death_hit_position = Vector2.ZERO
 	pending_death_attack_id = "pistol"
 	pending_death_travel_distance = 0.0
+	pending_death_blood_enhanced = false
+	pending_death_blood_budget_raw = -1
 	_update_combat_objective_hud()
 
 func _get_mission_profile() -> MissionProfile:
@@ -910,74 +1116,7 @@ func _get_nearby_noise_lure() -> NoiseLure:
 	return nearest
 
 func _on_world_interaction_requested() -> void:
-	if phase == "cleanup":
-		if is_instance_valid(player.dragged_restoration_prop):
-			player.attempt_restoration_prop_drag()
-			detail_label.text = "OBJECT RELEASED // GUIDE IT INTO THE CYAN OUTLINE"
-			return
-		if is_instance_valid(player.dragged_corpse):
-			var disposal := _get_nearby_disposal()
-			if is_instance_valid(disposal) and disposal.dispose(player.dragged_corpse):
-				player.dragged_corpse = null
-				detail_label.text = "BODY DISPOSED // %s" % disposal.disposal_type.to_upper()
-				return
-			player.attempt_corpse_drag()
-			return
-		# Body handling is the primary E interaction. In particular it must win
-		# over a nearby sink/counter; otherwise a corpse beside architecture can
-		# never receive the packaging action.
-		var corpse: Node2D = player.get_nearby_draggable_corpse()
-		if is_instance_valid(corpse):
-			if corpse.is_bagged():
-				player.attempt_corpse_drag()
-				detail_label.text = "BODY READY FOR EXTRACTION"
-			else:
-				var seal_steps := 2 if Progression.has_upgrade_perk("rapid_seal") else 1
-				for step in range(seal_steps):
-					if corpse.is_bagged(): break
-					corpse.apply_cleanup_tool("body_bag")
-				detail_label.text = "BODY BAGGED" if corpse.is_bagged() else "PACKAGING BODY // PRESS E AGAIN"
-			return
-		if _is_player_near_sink():
-			if player.rinse_mop(): detail_label.text = "MOP RINSED // CLEAN WATER"
-			else: detail_label.text = "MOP ALREADY CLEAN"
-			return
-		var displaced_prop: Node2D = player.get_nearby_restoration_prop()
-		if is_instance_valid(displaced_prop) and player.attempt_restoration_prop_drag():
-			detail_label.text = "OBJECT SECURED // RETURN IT TO THE CYAN OUTLINE"
-			return
-		var loose_evidence := _get_nearby_loose_evidence()
-		if is_instance_valid(loose_evidence):
-			var collected := 0
-			# One deliberate interaction clears a local evidence cluster. Requiring
-			# individual casing pickup adds repetition without adding decisions.
-			var collect_radius := 38.0 if Progression.has_upgrade_perk("field_collector") else 30.0
-			var collect_limit := 18 if Progression.has_upgrade_perk("field_collector") else 12
-			var nearby_evidence := CleanupRegistry.get_targets_in_radius(player.global_position, collect_radius, collect_limit, PackedStringArray(["shell", "dropped_weapon", "debris"]))
-			for evidence in nearby_evidence:
-				if not is_instance_valid(evidence) or not evidence.has_method("clean_step"): continue
-				for step in range(4):
-					if not is_instance_valid(evidence) or evidence.is_queued_for_deletion(): break
-					evidence.clean_step()
-				collected += 1
-			detail_label.text = "EVIDENCE BATCH // %d SECURED" % collected
-			return
-		var secret := _get_nearby_scene_secret()
-		if is_instance_valid(secret):
-			var result: Dictionary = secret.interact(Input.is_key_pressed(KEY_SHIFT))
-			if str(result.get("type", "")) == "clue": clues_collected += 1
-			elif bool(result.get("stolen", false)): valuables_stolen += 1
-			else: valuables_secured += 1
-			detail_label.text = "CLUE RECOVERED" if str(result.get("type", "")) == "clue" else ("VALUABLE POCKETED" if bool(result.get("stolen", false)) else "VALUABLE SECURED")
-			return
-		var furniture := _get_nearby_furniture()
-		if is_instance_valid(furniture) and furniture.interact():
-			if furniture is ResettableFurniture:
-				furniture_restored += 1
-				detail_label.text = "FURNITURE RESTORED // %d/3" % furniture_restored
-			return
-		return
-	if phase != "combat" or run_over: return
+	if run_over: return
 	var device := _get_nearby_security_device()
 	if is_instance_valid(device):
 		device.interact(player)
@@ -1002,22 +1141,132 @@ func _on_security_disabled(_camera: SecurityCamera) -> void:
 
 func _update_combat_objective_hud() -> void:
 	if phase != "combat" or run_over: return
+	if roguelike_mode and is_instance_valid(room_run):
+		hud.set_combat_counts(room_run.get_active_enemy_count(), 0, mission_tracker.alarm_triggers)
+		return
 	status_label.text = "MISSION // " + mission_tracker.profile.display_name if mission_tracker.profile != null else "MISSION // " + level_title
 	var enemies_left := mission_tracker.get_required_eliminations() - mission_tracker.enemies_eliminated
 	var cameras_left := mission_tracker.get_required_security_shutdowns() - mission_tracker.security_shutdowns
 	hud.set_combat_counts(enemies_left, cameras_left, mission_tracker.alarm_triggers)
 
-func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: int) -> void:
+func _on_blood_stance_changed(active: bool) -> void:
+	if not roguelike_mode or not is_instance_valid(blood_resource): return
+	blood_resource.set_stance_active(active)
+	var presenter := get_node_or_null("/root/NoirPresenter")
+	if is_instance_valid(presenter) and presenter.has_method("set_blood_stance_amount"): presenter.set_blood_stance_amount(1.0 if active else 0.0)
+	if is_instance_valid(combat_feedback): combat_feedback.show_flash(Color(0.55, 0.0, 0.08, 0.08 if active else 0.04), 0.08)
+
+func _on_blood_skill_requested(skill_id: String) -> void:
+	if not roguelike_mode or not is_instance_valid(blood_resource): return
+	if not blood_resource.request_skill(skill_id):
+		hud.show_banner("BLOOD REQUIRED // %d" % roundi(blood_resource.get_skill_cost(skill_id)), Color("a8a8a8"))
+
+func _on_blood_heal_requested() -> void:
+	if not roguelike_mode or not is_instance_valid(blood_resource) or not is_instance_valid(player): return
+	if blood_resource.consume_heal(player):
+		hud.show_banner("TRANSFUSION // +HEALTH", Color("d10b32"))
+		trauma_camera.add_trauma(0.08)
+	else:
+		hud.show_banner("BLOOD BAG UNAVAILABLE", Color("a8a8a8"))
+
+func _on_blood_resource_changed(current: float, maximum: float, active: bool) -> void:
+	if is_instance_valid(hud) and is_instance_valid(blood_resource): hud.set_blood_resource(current, maximum, active, blood_resource.get_cooldown_ratios())
+
+func _on_blood_skill_triggered(skill_id: String) -> void:
+	if not is_instance_valid(player): return
+	match skill_id:
+		"q":
+			player.perform_blood_dash(34.0)
+			trauma_camera.add_trauma(0.16)
+			hud.show_banner("Q // CRIMSON STEP", Color("d10b32"))
+		"e":
+			var pulse_radius := 52.0
+			for enemy in enemies_container.get_children():
+				if not is_instance_valid(enemy) or bool(enemy.get("is_dead")): continue
+				var distance := player.global_position.distance_to(enemy.global_position)
+				if distance > pulse_radius: continue
+				var direction := player.global_position.direction_to(enemy.global_position)
+				pending_death_direction = direction
+				pending_death_knockback = 18.0
+				pending_death_blood_power = 0.85
+				pending_death_attack_id = "blood_pulse"
+				if enemy.has_method("apply_lifecycle_impact"): enemy.apply_lifecycle_impact(direction, 16.0, "torso")
+				enemy.take_damage(28, player.global_position)
+				blood_system.spawn_micro_drop(enemy.global_position, 0.48, direction)
+			trauma_camera.add_trauma(0.34)
+			hud.show_banner("E // ARTERIAL PULSE", Color("d10b32"))
+		"r":
+			player.grant_blood_guard(55)
+			trauma_camera.add_trauma(0.12)
+			hud.show_banner("R // COAGULATE", Color("d10b32"))
+
+func _on_rogue_room_entered(room_id: String, index: int, enemy_count: int) -> void:
+	status_label.text = "ROOM %02d // %s" % [index, room_id.to_upper().replace("_", " ")]
+	detail_label.text = "%d HOSTILES // DOORS LIVE" % enemy_count
+	hud.show_banner("ROOM %02d // CONTACT" % index, Color("f4f4f4"))
+	hud.set_combat_counts(enemy_count, 0, 0)
+
+func _on_rogue_room_cleared(_room_id: String, index: int) -> void:
+	# Room clears must preserve combat flow. Permanent build choices belong in a
+	# future safe intermission, never in a modal that freezes the arena.
+	if is_instance_valid(room_run): room_run.complete_reward()
+	if run_over: return
+	hud.show_banner("ROOM %02d CLEARED // KEEP MOVING" % index, Color("f4f4f4"))
+
+func _on_rogue_run_cleared(room_count: int) -> void:
+	if run_over: return
+	run_over = true
+	blood_resource.set_stance_active(false)
+	combat_focus_active = false
+	combat_focus_time_remaining = 0.0
+	_set_hostile_combat_time_scale(1.0)
+	var target_time := mission_tracker.profile.target_duration_seconds if mission_tracker.profile != null else 480.0
+	var pace_ratio := elapsed / maxf(1.0, target_time)
+	if mission_tracker.alarm_triggers == 0 and pace_ratio <= 1.0:
+		final_grade = "S"
+	elif mission_tracker.alarm_triggers <= 1 and pace_ratio <= 1.25:
+		final_grade = "A"
+	elif pace_ratio <= 1.6:
+		final_grade = "B"
+	else:
+		final_grade = "C"
+	var time_bonus := roundi(clampf(1.0 - pace_ratio, 0.0, 1.0) * 600.0)
+	final_score = enemies_killed * 125 + room_count * 300 + time_bonus + precision_reward_bonus
+	if mission_tracker.alarm_triggers == 0: final_score += 250
+	var report := {
+		"mode": "roguelike",
+		"rooms_cleared": room_count,
+		"best_combo": best_combo,
+		"blood_build": blood_resource.build_id,
+		"combat_perks": blood_resource.perks.learned.duplicate(),
+		"kills": enemies_killed,
+		"shots": combat_shots_fired,
+		"alarms": mission_tracker.alarm_triggers,
+		"property_damage": mission_tracker.property_damage,
+		"combat_route": roundi(combat_route_distance),
+		"combat_seconds": elapsed,
+		"dominant_weapon": mission_tracker.get_dominant_weapon(),
+		"traces": ["%d ROOMS CLEARED" % room_count],
+	}
+	if record_progress and mission_tracker.profile != null:
+		Progression.record_roguelike_floor(mission_tracker.profile.mission_id, final_score, final_grade, elapsed, report, _capture_run_resources())
+	if is_instance_valid(player): player.set_controls_enabled(false)
+	status_label.text = "DESCENT COMPLETE" if Progression.run_session.is_complete() else "FLOOR CLEARED"
+	detail_label.text = "GRADE %s // %04d // %d ROOMS // ENTER REPORT" % [final_grade, final_score, room_count]
+	hud.show_banner("THE FLOOR REMEMBERS YOU", Color("d10b32"))
+	_show_run_end_prompt("DESCENT COMPLETE" if Progression.run_session.is_complete() else "FLOOR CLEARED // GRADE %s" % final_grade, true)
+
+func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: int, attachment_ids := PackedStringArray()) -> void:
 	# Merge coincident drops to keep evidence readable without ever deleting it.
 	for existing in get_tree().get_nodes_in_group("weapon_pickup"):
-		if existing is WeaponPickup and existing.weapon_id == weapon_id and existing.global_position.distance_to(world_position) <= 9.0:
+		if existing is WeaponPickup and existing.weapon_id == WeaponPlatformCatalog.canonical_id(weapon_id) and existing.attachment_ids == attachment_ids and existing.global_position.distance_to(world_position) <= 9.0:
 			existing.absorb_rounds(rounds)
 			return
 	var pickup = WEAPON_PICKUP_SCENE.instantiate()
 	if not RuntimeBudget.add_persistent("weapon_pickup", pickup, self): return
 	pickup.global_position = world_position + Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
 	pickup.rotation = randf_range(-PI, PI)
-	pickup.setup(weapon_id, rounds)
+	pickup.setup(weapon_id, rounds, attachment_ids)
 
 func _spawn_ammo_pickup(index: int) -> void:
 	var pickup = AMMO_PICKUP_SCENE.instantiate()
@@ -1037,7 +1286,7 @@ func _spawn_level_landmarks(world: Node) -> void:
 	if not is_instance_valid(world): return
 	var variant: String = str(world.get("layout_variant"))
 	var landmark_data := {
-		"nightclub": ["dj_booth", Vector2(200, 78), Color("ff2a8a")],
+		"nightclub": ["dj_booth", Vector2(244, 36), Color("d13c80")],
 		"sandwich_shop": ["diner_counter", Vector2(260, 76), Color("ff8748")],
 		"tactical_lab": ["training_target", Vector2(260, 100), Color("50d9ff")],
 		# Keep the crane clear of the widened three-cell service doorway.  Its old
@@ -1048,7 +1297,9 @@ func _spawn_level_landmarks(world: Node) -> void:
 		"penthouse": ["city_window", Vector2(334, 80), Color("ffd05a")],
 		"cold_storage": ["freezer_fans", Vector2(192, 104), Color("72e9ff")],
 		"casino_floor": ["roulette", Vector2(192, 112), Color("ffcb49")],
-		"police_archive": ["evidence_wall", Vector2(196, 104), Color("4d8cff")],
+		# The evidence wall is deliberately north of the central archive threshold;
+		# its old footprint overlapped the widened doorway despite the door opening.
+		"police_archive": ["evidence_wall", Vector2(196, 48), Color("4d8cff")],
 		"slaughterhouse": ["conveyor", Vector2(260, 108), Color("ff304c")],
 		"broadcast_tower": ["broadcast_console", Vector2(192, 112), Color("61ff9a")],
 		"last_call": ["broken_dj", Vector2(200, 80), Color("ff165f")],
@@ -1074,26 +1325,37 @@ func _configure_run_modifier() -> void:
 			for child in lighting.get_children():
 				if child is PointLight2D: child.energy *= 1.35
 
-func _on_weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int) -> void:
+func _on_weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int, attachment_ids: PackedStringArray) -> void:
 	if phase != "combat" or run_over: return
 	var thrown_weapon := THROWN_WEAPON_SCENE.instantiate()
-	if not RuntimeBudget.try_add("thrown_weapon", thrown_weapon, self): return
+	# This is player inventory in flight, not disposable visual budget.
+	if not RuntimeBudget.add_persistent("thrown_weapon", thrown_weapon, self): return
+	if roguelike_mode and is_instance_valid(blood_resource): blood_resource.perks.on_throw()
 	thrown_weapon.global_position = origin
-	thrown_weapon.setup(direction, weapon_id, rounds)
+	thrown_weapon.setup(direction, weapon_id, rounds, attachment_ids)
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool, hit_zone: String) -> void:
 	_on_damage_impact(DamageContext.create(hit_position, direction, damage, weapon_id, travel_distance, lethal, hit_zone))
 
 func _on_damage_impact(context: DamageContext) -> void:
-	blood_system.emit_context(context)
+	# Only living hostile flesh feeds the roguelike blood economy. Player hits,
+	# player death and corpse overkill retain impact feedback without creating a
+	# self-recycling blood source under the player.
+	if is_instance_valid(context.target) and context.target.is_in_group("enemy"):
+		blood_system.emit_context(context)
 	var hit_position := context.hit_position
 	var direction := context.direction
 	var weapon_id := context.weapon_id
 	var lethal := context.lethal
+	if is_instance_valid(context.target) and context.target != player:
+		var feedback_kind := "armour" if context.armor_absorbed >= float(context.damage) * 0.42 else ("head" if context.hit_zone == "head" else "flesh")
+		hud.show_hit_confirmation(feedback_kind, lethal)
+		combat_feedback.trigger_hit_confirmation(feedback_kind, lethal)
 	if is_instance_valid(context.target) and context.target.has_method("apply_lifecycle_impact"):
 		var target_rig := "hound" if context.target.is_in_group("enemy") and str(context.target.get("actor_type")) == "dog" else "human"
 		var physical := RAGDOLL_IMPACT.resolve(weapon_id, context.travel_distance, context.hit_zone, target_rig)
-		context.target.apply_lifecycle_impact(direction, float(physical.limb_force) * 0.58, context.hit_zone)
+		var force_scale := 0.66 if context.blood_enhanced else 0.58
+		context.target.apply_lifecycle_impact(direction, float(physical.limb_force) * force_scale, context.hit_zone)
 	if lethal:
 		var data := AttackCatalog.get_gun_data(weapon_id)
 		if context.target == player:
@@ -1110,14 +1372,28 @@ func _on_damage_impact(context: DamageContext) -> void:
 			}
 		else:
 			pending_death_direction = direction
-			pending_death_knockback = data.knockback
-			pending_death_blood_power = data.blood_power
-			pending_death_style = data.death_style
+			pending_death_knockback = data.knockback * (1.12 if context.blood_enhanced else 1.0)
+			pending_death_blood_power = data.blood_power * (1.48 if context.blood_enhanced else 1.0)
+			if context.blood_enhanced:
+				var weapon_class := str(data.weapon_class)
+				pending_death_style = "firearm_gib" if context.hit_zone == "head" or weapon_class in ["shotgun", "sniper", "lmg"] else "firearm_torn"
+			else:
+				pending_death_style = data.death_style
 			pending_death_hit_zone = context.hit_zone
 			pending_death_hit_position = hit_position
 			pending_death_attack_id = weapon_id
 			pending_death_travel_distance = context.travel_distance
+			pending_death_blood_enhanced = context.blood_enhanced
+			pending_death_blood_budget_raw = context.blood_budget_raw
+			# A lethal impact transfers ownership of the remaining finite blood
+			# ledger to the terminal burst spawned by _on_enemy_died. Clear the
+			# projectile context now so a through-shot cannot reuse the same mass on
+			# every downstream body after the death signal returns.
+			if context.blood_enhanced: context.blood_budget_raw = 0
 		_trigger_hit_stop(data.hit_stop)
+	elif is_instance_valid(context.target) and context.target != player:
+		var wound_data := AttackCatalog.get_gun_data(weapon_id)
+		_trigger_hit_stop(wound_data.hit_stop * clampf(0.20 + context.damage_ratio * 0.32, 0.20, 0.42))
 
 func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction: Vector2, melee_type: String, lethal: bool) -> void:
 	if not is_instance_valid(target) or target.is_dead: return
@@ -1170,7 +1446,10 @@ func _update_combat_focus(delta: float) -> void:
 	var focus_input_down := Input.is_action_pressed("combat_focus")
 	var focus_just_pressed := focus_input_down and not combat_focus_input_was_down
 	combat_focus_input_was_down = focus_input_down
-	var focus_allowed := phase == "combat" and not run_over and not transitioning_cleanup
+	# Focus is a finite combat resource.  The player may walk around the exterior
+	# staging area before deployment, but that is not an active combat window and
+	# must never consume a charge (or slow dormant room enemies).
+	var focus_allowed := phase == "combat" and not run_over and deployment_started and not entry_loadout_active
 	if not focus_allowed:
 		combat_focus_active = false
 		combat_focus_time_remaining = 0.0
@@ -1189,10 +1468,15 @@ func _update_combat_focus(delta: float) -> void:
 	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active, combat_focus_charges, COMBAT_FOCUS_MAX_CHARGES, combat_focus_recharge_progress)
 
 func _update_focus_screen_effect() -> void:
+	var screen_material := _get_screen_effect_material()
+	if is_instance_valid(screen_material): screen_material.set_shader_parameter("focus_amount", combat_focus_visual_amount)
+
+func _get_screen_effect_material() -> ShaderMaterial:
+	var presenter := get_node_or_null("/root/NoirPresenter")
+	if is_instance_valid(presenter) and presenter.has_method("get_screen_material"):
+		return presenter.get_screen_material() as ShaderMaterial
 	var overlay := get_node_or_null("RetroTreatment/Scanlines") as ColorRect
-	if not is_instance_valid(overlay) or overlay.material is not ShaderMaterial: return
-	var screen_material := overlay.material as ShaderMaterial
-	screen_material.set_shader_parameter("focus_amount", combat_focus_visual_amount)
+	return overlay.material as ShaderMaterial if is_instance_valid(overlay) and overlay.material is ShaderMaterial else null
 
 func _set_hostile_combat_time_scale(value: float) -> void:
 	var next_scale := clampf(value, 0.2, 1.0)
@@ -1221,6 +1505,8 @@ func _reward_combat_focus(attack_id: String, hit_zone: String, current_combo: in
 	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active, combat_focus_charges, COMBAT_FOCUS_MAX_CHARGES, combat_focus_recharge_progress)
 
 func _on_player_died(source_position := Vector2.ZERO) -> void:
+	if run_over: return
+	blood_resource.set_stance_active(false)
 	if is_instance_valid(playtest_telemetry):
 		var world := get_node_or_null("TileMap")
 		var room_id: String = str(world.get_tactical_room_id(player.global_position)) if is_instance_valid(world) and world.has_method("get_tactical_room_id") else "unknown"
@@ -1237,6 +1523,7 @@ func _on_player_died(source_position := Vector2.ZERO) -> void:
 		if absf(delta.x) > absf(delta.y): attack_direction = "EAST" if delta.x > 0.0 else "WEST"
 		else: attack_direction = "SOUTH" if delta.y > 0.0 else "NORTH"
 	detail_label.text = "%s FROM %s // R TO RESTART" % [last_player_death_cause, attack_direction]
+	_show_run_end_prompt("YOU DIED // ATTACK FROM %s" % attack_direction, false)
 
 func _spawn_player_death_ragdoll(source_position: Vector2) -> void:
 	if not is_instance_valid(player) or is_instance_valid(player_death_corpse): return
@@ -1281,15 +1568,7 @@ func _spawn_player_death_ragdoll(source_position: Vector2) -> void:
 		living_pose
 	)
 	RuntimeBudget.add_persistent("player_ragdoll", corpse, self)
-	corpse.set_cleanup_tracking(false)
 	player_death_corpse = corpse
-	blood_system.spawn_death_pool(
-		player.global_position,
-		float(death.get("blood_power", 1.0)),
-		Vector2.ZERO,
-		death.get("direction", Vector2.RIGHT),
-		str(death.get("attack_id", "fist"))
-	)
 	player.collision_layer = 0
 	player.collision_mask = 0
 	player.visible = false
@@ -1306,16 +1585,10 @@ func _show_flash(color: Color, duration: float) -> void:
 
 func _exit_tree() -> void:
 	CombatDirector.reset_kill_zones()
+	CleanupRegistry.reset()
 	RuntimeBudget.reset_session()
 	ENEMY_SCRIPT.clear_shared_caches()
 	EnemyNavigation.clear_shared_cache()
-	for saved in ultraviolet_materials.values():
-		var evidence := (saved.node as WeakRef).get_ref() as CanvasItem
-		if is_instance_valid(evidence):
-			evidence.material = saved.material
-			if evidence.has_method("set_ultraviolet_visible"): evidence.set_ultraviolet_visible(false)
-	ultraviolet_materials.clear()
-	ultraviolet_shader_material = null
 	if is_instance_valid(combat_feedback): combat_feedback.reset()
 	# Procedural streams are cached only for the lifetime of an active level.
 	ProceduralAudioLibrary.clear_cache()
@@ -1323,448 +1596,10 @@ func _exit_tree() -> void:
 	# strong ImageTexture references here leaked one GPU texture per HUD state
 	# across repeated retries and scene transitions.
 	PixelIconFactory.clear_cache()
-
-func _enter_cleanup_phase() -> void:
-	phase = "cleanup"
-	combat_focus_active = false
-	combat_focus_time_remaining = 0.0
-	_set_hostile_combat_time_scale(1.0)
-	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
-	if blood_system.has_method("settle_pixel_blood_for_cleanup"): blood_system.settle_pixel_blood_for_cleanup()
-	hud.set_phase("cleanup")
-	player.set_cleanup_mode(true)
-	if player.has_method("set_controls_enabled"): player.set_controls_enabled(true)
-	for bullet in get_tree().get_nodes_in_group("bullet"): bullet.queue_free()
-	player_shot_records.clear()
-	for corpse_node in get_tree().get_nodes_in_group("corpse"):
-		if is_instance_valid(corpse_node) and corpse_node.has_method("enter_cleanup_stable_state"):
-			corpse_node.enter_cleanup_stable_state()
-	# Freeze every physical decoration at the combat/cleanup boundary. Displaced
-	# objects remain draggable; untouched ones become immutable fixtures.
-	for prop_node in get_tree().get_nodes_in_group("destructible_prop"):
-		if is_instance_valid(prop_node) and prop_node.has_method("enter_cleanup_restore_state"):
-			prop_node.enter_cleanup_restore_state()
-	status_label.text = "CLEANUP REQUIRED"
-	detail_label.text = "GET CLOSE // HOLD LMB"
-	hud.set_objective("OBJECTIVES COMPLETE // ERASE ALL EVIDENCE")
-	last_cleanup_risk = CleanupRegistry.get_remaining_value()
-	var contract := ContractCatalog.get_contract(Progression.get_current_contract_id())
-	cleanup_time_remaining = float(contract.get("cleanup_time", mission_tracker.profile.cleanup_pressure_seconds if mission_tracker.profile != null else 0.0))
-	if cleanup_time_remaining > 0.0: cleanup_time_remaining *= lerpf(1.0, 0.72, float(Progression.get_heat()) / 100.0)
-	if Progression.get_run_mode() == "new_game_plus": cleanup_time_remaining *= 0.82
-	if str(active_modifier.get("id", "standard")) == "forensic_nightmare": cleanup_time_remaining *= 0.78
-	cleanup_pressure_active = cleanup_time_remaining > 0.0
-	cleanup_timed_out = false
-	if cleanup_pressure_active: detail_label.text = "POLICE ETA %02d:%02d // GET CLOSE // HOLD LMB" % [floori(cleanup_time_remaining / 60.0), floori(fmod(cleanup_time_remaining, 60.0))]
-	if is_instance_valid(extraction_zone): extraction_zone.set_active(true)
-	for disposal in corpse_disposals: disposal.set_active(true)
-	_spawn_cleanup_opportunities()
-
-func _spawn_corpse_disposals() -> void:
-	corpse_disposals.clear()
-	for index in range(disposal_positions.size()):
-		var disposal := CORPSE_DISPOSAL.new() as CorpseDisposal
-		add_child(disposal)
-		disposal.global_position = _map_authored_position(disposal_positions[index])
-		var kind := disposal_types[index] if index < disposal_types.size() else "dumpster"
-		disposal.setup(kind, 2 if kind == "incinerator" else 3)
-		corpse_disposals.append(disposal)
-
-func _spawn_cleanup_opportunities() -> void:
-	if cleanup_opportunities_spawned: return
-	cleanup_opportunities_spawned = true
-	var world := get_node_or_null("TileMap")
-	var secrets_are_authored := not cleanup_secret_positions.is_empty()
-	var furniture_is_authored := not cleanup_furniture_positions.is_empty()
-	var authored_secrets := cleanup_secret_positions
-	var authored_furniture := cleanup_furniture_positions
-	if authored_secrets.is_empty(): authored_secrets = PackedVector2Array([player.global_position + Vector2(54, -34), player.global_position + Vector2(92, 30), player.global_position + Vector2(-48, -42)])
-	if authored_furniture.is_empty(): authored_furniture = PackedVector2Array([player.global_position + Vector2(72, 62), player.global_position + Vector2(-62, 48), player.global_position + Vector2(112, -54)])
-	for index in range(authored_secrets.size()):
-		var spawn_position: Vector2 = _map_authored_position(authored_secrets[index]) if secrets_are_authored else authored_secrets[index]
-		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-			spawn_position = world.get_nearest_walkable_position(spawn_position, 8)
-			if spawn_position == Vector2.INF: continue
-		var secret := SCENE_SECRET.new() as SceneSecret
-		add_child(secret)
-		secret.global_position = spawn_position
-		secret.setup(cleanup_secret_types[index] if index < cleanup_secret_types.size() else ("clue" if index < 2 else "valuable"))
-	for spawn_position in authored_furniture:
-		var resolved_position: Vector2 = _map_authored_position(spawn_position) if furniture_is_authored else spawn_position
-		if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-			resolved_position = world.get_nearest_walkable_position(resolved_position, 8)
-			if resolved_position == Vector2.INF: continue
-		var furniture := RESETTABLE_FURNITURE.new() as ResettableFurniture
-		add_child(furniture)
-		furniture.global_position = resolved_position
-		furniture.setup(randf_range(-0.65, 0.65))
-
-func _get_nearby_scene_secret() -> SceneSecret:
-	var nearest: SceneSecret
-	var nearest_distance := 20.0 * 20.0
-	for node in get_tree().get_nodes_in_group("scene_secret"):
-		if not node is SceneSecret: continue
-		var distance := player.global_position.distance_squared_to(node.global_position)
-		if distance <= nearest_distance: nearest = node; nearest_distance = distance
-	return nearest
-
-func _get_nearby_furniture() -> Node2D:
-	var nearest: Node2D
-	var nearest_distance := 22.0 * 22.0
-	for node in get_tree().get_nodes_in_group("resettable_furniture"):
-		if not node is Node2D or not node.has_method("interact") or not node.has_method("get_interaction_prompt"): continue
-		if node.has_method("is_displaced") and node.is_displaced(): continue
-		if node is ResettableFurniture and node.restored: continue
-		var distance := player.global_position.distance_squared_to(node.global_position)
-		if distance <= nearest_distance: nearest = node; nearest_distance = distance
-	return nearest
-
-func _get_nearby_loose_evidence() -> Node2D:
-	if not is_instance_valid(player): return null
-	var candidates := CleanupRegistry.get_targets_in_radius(player.global_position, 24.0, 1, PackedStringArray(["shell", "dropped_weapon", "debris"]))
-	return candidates[0] if not candidates.is_empty() else null
-
-func _get_nearby_disposal() -> CorpseDisposal:
-	if not is_instance_valid(player): return null
-	var nearest: CorpseDisposal
-	var nearest_distance := 22.0 * 22.0
-	for disposal in corpse_disposals:
-		if not is_instance_valid(disposal) or not disposal.can_accept(): continue
-		var distance := player.global_position.distance_squared_to(disposal.global_position)
-		if distance <= nearest_distance:
-			nearest = disposal
-			nearest_distance = distance
-	return nearest
-
-func _is_player_near_sink() -> bool:
-	var tile_world := get_node_or_null("TileMap")
-	return is_instance_valid(tile_world) and tile_world.has_method("is_near_sink") and tile_world.is_near_sink(player.global_position)
-
-func _update_ultraviolet_mode() -> void:
-	var active: bool = phase == "cleanup" and is_instance_valid(player) and bool(player.ultraviolet_active)
-	if active:
-		if ultraviolet_shader_material == null:
-			var shader := Shader.new()
-			shader.code = "shader_type canvas_item; render_mode unshaded; void fragment(){ vec4 base = COLOR; float strength = max(base.r, max(base.g, base.b)); COLOR = vec4(0.20, 1.0, 0.46, base.a * max(0.55, strength)); }"
-			ultraviolet_shader_material = ShaderMaterial.new()
-			ultraviolet_shader_material.shader = shader
-		var illuminated := {}
-		for evidence in get_tree().get_nodes_in_group("blood_evidence"):
-			if evidence.is_in_group("pixel_blood_chunk"):
-				_update_pixel_blood_ultraviolet(evidence)
-				continue
-			if not evidence is CanvasItem or not _is_inside_ultraviolet_beam(evidence): continue
-			var instance_id := evidence.get_instance_id()
-			illuminated[instance_id] = true
-			if not ultraviolet_materials.has(instance_id):
-				ultraviolet_materials[instance_id] = {"node": weakref(evidence), "material": evidence.material}
-			evidence.material = ultraviolet_shader_material
-			if evidence.has_method("set_ultraviolet_visible"): evidence.set_ultraviolet_visible(true)
-		var no_longer_visible: Array[int] = []
-		for instance_id in ultraviolet_materials:
-			if illuminated.has(instance_id): continue
-			var saved: Dictionary = ultraviolet_materials[instance_id]
-			var old_evidence := (saved.node as WeakRef).get_ref() as CanvasItem
-			if is_instance_valid(old_evidence):
-				old_evidence.material = saved.material
-				if old_evidence.has_method("set_ultraviolet_visible"): old_evidence.set_ultraviolet_visible(false)
-			no_longer_visible.append(instance_id)
-		for instance_id in no_longer_visible: ultraviolet_materials.erase(instance_id)
-	elif ultraviolet_was_active:
-		for chunk in get_tree().get_nodes_in_group("pixel_blood_chunk"):
-			if is_instance_valid(chunk) and chunk.has_method("clear_ultraviolet"): chunk.clear_ultraviolet()
-		for saved in ultraviolet_materials.values():
-			var evidence := (saved.node as WeakRef).get_ref() as CanvasItem
-			if is_instance_valid(evidence):
-				evidence.material = saved.material
-				if evidence.has_method("set_ultraviolet_visible"): evidence.set_ultraviolet_visible(false)
-		ultraviolet_materials.clear()
-	ultraviolet_was_active = active
-
-func _update_pixel_blood_ultraviolet(chunk: Node) -> void:
-	if player.ultraviolet_scan_time > 0.0:
-		var scan_radius := 82.0 + Progression.get_upgrade_level("scanner") * 18.0
-		if mission_tracker.profile != null and mission_tracker.profile.mission_id == "nightclub": scan_radius += 20.0
-		chunk.set_ultraviolet_circle(player.global_position, scan_radius)
-		return
-	var polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon() if player.has_method("get_ultraviolet_beam_polygon") else PackedVector2Array()
-	if polygon.size() >= 3: chunk.set_ultraviolet_polygon(polygon)
-	else: chunk.clear_ultraviolet()
-
-func _is_inside_ultraviolet_beam(evidence: CanvasItem) -> bool:
-	if not evidence is Node2D: return false
-	var to_evidence: Vector2 = evidence.global_position - player.global_position
-	if player.ultraviolet_scan_time > 0.0:
-		var scan_radius := 82.0 + Progression.get_upgrade_level("scanner") * 18.0
-		# Nightclub's dark carpet is its authored cleanup identity: the pulse has
-		# stronger reach here, rewarding deliberate UV verification over pixel hunt.
-		if mission_tracker.profile != null and mission_tracker.profile.mission_id == "nightclub": scan_radius += 20.0
-		if to_evidence.length_squared() > scan_radius * scan_radius: return false
-	else:
-		var polygon: PackedVector2Array = player.get_ultraviolet_beam_polygon() if player.has_method("get_ultraviolet_beam_polygon") else PackedVector2Array()
-		return polygon.size() >= 3 and Geometry2D.is_point_in_polygon(evidence.global_position, polygon)
-	var query := PhysicsRayQueryParameters2D.create(player.global_position, evidence.global_position, 4)
-	query.collide_with_areas = false
-	return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
-
-func _begin_cleanup_transition() -> void:
-	transitioning_cleanup = true
-	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
-	status_label.text = "SCENE STABILIZATION"
-	detail_label.text = "CHECKING WEAPONS // BODIES // ACTIVE HAZARDS"
-	hud.show_banner("AREA SECURE // STABILIZE THE SCENE")
-	combat_feedback.show_flash(Color(0.28, 0.78, 1.0, 0.10), 0.18)
-	await get_tree().create_timer(1.15, true, false, true).timeout
-	if not is_inside_tree() or run_over: return
-	if not mission_tracker.are_combat_objectives_complete():
-		transitioning_cleanup = false
-		combat_completion_hold = 0.0
-		if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(true)
-		return
-	Events.combat_ended.emit()
-	_enter_cleanup_phase()
-
-func _on_clean_requested(world_position: Vector2, stroke_direction := Vector2.RIGHT, stroke_strength := 1.0, stroke_start := Vector2.INF, brush_radius_override := -1.0, power_multiplier := 1.0, stroke_quality := 1.0) -> void:
-	if phase != "cleanup" or run_over: return
-	if player.global_position.distance_to(world_position) > 38.0: return
-	if stroke_start == Vector2.INF: stroke_start = world_position - stroke_direction.normalized() * maxf(2.0, stroke_strength * 9.0)
-	# Blood and every environmental liquid share the same continuous capsule
-	# gesture. They keep separate evidence channels but never disappear in blocks.
-	var pixel_cleaned := false
-	var pixel_power := 0
-	var liquid_system := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
-	if not is_instance_valid(liquid_system):
-		liquid_system = preload("res://scripts/effects/pixel_liquid_system.gd").get_or_create(get_tree()) as Node2D
-	if player.current_cleanup_tool == "pressure_washer":
-		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-		var spray_radius := brush_radius_override if brush_radius_override > 0.0 else 7.0
-		var spray_direction := player.global_position.direction_to(world_position)
-		var nozzle_origin := player.global_position + spray_direction * 12.0
-		if is_instance_valid(liquid_system) and liquid_system.has_method("emit_pressure_stream"):
-			var stability: float = liquid_system.emit_pressure_stream(nozzle_origin, world_position, spray_radius, pixel_power, Progression.get_upgrade_level("pressure_washer"))
-			player.set_pressure_washer_stability(stability)
-	elif player.current_cleanup_tool == "mop" and blood_system.has_method("clean_pixel_stroke"):
-		pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("blood")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-		var brush_radius := brush_radius_override if brush_radius_override > 0.0 else float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius)
-		pixel_cleaned = blood_system.clean_pixel_stroke(stroke_start, world_position, brush_radius, pixel_power, player.current_cleanup_tool)
-	var compatible_types := CleanupWorkflow.get_compatible_types(player.current_cleanup_tool)
-	var target_query_radius := float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius) + 2.0 if player.current_cleanup_tool == "mop" else 26.0
-	var target := CleanupRegistry.get_nearest_compatible_target(world_position, target_query_radius, compatible_types)
-	# The owning canvas already handled every crossed chunk above; choose another
-	# nearby legacy/solid evidence target instead of cleaning the endpoint twice.
-	if is_instance_valid(target) and target.is_in_group("pixel_blood_chunk"):
-		target = null
-		for candidate in CleanupRegistry.get_targets_in_radius(world_position, target_query_radius, 24, compatible_types):
-			if candidate.is_in_group("pixel_blood_chunk"): continue
-			target = candidate
-			break
-	# Invisible forensic residue must not absorb ordinary mop input. It remains
-	# indexed so the pressure washer can remove it when the player chooses to.
-	if player.current_cleanup_tool == "mop" and is_instance_valid(target) and target.has_method("is_ultraviolet_residue") and target.is_ultraviolet_residue():
-		target = null
-		for candidate in CleanupRegistry.get_targets_in_radius(world_position, target_query_radius, 24, compatible_types):
-			if candidate.has_method("is_ultraviolet_residue") and candidate.is_ultraviolet_residue(): continue
-			target = candidate
-			break
-	# A live pipe/electrical source must be isolated before its connected pixels
-	# can be removed. This check occurs before the shared liquid canvas is touched.
-	var active_liquid_source_near := false
-	for hazard in get_tree().get_nodes_in_group("environment_hazard"):
-		if not hazard is EnvironmentHazard or not hazard.source_active or hazard.hazard_kind not in ["water", "electric"]: continue
-		if hazard.global_position.distance_to(world_position) <= hazard.target_radius * 1.6:
-			active_liquid_source_near = true
-			break
-	if active_liquid_source_near:
-		detail_label.text = "SOURCE STILL ACTIVE // RESTORE DAMAGED EQUIPMENT FIRST"
-		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
-		return
-	if player.current_cleanup_tool == "mop":
-		if is_instance_valid(liquid_system):
-			if pixel_power <= 0: pixel_power = maxi(1, roundi(float(player.get_cleanup_efficiency("spill")) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-			var liquid_brush := brush_radius_override if brush_radius_override > 0.0 else float(player.get_cleanup_stroke_profile(0.0, stroke_quality).radius)
-			pixel_cleaned = liquid_system.clean_stroke(stroke_start, world_position, liquid_brush, pixel_power, player.current_cleanup_tool) or pixel_cleaned
-	if not is_instance_valid(target):
-		if pixel_cleaned:
-			if player.current_cleanup_tool == "mop": player.record_mop_use(0.34 + 0.08 * pixel_power)
-			ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
-		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
-		return
-	var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else "unknown"
-	if target.has_method("is_cleanup_blocked") and target.is_cleanup_blocked():
-		detail_label.text = "SOURCE STILL ACTIVE // RESTORE DAMAGED EQUIPMENT FIRST"
-		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
-		return
-	if target.has_method("apply_cleanup_tool"):
-		if target.apply_cleanup_tool(player.current_cleanup_tool):
-			player.report_cleanup_stroke_result(true, stroke_quality, stroke_direction)
-			return
-		if player.current_cleanup_tool != _required_cleanup_tool(cleanup_type):
-			detail_label.text = "NEED %s" % _required_cleanup_tool(cleanup_type).to_upper().replace("_", " ")
-			player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
-			return
-	var steps: int = int(player.get_cleanup_efficiency(cleanup_type))
-	if steps <= 0:
-		detail_label.text = "NEED %s" % _required_cleanup_tool(cleanup_type).to_upper().replace("_", " ")
-		player.report_cleanup_stroke_result(pixel_cleaned, stroke_quality, stroke_direction)
-		return
-	var used_cleaner := bool(target.get_meta("cleaner_primed", false))
-	if used_cleaner:
-		steps += 2
-		target.set_meta("cleaner_primed", false)
-	steps = maxi(1, roundi(float(steps) * clampf(stroke_strength * power_multiplier, 0.35, 1.55)))
-	# Closing Time's grease/liquid identity gives the washer a real situational
-	# advantage without letting it replace the mop for solid gore.
-	if mission_tracker.profile != null and mission_tracker.profile.mission_id == "sandwich_shop" and player.current_cleanup_tool == "pressure_washer" and cleanup_type == "spill":
-		steps += 3
-	var targets: Array[Node2D] = [target]
-	if player.current_cleanup_tool in ["mop", "pressure_washer"]:
-		var clean_radius := 30.0 if player.current_cleanup_tool == "pressure_washer" else target_query_radius
-		var clean_count := 10 if player.current_cleanup_tool == "pressure_washer" else 6
-		targets = CleanupRegistry.get_targets_in_radius(world_position, clean_radius, clean_count, compatible_types)
-	for cleanup_target in targets:
-		if cleanup_target.has_method("clean_stroke"):
-			cleanup_target.clean_stroke(world_position, stroke_direction, steps, player.current_cleanup_tool)
-		elif cleanup_target.has_method("clean_at"):
-			cleanup_target.clean_at(world_position, steps)
-		else:
-			for index in range(steps):
-				if not is_instance_valid(cleanup_target) or cleanup_target.is_queued_for_deletion(): break
-				cleanup_target.clean_step()
-	if used_cleaner and is_instance_valid(target): target.modulate = Color.WHITE
-	if is_instance_valid(liquid_system) and player.current_cleanup_tool == "mop": liquid_system.stamp_cleaning_stroke(stroke_start, world_position, player.current_cleanup_tool)
-	if player.current_cleanup_tool == "mop": player.record_mop_use(0.38 + 0.16 * steps)
-	player.report_cleanup_stroke_result(true, stroke_quality, stroke_direction)
-	ammo_label.text = player.current_cleanup_tool.to_upper().replace("_", " ")
-
-func _on_blood_cleaning_layer_changed(_world_position: Vector2, layer_name: String, _progress: float) -> void:
-	if phase != "cleanup" or run_over or cleanup_layer_feedback_cooldown > 0.0: return
-	cleanup_layer_feedback_cooldown = 0.22
-	match layer_name:
-		"DILUTED": detail_label.text = "THICK LAYER LIFTED // KEEP THE STROKE MOVING"
-		"UV_RESIDUE": detail_label.text = "VISIBLE BLOOD CLEARED // UV TRACE REMAINS"
-		"CLEAN": detail_label.text = "REGION CLEAN"
-
-func _on_blood_cleaning_region_completed(_world_position: Vector2) -> void:
-	if phase != "cleanup" or run_over: return
-	var washer_finish: bool = player.current_cleanup_tool == "pressure_washer"
-	var detergent_finish: bool = washer_finish and Progression.get_upgrade_level("pressure_washer") >= 3
-	detail_label.text = "REGION STRIPPED // DETERGENT CLEAR" if detergent_finish else ("REGION RINSED" if washer_finish else "REGION CLEAN // FLOW MAINTAINED")
-	combat_feedback.show_flash(Color(0.35, 0.88, 1.0, 0.13 if detergent_finish else 0.08), 0.11 if detergent_finish else 0.07)
-	if cleanup_layer_feedback_cooldown <= 0.12: _play_area_clean_feedback()
-	cleanup_layer_feedback_cooldown = 0.34
-
-func _on_cleaner_requested(world_position: Vector2) -> void:
-	if phase != "cleanup" or run_over: return
-	if player.global_position.distance_to(world_position) > 38.0: return
-	var target := CleanupRegistry.get_nearest_target(world_position, 16.0)
-	if not is_instance_valid(target):
-		detail_label.text = "NO STAIN IN RANGE // CLEANER %d" % player.cleaner_charges
-		return
-	var cleanup_type := str(target.get_cleanup_type()) if target.has_method("get_cleanup_type") else ""
-	if cleanup_type not in ["blood", "blood_pool", "blood_footprint", "gore"]:
-		detail_label.text = "CLEANER ONLY WORKS ON BIOLOGICAL STAINS"
-		return
-	var liquid_surface := get_tree().get_first_node_in_group("pixel_liquid_system") as Node2D
-	if not is_instance_valid(liquid_surface): liquid_surface = preload("res://scripts/effects/pixel_liquid_system.gd").get_or_create(get_tree()) as Node2D
-	if is_instance_valid(liquid_surface): liquid_surface.emit_burst(world_position, &"cleaner", player.global_position.direction_to(world_position), 0.55)
-	target.set_meta("cleaner_primed", true)
-	target.modulate = Color(1.15, 0.72, 0.88, 1.0)
-	detail_label.text = "STAIN TREATED // CLEANER %d" % player.cleaner_charges
-
-func _required_cleanup_tool(cleanup_type: String) -> String:
-	return CleanupWorkflow.get_required_tool(cleanup_type)
-
-func _get_cleanup_workflow_hint(counts: Dictionary) -> String:
-	return CleanupWorkflow.get_hint(counts)
-
-func _deposit_bagged_corpses() -> void:
-	if not is_instance_valid(extraction_zone): return
-	for corpse_node in get_tree().get_nodes_in_group("corpse"):
-		if not is_instance_valid(corpse_node) or not corpse_node.has_method("is_bagged") or not corpse_node.is_bagged(): continue
-		if extraction_zone.contains_position(corpse_node.global_position, 15.0): corpse_node.extract_bag()
-
-func _on_extraction_requested() -> void:
-	if phase != "cleanup" or run_over or not is_instance_valid(extraction_zone): return
-	if not extraction_zone.contains_position(player.global_position): return
-	_finish_run(CleanupRegistry.get_remaining_count() > 0)
-
-func _finish_run(left_evidence: bool) -> void:
-	if run_over: return
-	run_over = true
-	combat_focus_active = false
-	combat_focus_time_remaining = 0.0
-	_set_hostile_combat_time_scale(1.0)
-	if is_instance_valid(combat_feedback): combat_feedback.set_base_time_scale(1.0)
-	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
-	var cleanup_ratio := CleanupRegistry.get_cleanup_ratio()
-	var contract := ContractCatalog.get_contract(Progression.get_current_contract_id())
-	var evidence_counts := CleanupRegistry.get_type_counts()
-	var bodies_remaining := int(evidence_counts.get("corpse", 0))
-	var ballistic_remaining := int(evidence_counts.get("shell", 0)) + int(evidence_counts.get("dropped_weapon", 0))
-	var biological_remaining := int(evidence_counts.get("blood", 0)) + int(evidence_counts.get("blood_pool", 0)) + int(evidence_counts.get("blood_footprint", 0)) + int(evidence_counts.get("gore", 0))
-	var contract_success := ContractCatalog.evaluate(str(contract.id), cleanup_ratio, mission_tracker.alarm_triggers, combat_shots_fired, cleanup_timed_out, mission_tracker.property_damage, bodies_remaining, ballistic_remaining)
-	if contract_success and str(contract.id) != "standard": final_score += roundi(250.0 * float(contract.payout))
-	var cleanup_tier: Dictionary = GAMEPLAY_RULES.get_cleanup_tier(cleanup_ratio)
-	var scene_certified := bool(cleanup_tier.can_extract)
-	left_evidence = left_evidence or cleanup_ratio < 0.999
-	var target_duration := mission_tracker.profile.target_duration_seconds if mission_tracker.profile != null else 600.0
-	var time_bonus := roundi(clampf((target_duration - elapsed) / maxf(target_duration, 1.0), 0.0, 1.0) * 500.0)
-	var restoration_cost := MissionResultBuilder.restoration_cost(mission_tracker.property_damage, ballistic_remaining, biological_remaining)
-	var room_verification_bonus := verified_cleanup_rooms.size() * 35
-	final_score += maxi(0, roundi(cleanup_ratio * 1000.0) + enemies_killed * 100 + time_bonus + mission_tracker.get_score_modifier() + clues_collected * 90 + valuables_secured * 80 + valuables_stolen * 130 + furniture_restored * 45 + room_verification_bonus + precision_reward_bonus - restoration_cost)
-	if Progression.get_run_mode() == "score_attack": final_score = roundi(final_score * 1.5)
-	elif Progression.get_run_mode() == "new_game_plus": final_score = roundi(final_score * 1.25)
-	final_grade = MissionResultBuilder.grade(cleanup_ratio, mission_tracker.alarm_triggers, mission_tracker.property_damage)
-	status_label.text = "PERFECT CLEANUP" if cleanup_ratio >= 0.999 else ("SCENE CERTIFIED" if scene_certified else "SCENE ABANDONED")
-	var footprint_count := get_tree().get_nodes_in_group("footprint").size()
-	detail_label.text = "GRADE %s // %04d // %s // SHOTS %d // %d ALARMS // ENTER REPORT // R RETRY" % [final_grade, final_score, "CONTRACT OK" if contract_success else "CONTRACT FAILED", combat_shots_fired, mission_tracker.alarm_triggers]
-	hud.set_objective("MISSION COMPLETE // " + mission_tracker.get_status_line())
-	interaction_label.text = "ACCEPTABLE CLEAN // RISK %d" % CleanupRegistry.get_remaining_value() if scene_certified and left_evidence else ("EVIDENCE LEFT // %d" % CleanupRegistry.get_remaining_value() if left_evidence else "PERFECT CLEANUP")
-	if record_progress:
-		Progression.record_mission_result(mission_tracker.profile.mission_id, final_score, final_grade, elapsed, cleanup_ratio, mission_tracker.alarm_triggers, CleanupRegistry.get_remaining_value(), _build_forensic_report(cleanup_ratio))
-	if is_instance_valid(playtest_telemetry): playtest_telemetry.complete_run(cleanup_ratio, combat_phase_elapsed, cleanup_phase_elapsed, CleanupRegistry.get_remaining_value(), mission_tracker.alarm_triggers)
-
-func _build_forensic_report(cleanup_ratio: float) -> Dictionary:
-	var counts := CleanupRegistry.get_type_counts()
-	var traces: Array[String] = []
-	var biological := int(counts.get("blood", 0)) + int(counts.get("blood_pool", 0)) + int(counts.get("blood_footprint", 0)) + int(counts.get("gore", 0))
-	var ballistic := int(counts.get("shell", 0)) + int(counts.get("dropped_weapon", 0))
-	var bodies := int(counts.get("corpse", 0))
-	if bodies > 0: traces.append("%d BODY%s RECOVERABLE" % [bodies, "" if bodies == 1 else "S"])
-	if ballistic > 0: traces.append("%d BALLISTIC TRACE%s" % [ballistic, "" if ballistic == 1 else "S"])
-	if biological > 0: traces.append("%d BIOLOGICAL TRACE%s" % [biological, "" if biological == 1 else "S"])
-	if mission_tracker.alarm_triggers > 0: traces.append("SECURITY RESPONSE LOGGED")
-	if mission_tracker.property_damage > 0: traces.append("%d PROPERTY IMPACT%s" % [mission_tracker.property_damage, "" if mission_tracker.property_damage == 1 else "S"])
-	if valuables_stolen > 0: traces.append("VALUABLES REPORTED MISSING")
-	if traces.is_empty(): traces.append("NO ACTIONABLE TRACE CHAIN")
-	var contract := ContractCatalog.get_contract(Progression.get_current_contract_id())
-	var contract_success := ContractCatalog.evaluate(str(contract.id), cleanup_ratio, mission_tracker.alarm_triggers, combat_shots_fired, cleanup_timed_out, mission_tracker.property_damage, bodies, ballistic)
-	return {
-		"classification": "PERFECT" if cleanup_ratio >= 0.999 else ("CERTIFIED" if cleanup_ratio >= 0.90 else "COMPROMISED"),
-		"cleanup_percent": roundi(cleanup_ratio * 100.0),
-		"shots": combat_shots_fired,
-		"dominant_weapon": mission_tracker.get_dominant_weapon(),
-		"projected_weapon_cleanup": mission_tracker.get_projected_weapon_cleanup_cost(),
-		"bodies": bodies,
-		"ballistic": ballistic,
-		"biological": biological,
-		"property_damage": mission_tracker.property_damage,
-		"restoration_cost": MissionResultBuilder.restoration_cost(mission_tracker.property_damage, ballistic, biological),
-		"dominant_cost": MissionResultBuilder.dominant_cost(mission_tracker.property_damage, ballistic, biological, bodies),
-		"rooms_verified": verified_cleanup_rooms.size(),
-		"field_kit": Progression.get_current_kit_id(),
-		"traces": traces,
-		"contract_id": str(contract.id),
-		"contract_name": str(contract.name),
-		"contract_success": contract_success,
-		"contract_multiplier": float(contract.payout),
-		"cleanup_timed_out": cleanup_timed_out,
-		"alarms": mission_tracker.alarm_triggers,
-		"valuables_stolen": valuables_stolen > 0,
-		"run_mode": Progression.get_run_mode(),
-		"combat_route": roundi(combat_route_distance),
-		"cleanup_route": roundi(cleanup_route_distance),
-		"combat_seconds": combat_phase_elapsed,
-		"cleanup_seconds": cleanup_phase_elapsed,
-		"target_duration": mission_tracker.profile.target_duration_seconds if mission_tracker.profile != null else 600.0,
-	}
+	# Generated actor, environment, light and workbench images are also strong GPU
+	# resources. Release them at the scene boundary so a campaign/retry loop does
+	# not retain one generation of textures after its nodes have been freed.
+	PixelActorTextureFactory.clear_cache()
+	PixelEnvironmentAtlas.clear_cache()
+	PixelLightTextureFactory.clear_cache()
+	WeaponUIIconFactory.clear_cache()

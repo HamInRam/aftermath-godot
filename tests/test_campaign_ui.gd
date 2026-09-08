@@ -12,10 +12,14 @@ const SAFEHOUSE_SCENE := preload("res://scenes/ui/safehouse_screen.tscn")
 var failures := 0
 
 func _ready() -> void:
-	_expect(ProjectSettings.get_setting("display/window/stretch/mode") == "canvas_items", "UI should render at output resolution instead of being enlarged from the native viewport")
-	_expect(ProjectSettings.get_setting("display/window/stretch/scale_mode") == "integer", "pixel art and UI should retain integer output scaling")
+	_expect(ProjectSettings.get_setting("display/window/stretch/mode") == "canvas_items", "vector-backed pixel type should rasterize at output resolution instead of being enlarged from a 320x180 bitmap")
+	_expect(ProjectSettings.get_setting("display/window/stretch/aspect") == "keep", "window resizing should preserve the authored 16:9 composition")
+	_expect(ProjectSettings.get_setting("display/window/stretch/scale_mode") == "integer", "pixel art and UI should retain integer output scaling without uneven glyph stems")
+	_expect(ProjectSettings.get_setting("gui/fonts/dynamic_fonts/use_oversampling") == true, "dynamic pixel type should be rerasterized for the active integer window scale")
 	var theme := load("res://utility/themes/default_theme.tres") as Theme
 	_expect(theme.default_font != null and theme.default_font.resource_path.ends_with("Silkscreen-Regular.ttf"), "UI should use the bundled grid-designed Silkscreen pixel font")
+	var font_import := FileAccess.get_file_as_string("res://assets/fonts/Silkscreen-Regular.ttf.import")
+	_expect("antialiasing=0" in font_import and "subpixel_positioning=0" in font_import and "allow_system_fallback=false" in font_import, "pixel type must use deterministic hard-edge rasterization on every machine")
 	var original_data: Dictionary = Progression.data.duplicate(true)
 	var original_current: String = Progression.current_mission_id
 	var original_result: Dictionary = Progression.last_result.duplicate(true)
@@ -36,16 +40,12 @@ func _ready() -> void:
 	compact_hud.set_combat_counts(6, 2, 1)
 	_expect(compact_hud.enemy_count_label.text == "x6" and compact_hud.camera_count_label.text == "x2" and compact_hud.alarm_count_label.text == "x1", "combat objectives should use three glanceable icon counters")
 	_expect(compact_hud.tactical_backplate.get_rect().intersection(compact_hud.status_backplate.get_rect()).get_area() == 0.0, "tactical counters and transient status must occupy disjoint safe zones")
-	compact_hud.set_phase("cleanup")
-	_expect("UV" in compact_hud.tutorial_label.text and compact_hud.tutorial_label.text.length() < 40, "cleanup onboarding should disclose tools with a compact contextual strip")
-	compact_hud.set_cleanup_summary(0.84, 12, 75.0)
-	compact_hud.set_cleanup_tool("mop", 0.55)
-	compact_hud.set_cleanup_context("kitchen", 0.96, false, true, {"blood": 3, "corpse": 1, "shell": 2})
-	_expect(is_equal_approx(compact_hud.cleanup_meter.value, 84.0) and compact_hud.cleanup_percent_label.text == "84%" and compact_hud.cleanup_police_label.text == "01:15", "cleanup HUD should prioritize total cleanliness and response time without a text wall")
-	_expect(compact_hud.cleanup_tool_label.text == "MOP" and is_equal_approx(compact_hud.cleanup_tool_meter.value, 9.0 / 16.0), "cleanup tool state should use the same cacheable sixteen-step visual value as the gradual mop icon")
-	_expect(compact_hud.cleanup_tool_meter.size.x <= 26.0 and compact_hud.cleanup_tool_meter.size.y <= 1.0, "cleanup tool condition should never inherit stock ProgressBar minimum sizing")
-	_expect(compact_hud.cleanup_scan_label.visible and "B3" in compact_hud.cleanup_scan_label.text and compact_hud.detail_label.text.is_empty(), "forensic counts and current workflow should only appear in active scan mode while room verification stays transient")
-	_expect(compact_hud.cleanup_meter.size.x <= 26.0 and compact_hud.cleanup_meter.size.y <= 1.0 and compact_hud.cleanup_meter.position.x <= 16.0, "cleanup progress should remain a genuinely tiny peripheral upper-left guide after integer viewport scaling")
+	compact_hud.set_roguelike_mode(true)
+	compact_hud.set_blood_resource(48.0, 100.0, true, {"q": 0.0, "e": 0.5, "r": 0.0})
+	_expect(compact_hud.blood_count_label.text == "048" and compact_hud.blood_meter.value == 0.48, "roguelike HUD should expose stored blood as a compact numeric reservoir")
+	_expect(compact_hud.focus_count_label.text == "x2" and compact_hud.focus_meter.value == 0.5, "blood refreshes must never overwrite the independent Focus charge and duration display")
+	_expect(compact_hud.focus_backplate.get_rect().intersection(compact_hud.blood_backplate.get_rect()).get_area() == 0.0, "blood and Focus resources must occupy separate HUD cards")
+	_expect("Q STEP" in compact_hud.blood_skill_label.text and "e PULSE" in compact_hud.blood_skill_label.text, "blood skill HUD should distinguish ready and cooling abilities without a text wall")
 	compact_hud.queue_free()
 	await get_tree().process_frame
 	Progression.reset_progress(false)
@@ -54,22 +54,22 @@ func _ready() -> void:
 	await get_tree().process_frame
 	var panel := title.get_node("Panel") as Control
 	var menu := title.get_node("Panel/VBox") as Control
-	_expect(menu.size.x <= panel.size.x and menu.size.y <= panel.size.y, "career status must not stretch or clip the centered level-select panel")
-	_expect(title.get_node("Panel/VBox").size.y <= title.get_node("Panel").size.y, "campaign menu should fit inside the native 180px viewport panel")
-	_expect(not title.get_node("Panel/VBox/NightclubButton").disabled, "first campaign case should be selectable")
-	_expect(title.get_node("Panel/VBox/NightclubButton").icon != null, "unlocked cases should expose a readable pixel case icon")
+	_expect(menu.size.x <= panel.size.x and menu.size.y <= panel.size.y, "run status must not stretch or clip the centered launch panel")
+	_expect(title.get_node("Panel/VBox").size.y <= title.get_node("Panel").size.y, "roguelike launch menu should fit inside the native 180px viewport panel")
+	_expect(title.get_node("Panel/VBox/NightclubButton").text == "START NEW RUN", "the primary action should begin a randomized run instead of selecting a linear case")
+	_expect(title.get_node("Panel/VBox/NightclubButton").icon != null, "the run action should expose a readable pixel play icon")
 	_expect(title.get_node("Panel/VBox/SettingsButton").icon != null, "settings navigation should expose a semantic pixel icon")
-	_expect(title.get_node("Panel/VBox/SandwichButton").disabled, "second case should render locked before progression")
-	_expect(title.get_node("Panel/VBox/AfterHoursButton").disabled, "final case should render locked before progression")
-	_expect(title.get_node("Panel/VBox/TacticalLabButton").disabled, "fourth campaign case should render locked on the first page")
-	_expect("12" in title.get_node("Panel/VBox/Subtitle").text, "case-file pagination should expose the complete campaign size")
+	_expect(title.get_node("Panel/VBox/SandwichButton").text == "ARMORY" and not title.get_node("Panel/VBox/SandwichButton").disabled, "the launch menu should expose the armory without masquerading as a mission")
+	_expect(title.get_node("Panel/VBox/AfterHoursButton").text == "GUNSMITH" and not title.get_node("Panel/VBox/AfterHoursButton").disabled, "the launch menu should expose the gunsmith without masquerading as a mission")
+	_expect(not title.get_node("Panel/VBox/TacticalLabButton").visible, "the former fourth case selector must not survive in the roguelike launch flow")
+	_expect("RANDOMIZED ROOM RUN" in title.get_node("Panel/VBox/Subtitle").text, "the launch screen should communicate the randomized run structure")
 	title.queue_free()
 	await get_tree().process_frame
 	Progression.data.credits = 500
 	var workshop = UPGRADE_SCENE.instantiate()
 	add_child(workshop)
 	await get_tree().process_frame
-	_expect(workshop.get_node("Panel/VBox/UpgradeList").get_child_count() == 5, "workshop should expose all five independent career upgrade routes")
+	_expect(workshop.get_node("Panel/VBox/UpgradeList").get_child_count() == 6, "workshop should expose all six independent career upgrade routes")
 	_expect(workshop.get_node("Panel/VBox").size.y <= workshop.get_node("Panel").size.y, "workshop should fit the native-resolution panel")
 	_expect("BALANCE" in workshop.get_node("Panel/VBox/Header/Credits").text, "workshop should expose the current spendable balance")
 	workshop.queue_free()
@@ -119,9 +119,9 @@ func _ready() -> void:
 	add_child(loadout_screen)
 	await get_tree().process_frame
 	_expect(loadout_screen.get_node("Panel/VBox").size.y <= loadout_screen.get_node("Panel").size.y, "weapon configuration should fit its dedicated panel")
-	_expect("PISTOL" in loadout_screen.get_node("Panel/VBox/Weapons").text, "weapon configuration should identify issued weapons")
+	_expect("M4A1" in loadout_screen.get_node("Panel/VBox/Weapons").text, "weapon configuration should identify issued real-world platforms")
 	_expect("+" in loadout_screen.get_node("Panel/VBox/Weapons").text, "weapon configuration should show magazine and reserve ammunition")
-	_expect("AFTERMATH" in loadout_screen.get_node("Panel/VBox/Stats").text, "loadout selection should forecast the later cleanup burden")
+	_expect("POWER" in loadout_screen.get_node("Panel/VBox/Stats").text and "PEN" in loadout_screen.get_node("Panel/VBox/Stats").text, "loadout selection should forecast combat power and penetration")
 	loadout_screen.queue_free()
 	await get_tree().process_frame
 	var best := {"mission_id": "nightclub", "score": 1300, "grade": "A", "elapsed": 90.0, "cleanup_ratio": 1.0, "alarms": 1, "evidence_left": 0}

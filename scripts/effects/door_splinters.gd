@@ -5,7 +5,7 @@ var lifetime := 0.45
 
 func setup(direction: Vector2) -> void:
 	var forward := direction.normalized()
-	for index in range(30):
+	for index in range(38):
 		particles.append({
 			"position": Vector2.ZERO,
 			"velocity": forward.rotated(randf_range(-0.62, 0.62)) * randf_range(70.0, 160.0),
@@ -28,7 +28,8 @@ func _draw() -> void:
 	var alpha := clampf(lifetime / 0.45, 0.0, 1.0)
 	for particle in particles:
 		var point: Vector2 = Vector2(particle.position).round()
-		draw_rect(Rect2(point, Vector2.ONE), Color(0.72, 0.42, 0.17, alpha))
+		var shard_color := Color(0.92, 0.92, 0.92, alpha) if int(particle.angle * 100.0) % 3 == 0 else Color(0.48, 0.48, 0.48, alpha)
+		draw_rect(Rect2(point, Vector2.ONE), shard_color)
 		if particle.double:
 			var tail := Vector2.RIGHT.rotated(float(particle.angle)).round()
-			draw_rect(Rect2(point + tail, Vector2.ONE), Color(0.48, 0.25, 0.12, alpha * 0.78))
+			draw_rect(Rect2(point + tail, Vector2.ONE), Color(0.24, 0.24, 0.24, alpha * 0.78))

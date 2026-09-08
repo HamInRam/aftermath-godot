@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource path="res://scripts/effects/wall_sparks.gd" type="Script" id="1_sparks"]
 
@@ -12,12 +12,24 @@ damping_min = 80.0
 damping_max = 140.0
 scale_min = 1.0
 scale_max = 1.0
-color = Color(1, 0.82, 0.08, 1)
+color = Color(1, 1, 1, 1)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcess_dust"]
+direction = Vector3(1, 0, 0)
+spread = 72.0
+initial_velocity_min = 24.0
+initial_velocity_max = 72.0
+gravity = Vector3(0, 0, 0)
+damping_min = 34.0
+damping_max = 68.0
+scale_min = 1.0
+scale_max = 1.0
+color = Color(0.46, 0.46, 0.46, 0.72)
 
 [node name="WallSparks" type="GPUParticles2D" groups=["wall_sparks"]]
 z_index = 9
 emitting = false
-amount = 12
+amount = 18
 lifetime = 0.24
 one_shot = true
 explosiveness = 1.0
@@ -26,3 +38,15 @@ local_coords = false
 visibility_rect = Rect2(-64, -64, 128, 128)
 process_material = SubResource("ParticleProcess_sparks")
 script = ExtResource("1_sparks")
+
+[node name="ConcreteDust" type="GPUParticles2D" parent="."]
+z_index = -1
+emitting = false
+amount = 16
+lifetime = 0.34
+one_shot = true
+explosiveness = 0.88
+randomness = 0.62
+local_coords = true
+visibility_rect = Rect2(-64, -64, 128, 128)
+process_material = SubResource("ParticleProcess_dust")

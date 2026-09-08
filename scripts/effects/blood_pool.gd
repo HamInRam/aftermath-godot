@@ -138,8 +138,8 @@ func get_cleanup_progress() -> float:
 func _draw() -> void:
 	if ultraviolet_residue:
 		if ultraviolet_visible:
-			PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 7, Color(0.20, 1.0, 0.46, 0.16), Color(0.45, 1.0, 0.72, 0.25), Color(0.08, 0.38, 0.2, 0.18), 41)
-			PIXEL_PAINTER.circle(self, Vector2.ZERO, 10, Color(0.45, 1.0, 0.72, 0.18), true)
+			PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 7, Color(0.62, 0.12, 1.0, 0.20), Color(0.80, 0.38, 1.0, 0.30), Color(0.30, 0.03, 0.60, 0.22), 41)
+			PIXEL_PAINTER.circle(self, Vector2.ZERO, 10, Color(0.72, 0.24, 1.0, 0.26), true)
 		return
 	var age_step := floorf(clampf(stain_age / 24.0, 0.0, 0.99) * 4.0) / 3.0
 	var blood := Color(0.58, 0.006, 0.035, 0.88 * amount).lerp(Color(0.26, 0.002, 0.012, 0.92 * amount), age_step).darkened(surface_darken)

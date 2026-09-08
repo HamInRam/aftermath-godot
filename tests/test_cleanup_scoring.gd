@@ -1,13 +1,6 @@
 extends Node
 
 const LEVEL_SCENE := preload("res://scenes/levels/after_hours.tscn")
-
-class DummyCorpseEvidence:
-	extends Node2D
-	func _ready() -> void: CleanupRegistry.register_target(self)
-	func clean_step() -> void: pass
-	func get_cleanup_type() -> String: return "corpse"
-
 var failures := 0
 
 func _ready() -> void:
@@ -18,44 +11,18 @@ func _run() -> void:
 	level.record_progress = false
 	add_child(level)
 	for enemy in level.get_node("Enemies").get_children(): enemy.set_physics_process(false)
-	var evidence := DummyCorpseEvidence.new()
-	level.add_child(evidence)
-	evidence.global_position = Vector2(200, 100)
-	_expect(CleanupRegistry.get_initial_value() == 25 and CleanupRegistry.get_remaining_value() == 25, "corpse evidence should carry critical severity")
-	level.phase = "cleanup"
-	level.extraction_zone.set_active(true)
-	level.player.global_position = level.extraction_zone.global_position
-	level._on_extraction_requested()
-	_expect(level.run_over and level.final_grade == "D", "leaving all critical evidence should produce a failing grade")
-	_expect(level.status_label.text == "SCENE ABANDONED", "partial extraction should clearly report abandonment")
-	_expect(level.final_score > 0, "combat and time components should still produce a numeric score")
-	_expect(level.extraction_zone.contains_position(level.player.global_position), "extraction zone should recognize the player")
-	if failures == 0: print("cleanup scoring regression: PASS")
-	for audio_node in level.find_children("*", "AudioStreamPlayer", true, false):
-		var audio := audio_node as AudioStreamPlayer
-		audio.stop()
-		audio.stream = null
+	_expect(not level.has_method("_enter_cleanup_phase"), "retired cleanup must have no runtime entry point")
+	_expect(not level.has_method("_on_clean_requested"), "mop/washer input must not survive in the room shooter")
+	_expect(get_tree().get_nodes_in_group("restoration_anchor").is_empty(), "combat must not spawn furniture-return ghosts")
+	level.mission_tracker.record_alarm_trigger()
+	level._on_rogue_run_cleared(4)
+	_expect(level.run_over and level.final_grade == "A", "one alarm should lower a fast floor from S to A")
+	_expect(level.phase == "combat" and level.final_score > 0, "combat completion must score without cleaning")
+	_expect(is_instance_valid(level.run_end_layer), "the floor action must remain visible instead of fading with HUD hints")
 	level.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	CleanupRegistry.reset()
-	var alarmed_level = LEVEL_SCENE.instantiate()
-	alarmed_level.record_progress = false
-	add_child(alarmed_level)
-	for enemy in alarmed_level.get_node("Enemies").get_children(): enemy.set_physics_process(false)
-	alarmed_level.phase = "cleanup"
-	alarmed_level.mission_tracker.record_alarm_trigger()
-	alarmed_level._finish_run(false)
-	_expect(alarmed_level.final_grade == "A", "an otherwise perfect mission with an alarm should lose the S grade")
-	_expect("1 ALARMS" in alarmed_level.detail_label.text, "mission result should disclose alarm count")
-	for audio_node in alarmed_level.find_children("*", "AudioStreamPlayer", true, false):
-		var audio := audio_node as AudioStreamPlayer
-		audio.stop()
-		audio.stream = null
-	alarmed_level.queue_free()
-	await get_tree().process_frame
-	await get_tree().process_frame
-	CleanupRegistry.reset()
+	if failures == 0: print("retired cleanup boundary regression: PASS")
 	get_tree().quit(failures)
 
 func _expect(condition: bool, message: String) -> void:

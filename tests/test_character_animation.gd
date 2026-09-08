@@ -8,9 +8,10 @@ var failures := 0
 func _ready() -> void:
 	var player = PLAYER_SCENE.instantiate()
 	add_child(player)
-	_expect(player.has_node("LifecycleRig") and player.get_node("LifecycleRig").visible, "player must use a visible full-lifecycle physics skeleton")
-	_expect(not player.get_node("LegsVisual").visible, "legacy player legs must stay hidden behind the lifecycle skeleton")
-	var player_rig = player.get_node("LifecycleRig")
+	_expect(player.has_node("UpperBody/LifecycleRig") and player.get_node("UpperBody/LifecycleRig").visible, "player upper body must use a visible full-lifecycle physics skeleton")
+	_expect(player.get_node("Legs").visible, "player legs must be an independent visible locomotion layer")
+	var player_rig = player.get_node("UpperBody/LifecycleRig")
+	_expect(player_rig.z_index > 2, "head and articulated palms must occlude the gun stock at every aim angle")
 	_expect(player_rig.visual_role == "player", "player skin must carry a dedicated readable visual identity")
 	_expect(not player_rig.should_draw_legs(), "strict top-down legs must remain occluded while standing")
 	player_rig.update_lifecycle(0.016, Vector2(100, 0), 100.0)
@@ -36,34 +37,34 @@ func _ready() -> void:
 	_expect(projected_world_offset.round() == Vector2(0, -4), "pseudo-3D body height must remain screen-up while the actor aims in any direction")
 	player.rotation = 0.0
 	_expect(not player.has_node("UpperBody/BodySprite/PixelBody"), "player must use one authoritative compact body")
-	_expect(player.get_node("UpperBody/BodySprite").texture.get_size() == Vector2(16, 16), "player must use a strict 16x16 top-down frame")
+	_expect(player.get_node("UpperBody/BodySprite").texture.get_size() == Vector2(32, 32), "player authoring canvas must leave transparent room for articulated grips")
 	_expect(player.get_node("UpperBody/Gun").scale == Vector2.ONE, "held weapon must remain on the native pixel grid without fractional scaling")
 	var enemy = ENEMY_SCENE.instantiate()
 	add_child(enemy)
-	_expect(enemy.has_node("LifecycleRig") and enemy.get_node("LifecycleRig").visible, "enemy must use a visible full-lifecycle physics skeleton")
-	_expect(not enemy.get_node("LegsVisual").visible, "legacy enemy legs must stay hidden behind the lifecycle skeleton")
+	_expect(enemy.has_node("UpperBody/LifecycleRig") and enemy.get_node("UpperBody/LifecycleRig").visible, "enemy upper body must use a visible full-lifecycle physics skeleton")
+	_expect(enemy.get_node("Legs").visible, "enemy legs must be an independent visible locomotion layer")
 	var corpse = CORPSE_SCENE.instantiate()
 	add_child(corpse)
 	_expect(player.z_index > enemy.z_index and enemy.z_index > corpse.z_index, "living player and enemies must always render above corpses")
 	enemy.configure_combat("heavy")
-	_expect(enemy.get_node("LifecycleRig").visual_role == "heavy", "heavy enemies need a wider authored role silhouette")
-	var heavy_texture = enemy.get_node("Sprite2D").texture
+	_expect(enemy.get_node("UpperBody/LifecycleRig").visual_role == "heavy", "heavy enemies need a wider authored role silhouette")
+	var heavy_texture = enemy.get_node("UpperBody/Sprite2D").texture
 	enemy.configure_combat("assault")
-	var assault_texture = enemy.get_node("Sprite2D").texture
+	var assault_texture = enemy.get_node("UpperBody/Sprite2D").texture
 	enemy.configure_combat("melee")
-	var melee_texture = enemy.get_node("Sprite2D").texture
+	var melee_texture = enemy.get_node("UpperBody/Sprite2D").texture
 	enemy.configure_combat("gunner")
-	var gunner_texture = enemy.get_node("Sprite2D").texture
-	_expect(enemy.get_node("Sprite2D").texture.get_size() == Vector2(16, 16), "enemy must use a strict 16x16 top-down frame")
+	var gunner_texture = enemy.get_node("UpperBody/Sprite2D").texture
+	_expect(enemy.get_node("UpperBody/Sprite2D").texture.get_size() == Vector2(32, 32), "enemy authoring canvas must leave transparent room for articulated grips")
 	_expect(heavy_texture != assault_texture and assault_texture != melee_texture and melee_texture != gunner_texture, "all human combat archetypes need distinct silhouettes")
 	enemy._set_knockdown_visual(true)
-	enemy.get_node("LifecycleRig").enter_knockdown(Vector2.RIGHT, 32.0)
-	_expect(enemy.get_node("LifecycleRig").mode == enemy.get_node("LifecycleRig").Mode.KNOCKED_DOWN, "knockdown must release the living skeleton into physics")
-	_expect(enemy.get_node("LifecycleRig").knockdown_transition_time > 0.0, "knockdown must include a short readable fall transition before prone ragdoll rendering")
+	enemy.get_node("UpperBody/LifecycleRig").enter_knockdown(Vector2.RIGHT, 32.0)
+	_expect(enemy.get_node("UpperBody/LifecycleRig").mode == enemy.get_node("UpperBody/LifecycleRig").Mode.KNOCKED_DOWN, "knockdown must release the living skeleton into physics")
+	_expect(enemy.get_node("UpperBody/LifecycleRig").knockdown_transition_time > 0.0, "knockdown must include a short readable fall transition before prone ragdoll rendering")
 	enemy._set_knockdown_visual(false)
-	_expect(enemy.get_node("LifecycleRig").mode == enemy.get_node("LifecycleRig").Mode.RECOVERING, "recovery must pull the same skeleton back toward its standing targets")
+	_expect(enemy.get_node("UpperBody/LifecycleRig").mode == enemy.get_node("UpperBody/LifecycleRig").Mode.RECOVERING, "recovery must pull the same skeleton back toward its standing targets")
 	enemy.configure_combat("dog")
-	_expect(enemy.get_node("LifecycleRig").rig_kind == "hound" and enemy.get_node("LifecycleRig").points.size() == 12, "hound actors must use a full-lifecycle quadruped skeleton")
+	_expect(enemy.get_node("UpperBody/LifecycleRig").rig_kind == "hound" and enemy.get_node("UpperBody/LifecycleRig").points.size() == 12, "hound actors must use a full-lifecycle quadruped skeleton")
 	player.queue_free()
 	enemy.queue_free()
 	corpse.queue_free()

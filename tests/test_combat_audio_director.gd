@@ -22,6 +22,20 @@ func _ready() -> void:
 	var previous_intensity := director.combat_intensity
 	director._process(0.1)
 	_expect(director.event_pressure >= 0.7 and director.combat_intensity > previous_intensity, "player gunfire should immediately raise dynamic music pressure")
+	_expect(director.gunfire_duck > 0.0 and director.gunfire_duck <= 4.0, "gunfire should make bounded room for transient detail")
+	for index in range(30): director._on_weapon_fired(Vector2.ZERO, Vector2.RIGHT, false, "smg")
+	_expect(director.gunfire_duck == 4.0, "automatic fire must not stack ducking into silence")
+	director._process(0.5)
+	_expect(director.gunfire_duck == 0.0, "music should recover after the firing window")
+	var fingerprints := {}
+	for kind in ["handgun", "pdw", "smg", "carbine", "dmr", "sniper", "lmg"]:
+		var stream := ProceduralAudioLibrary.get_sfx("weapon_" + kind)
+		_expect(not fingerprints.has(hash(stream.data)), "weapon classes require distinct waveforms")
+		fingerprints[hash(stream.data)] = true
+		_expect(stream.data.decode_s16(0) == 0, "shot onset should not contain a discontinuity")
+		var peak := 0
+		for index in range(0, stream.data.size(), 2): peak = maxi(peak, absi(stream.data.decode_s16(index)))
+		_expect(peak > 1000 and peak < 32767, "voice must be audible without clipping")
 	var pulse := ProceduralAudioLibrary.get_loop("pulse")
 	_expect(pulse == ProceduralAudioLibrary.get_loop("pulse"), "procedural loops should be cached instead of regenerated per level")
 	_expect(pulse.loop_mode == AudioStreamWAV.LOOP_FORWARD and pulse.data.size() == ProceduralAudioLibrary.MIX_RATE * 8, "procedural music should be a seamless four-second 16-bit loop")

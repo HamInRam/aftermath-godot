@@ -8,13 +8,14 @@ signal impact_flash_requested(color: Color)
 @export_range(0.0, 0.2, 0.001) var max_rotation := 0.0
 @export_range(0.1, 30.0, 0.1) var noise_speed := 12.0
 @export_range(1, 8, 1) var noise_octaves := 3
-@export_range(0.0, 120.0, 1.0) var max_look_ahead := 58.0
-@export_range(0.0, 200.0, 1.0) var extended_look_ahead := 125.0
-@export_range(0.0, 1.0, 0.05) var normal_look_weight := 0.25
-@export_range(0.0, 1.0, 0.05) var extended_look_weight := 0.55
+@export_range(0.0, 180.0, 1.0) var max_look_ahead := 120.0
+@export_range(0.0, 240.0, 1.0) var extended_look_ahead := 168.0
+@export_range(0.0, 1.0, 0.05) var normal_look_weight := 0.58
+@export_range(0.0, 1.0, 0.05) var extended_look_weight := 0.72
+@export_range(0.0, 24.0, 1.0) var combat_visibility_margin := 8.0
 @export_range(1.0, 20.0, 0.5) var follow_speed_x := 7.5
 @export_range(1.0, 20.0, 0.5) var follow_speed_y := 6.5
-@export_range(1.0, 2.0, 0.05) var exploration_zoom := 1.35
+@export_range(1.0, 2.0, 0.05) var exploration_zoom := 1.18
 @export var camera_center_bounds := Rect2(160.0, 90.0, 64.0, 44.0)
 @export_group("Position Tilt")
 @export_range(0.0, 4.0, 0.05) var tilt_max_degrees := 0.55
@@ -36,6 +37,13 @@ var smooth_shake_offset := Vector2.ZERO
 var smooth_tilt := 0.0
 var drift_time := 0.0
 var shake_strength := 1.0
+var directional_offset := Vector2.ZERO
+var last_player_shot_direction := Vector2.RIGHT
+var impact_frame := -1
+var frame_impact_peak := 0.0
+var frame_trauma_start := 0.0
+const PRESENTATION := preload("res://utility/weapon_presentation_profile.gd")
+const MAX_DIRECTIONAL_OFFSET := 2.6
 
 func _ready() -> void:
 	zoom = Vector2.ONE * exploration_zoom
@@ -49,11 +57,12 @@ func _ready() -> void:
 	process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	follow_target = get_tree().get_first_node_in_group("player") as Node2D
 	smooth_follow_position = global_position
+	Events.weapon_fired.connect(_on_presented_weapon_fire)
 
 func configure_world_bounds(world_rect: Rect2) -> void:
-	# Derive legal camera centres from the actual visible footprint. At 320x180
-	# and 1.35x zoom the player sees roughly 237x133 world pixels: enough to read
-	# the current room and a connected sightline, never the whole building.
+	# The wider arcade framing shows roughly 271x153 world pixels at 320x180:
+	# enough floor for fast lateral movement while the building still unfolds one
+	# chamber at a time rather than becoming a full-map tactical overview.
 	var viewport_size := get_viewport_rect().size
 	var half_visible := viewport_size / maxf(1.0, exploration_zoom) * 0.5
 	var minimum := world_rect.position + half_visible
@@ -64,27 +73,60 @@ func configure_world_bounds(world_rect: Rect2) -> void:
 	tilt_room_center_x = world_rect.get_center().x
 
 func add_trauma(amount: float) -> void:
-	# Repeated impacts should intensify the shake without pinning the camera at its
-	# maximum for an entire automatic burst.
-	var headroom := 1.0 - trauma * 0.72
-	trauma = clampf(trauma + amount * headroom, 0.0, 1.0)
+	# Simultaneous pellets, kills and debris share one peak instead of multiplying
+	# camera motion by the number of objects. A stronger impact still wins.
+	var frame := Engine.get_process_frames()
+	if frame != impact_frame:
+		impact_frame = frame
+		frame_impact_peak = 0.0
+		frame_trauma_start = trauma
+	frame_impact_peak = maxf(frame_impact_peak, maxf(0.0, amount))
+	var headroom := 1.0 - frame_trauma_start * 0.72
+	trauma = clampf(frame_trauma_start + frame_impact_peak * headroom, 0.0, 1.0)
 
 func trigger_kill_effect(shake_power := 0.42, flash_type := "red") -> void:
-	add_trauma(shake_power)
-	var flash_color := Color(0.8, 0.0, 0.2, 0.24) if flash_type == "red" else Color(1.0, 1.0, 1.0, 0.34)
+	add_trauma(shake_power * 0.45)
+	add_directional_impulse(-last_player_shot_direction, clampf(shake_power, 0.3, 0.9))
+	var flash_color := Color(0.82, 0.0, 0.1, 0.12) if flash_type == "red" else Color(1.0, 1.0, 1.0, 0.15)
 	impact_flash_requested.emit(flash_color)
 
-func get_follow_position(player_position: Vector2, mouse_position: Vector2) -> Vector2:
-	return get_follow_position_for_mode(player_position, mouse_position, Input.is_action_pressed("look_ahead"))
+func _on_presented_weapon_fire(_origin: Vector2, direction: Vector2, enemy_owned: bool, weapon_id: String) -> void:
+	# Enemy fire is already legible as world-space flash/projectile movement.
+	# Only the player's trigger pulls kick the camera away from the firing axis.
+	if enemy_owned: return
+	last_player_shot_direction = direction.normalized()
+	var platform := WeaponPlatformCatalog.get_platform(weapon_id)
+	var profile := PRESENTATION.for_class(str(platform.get("class", "handgun")))
+	add_directional_impulse(-last_player_shot_direction, float(profile.camera))
 
-func get_follow_position_for_mode(player_position: Vector2, mouse_position: Vector2, peeking: bool) -> Vector2:
+func add_directional_impulse(direction: Vector2, strength: float) -> void:
+	if direction.length_squared() < 0.001: return
+	directional_offset = (directional_offset * 0.35 + direction.normalized() * clampf(strength, 0.0, MAX_DIRECTIONAL_OFFSET)).limit_length(MAX_DIRECTIONAL_OFFSET)
+
+func get_follow_position(player_position: Vector2, mouse_position: Vector2) -> Vector2:
+	var weapon_multiplier := 1.0
+	if is_instance_valid(follow_target) and follow_target.has_method("get_camera_look_ahead_multiplier"):
+		weapon_multiplier = float(follow_target.get_camera_look_ahead_multiplier())
+	var context_targeting: bool = is_instance_valid(follow_target) and follow_target.has_method("is_targeting_mode_active") and bool(follow_target.is_targeting_mode_active())
+	return get_follow_position_for_mode(player_position, mouse_position, Input.is_action_pressed("look_ahead") or context_targeting, weapon_multiplier)
+
+func get_follow_position_for_mode(player_position: Vector2, mouse_position: Vector2, peeking: bool, weapon_multiplier := 1.0) -> Vector2:
 	var mouse_delta := mouse_position - player_position
-	var distance_limit := extended_look_ahead if peeking else max_look_ahead
+	var distance_limit := (extended_look_ahead if peeking else max_look_ahead) * clampf(weapon_multiplier, 0.75, 1.55)
 	var weight := extended_look_weight if peeking else normal_look_weight
 	var desired := player_position + mouse_delta.limit_length(distance_limit) * weight
 	desired.x = clampf(desired.x, camera_center_bounds.position.x, camera_center_bounds.end.x)
 	desired.y = clampf(desired.y, camera_center_bounds.position.y, camera_center_bounds.end.y)
 	return desired
+
+func is_world_position_combat_visible(world_position: Vector2) -> bool:
+	# Hostiles may track and reposition outside the frame, but they may only
+	# complete a shot once their body has entered the player's readable view.
+	# This keeps long sightlines dangerous without allowing invisible deaths.
+	var screen_center := get_screen_center_position()
+	var relative := (world_position - screen_center).rotated(-global_rotation)
+	var safe_half_extent := get_viewport_rect().size / (zoom * 2.0) - Vector2.ONE * combat_visibility_margin
+	return absf(relative.x) <= maxf(1.0, safe_half_extent.x) and absf(relative.y) <= maxf(1.0, safe_half_extent.y)
 
 func get_tilt_target(player_x: float) -> float:
 	var signed_distance := player_x - tilt_room_center_x
@@ -96,6 +138,8 @@ func get_tilt_target(player_x: float) -> float:
 
 func _physics_process(delta: float) -> void:
 	drift_time += delta
+	directional_offset *= exp(-22.0 * delta)
+	if directional_offset.length_squared() < 0.0001: directional_offset = Vector2.ZERO
 	if not is_instance_valid(follow_target):
 		follow_target = get_tree().get_first_node_in_group("player") as Node2D
 	if is_instance_valid(follow_target):
@@ -116,11 +160,11 @@ func _physics_process(delta: float) -> void:
 		smooth_shake_offset = smooth_shake_offset.lerp(Vector2.ZERO, 1.0 - exp(-18.0 * delta))
 		var tilt_pixel := roundi(rad_to_deg(smooth_tilt) * 1.8)
 		var drift_pixel := roundi(sin(drift_time * drift_speed)) if ambient_drift_enabled else 0
-		offset = smooth_shake_offset.round() + Vector2(drift_pixel, tilt_pixel)
+		offset = (smooth_shake_offset + directional_offset * shake_strength).round() + Vector2(drift_pixel, tilt_pixel)
 		rotation = 0.0
 		return
-	smooth_shake_offset = Vector2(noise.get_noise_1d(noise_time), noise.get_noise_1d(noise_time + 71.7)) * max_offset * shake * shake_strength
+	smooth_shake_offset = Vector2(noise.get_noise_1d(noise_time), noise.get_noise_1d(noise_time + 71.7)) * minf(max_offset, 1.5) * shake * shake_strength
 	var tilt_pixel := roundi(rad_to_deg(smooth_tilt) * 1.8)
 	var drift_pixel := roundi(sin(drift_time * drift_speed)) if ambient_drift_enabled else 0
-	offset = smooth_shake_offset.round() + Vector2(drift_pixel, tilt_pixel)
+	offset = (smooth_shake_offset + directional_offset * shake_strength).round() + Vector2(drift_pixel, tilt_pixel)
 	rotation = 0.0

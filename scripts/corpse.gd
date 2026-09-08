@@ -4,23 +4,17 @@ static var weapon_pose_cursors: Dictionary = {}
 const PIXEL_RAGDOLL := preload("res://scripts/effects/pixel_ragdoll_2d.gd")
 const RAGDOLL_IMPACT := preload("res://scripts/combat/ragdoll_impact_resolver.gd")
 const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+const DETACHED_LIMB := preload("res://scripts/effects/detached_limb.gd")
 
 var spin := 0.0
 var simulated_rotation := 0.0
 var wound_variant := 0
 var wound_severity := 1.0
 var death_style := "firearm"
-var cleanup_amount := 1.0
-var dragging_actor: Node2D
-var bag_progress := 0.0
-var bagged := false
 var wound_offset := Vector2.ZERO
-var bleed_time := 4.0
-var bleed_tick := 0.35
-var drag_stain_distance := 0.0
-var last_drag_position := Vector2.ZERO
-var clothing_absorption := 0.0
+var clothing_absorption := 0.0 # Legacy renderer input; active renderer ignores it.
 var attack_id := "pistol"
+var attack_family := "pistol"
 var wound_kind := "puncture"
 var missing_modules: PackedStringArray = []
 var dismemberment_state := "intact"
@@ -33,12 +27,9 @@ var travel_distance := 0.0
 var rig_kind := "human"
 var victim_role := "enemy"
 var ragdoll_impact_profile: Dictionary = {}
-var cleanup_tracking := true
-var cleanup_freeze_delay := 0.0
 var root_speed_limit := 30.0
 
 func _ready() -> void:
-	CleanupRegistry.register_target(self)
 	queue_redraw()
 
 func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, blood_power := 1.0, style := "firearm", hit_zone := "torso", new_attack_id := "pistol", new_travel_distance := 0.0, new_rig_kind := "human", new_victim_role := "enemy", initial_pose := {}) -> void:
@@ -48,15 +39,19 @@ func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, bl
 	wound_severity = clampf(blood_power, 0.7, 1.8)
 	death_style = style
 	attack_id = new_attack_id
+	attack_family = _resolve_attack_family(attack_id)
 	travel_distance = maxf(0.0, new_travel_distance)
 	rig_kind = "hound" if new_rig_kind in ["hound", "dog"] else "human"
 	victim_role = new_victim_role
+	# All blood is resolved in the impact frame. Corpses are visual/AI state only
+	# and never become passive emitters or cleanup objectives.
 	# Legacy/non-projectile kill paths may only provide the authored death style.
 	# Recover a high-energy firearm identity instead of silently drawing a pistol corpse.
 	if attack_id == "pistol" and death_style == "firearm_gib":
 		attack_id = "shotgun" if blood_power >= 2.0 else "lmg"
 	elif attack_id == "pistol" and death_style == "firearm_torn" and blood_power < 0.95:
 		attack_id = "smg"
+	attack_family = _resolve_attack_family(attack_id)
 	# Cycle instead of pure random selection so four consecutive kills with the
 	# same weapon always demonstrate four different corpse silhouettes.
 	var next_pose := (int(weapon_pose_cursors.get(attack_id, -1)) + 1) % 4
@@ -77,7 +72,7 @@ func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, bl
 	var authored_root_scale := 0.65
 	var minimum_root_speed := 12.0
 	root_speed_limit = 28.0
-	match attack_id:
+	match attack_family:
 		"pistol": authored_root_scale = 0.82; minimum_root_speed = 18.0; root_speed_limit = 30.0
 		"smg": authored_root_scale = 0.68; minimum_root_speed = 16.0; root_speed_limit = 28.0
 		"lmg": authored_root_scale = 0.76; minimum_root_speed = 22.0; root_speed_limit = 42.0
@@ -96,19 +91,45 @@ func setup(facing: float, impact_direction := Vector2.ZERO, knockback := 0.0, bl
 	if Settings.ragdoll_enabled:
 		ragdoll = PIXEL_RAGDOLL.new() as PixelRagdoll2D
 		add_child(ragdoll)
+		ragdoll.wound_state = dismemberment_state
+		ragdoll.wound_variant = wound_variant
 		if victim_role == "player":
-			ragdoll.cloth_color = Color("d8e2df")
-			ragdoll.accent_color = Color("27c9ca")
+			ragdoll.cloth_color = Color("d8d8d8")
+			ragdoll.accent_color = Color("777777")
 		ragdoll.setup(impact_direction, float(ragdoll_impact_profile.limb_force), missing_modules, corpse_pose_variant, rig_kind, ragdoll_impact_profile, initial_pose)
+	_spawn_detached_anatomy(impact_direction)
 	death_twitch = 0.16
 	wound_offset = Vector2(4, 0) if hit_zone == "head" else (Vector2(-2, 3) if hit_zone == "limb" else Vector2.ZERO)
-	last_drag_position = global_position
 	queue_redraw()
+
+func _spawn_detached_anatomy(impact_direction: Vector2) -> void:
+	if not Settings.gore_enabled or missing_modules.is_empty() or not is_inside_tree(): return
+	var parent := get_parent() as Node2D
+	# Some tests host corpses directly under a Node. Node2D is not required for
+	# gameplay ownership, only for converting a transformed room's local space.
+	var effect_parent := get_parent()
+	if not is_instance_valid(effect_parent): return
+	var limb_power := clampf(float(ragdoll_impact_profile.get("limb_force", 30.0)) / 72.0, 0.65, 1.55)
+	for module in missing_modules:
+		var kind := "head" if module == "head" else ("leg" if module.begins_with("leg") else "arm")
+		var local_point := Vector2(5, 0) if kind == "head" else (Vector2(-5, 3) if kind == "leg" else Vector2(1, -3 if module == "arm_front" else 3))
+		var spawn_position := to_global(local_point)
+		var query := PhysicsRayQueryParameters2D.create(global_position, spawn_position, 4)
+		var blocked := get_world_2d().direct_space_state.intersect_ray(query)
+		if not blocked.is_empty(): spawn_position = blocked.position + blocked.normal * 2.5
+		var limb := DETACHED_LIMB.new() as CharacterBody2D
+		limb.position = parent.to_local(spawn_position) if is_instance_valid(parent) else spawn_position
+		# Severed parts are anatomy, not renewable blood emitters. Every crimson
+		# pixel still comes from the wound event's finite mass ledger.
+		limb.setup(kind, impact_direction, limb_power, false)
+		limb.visual_role = ragdoll.visual_role if is_instance_valid(ragdoll) else ("player" if victim_role == "player" else "gunner")
+		RuntimeBudget.add_persistent("anatomy", limb, effect_parent)
 
 func _configure_dismemberment(hit_zone: String, limb_count: int) -> void:
 	missing_modules.clear()
 	dismemberment_state = "intact"
-	match attack_id:
+	if not Settings.gore_enabled: return
+	match attack_family:
 		"pistol":
 			if hit_zone == "head": dismemberment_state = "head_puncture"
 			elif hit_zone == "limb": dismemberment_state = "limb_puncture"
@@ -151,15 +172,19 @@ func _configure_dismemberment(hit_zone: String, limb_count: int) -> void:
 			if requested > 2: missing_modules.append("arm_back")
 	# Preserve violence-profile support for future weapons without making light
 	# firearms randomly erase more anatomy than their authored state permits.
-	if attack_id not in ["pistol", "smg", "lmg", "shotgun"]:
+	if attack_family not in ["pistol", "smg", "lmg", "shotgun"]:
 		return
 
+func _resolve_attack_family(source_id: String) -> String:
+	if source_id in ["pistol", "smg", "lmg", "shotgun"]: return source_id
+	if not WeaponPlatformCatalog.has_weapon(source_id): return source_id
+	var weapon_class := str(WeaponPlatformCatalog.get_platform(source_id).get("class", "handgun"))
+	if weapon_class == "handgun": return "pistol"
+	if weapon_class in ["pdw", "smg"]: return "smg"
+	if weapon_class == "shotgun": return "shotgun"
+	return "lmg"
+
 func _physics_process(delta: float) -> void:
-	if cleanup_freeze_delay > 0.0:
-		cleanup_freeze_delay = maxf(0.0, cleanup_freeze_delay - delta)
-		if cleanup_freeze_delay <= 0.0 and is_instance_valid(ragdoll):
-			ragdoll.freeze_pose()
-			_align_root_to_ragdoll()
 	if overkill_window > 0.0:
 		overkill_window = maxf(0.0, overkill_window - delta)
 		if overkill_window <= 0.0: collision_layer = 0
@@ -168,30 +193,13 @@ func _physics_process(delta: float) -> void:
 		simulated_rotation += sin(death_twitch * 90.0) * 0.012
 		rotation = snappedf(simulated_rotation, PI / 8.0)
 		queue_redraw()
-	_update_bleeding(delta)
-	if is_instance_valid(dragging_actor):
-		var drag_direction := Vector2.RIGHT.rotated(dragging_actor.rotation)
-		# A sealed 30px body bag is held near one tapered end instead of being
-		# dragged from its center through the cleaner's feet.
-		var drag_offset := 15.0 if bagged else 13.0
-		var target_position := dragging_actor.global_position - drag_direction * drag_offset
-		velocity = ((target_position - global_position) * 9.0).limit_length(92.0)
-		move_and_slide()
-		if not bagged: drag_stain_distance += global_position.distance_to(last_drag_position)
-		if not bagged and drag_stain_distance >= 8.0:
-			var drag_vector := global_position - last_drag_position
-			_spawn_blood_drop(global_position + wound_offset.rotated(rotation), 0.55, drag_vector)
-			var system := get_tree().get_first_node_in_group("blood_system")
-			if is_instance_valid(system) and system.has_method("spawn_drag_smear"):
-				system.spawn_drag_smear(global_position + wound_offset.rotated(rotation), drag_vector.normalized(), 0.65 * wound_severity)
-			drag_stain_distance = 0.0
-		last_drag_position = global_position
-		simulated_rotation = lerp_angle(simulated_rotation, drag_direction.angle(), 1.0 - exp(-5.0 * delta))
-		rotation = snappedf(simulated_rotation, PI / 8.0)
-		return
 	if velocity.length_squared() < 0.1:
 		velocity = Vector2.ZERO
-		if bleed_time <= 0.0 and cleanup_freeze_delay <= 0.0: set_physics_process(false)
+		# The same process owns the overkill/collision timeout. Sleeping the root
+		# immediately used to leave a stationary corpse on its combat collision
+		# layer forever and kept its overkill window permanently open.
+		if overkill_window <= 0.0 and death_twitch <= 0.0:
+			set_physics_process(false)
 		return
 	velocity = velocity.limit_length(root_speed_limit)
 	var collision := move_and_collide(velocity * delta)
@@ -204,7 +212,6 @@ func _physics_process(delta: float) -> void:
 			elif collider.has_method("take_damage") and impact_velocity.length() >= 55.0:
 				collider.take_damage(1, global_position - impact_velocity.normalized())
 		if impact_velocity.length() >= 38.0:
-			_spawn_blood_drop(collision.get_position(), clampf(impact_velocity.length() / 110.0, 0.35, 0.9), -collision.get_normal())
 			Events.publish_combat_noise(collision.get_position(), clampf(impact_velocity.length() * 1.2, 48.0, 110.0), "corpse_impact")
 		# A corpse should thud and settle at a wall, not retain enough tangential
 		# energy to squeeze around thin corners or disabled door leaves.
@@ -217,23 +224,6 @@ func _physics_process(delta: float) -> void:
 	simulated_rotation += spin * delta
 	rotation = snappedf(simulated_rotation, PI / 8.0)
 	spin = move_toward(spin, 0.0, 7.0 * delta)
-
-func _update_bleeding(delta: float) -> void:
-	if bagged or bleed_time <= 0.0: return
-	clothing_absorption = minf(1.0, clothing_absorption + delta * (0.18 + wound_severity * 0.09))
-	queue_redraw()
-	bleed_time -= delta
-	bleed_tick -= delta
-	if bleed_tick <= 0.0:
-		bleed_tick = randf_range(0.38, 0.72)
-		_spawn_blood_drop(global_position + wound_offset.rotated(rotation), clampf(bleed_time / 4.0, 0.25, 0.75), Vector2.RIGHT.rotated(rotation))
-
-func _spawn_blood_drop(position: Vector2, strength: float, direction: Vector2) -> void:
-	# Packaging seals every biological emission path, including drag and impact
-	# helpers that may still run while the bag is being transported.
-	if bagged: return
-	var system := get_tree().get_first_node_in_group("blood_system")
-	if is_instance_valid(system) and system.has_method("spawn_micro_drop"): system.spawn_micro_drop(position, strength, direction)
 
 func try_claim_investigation(investigator: Node) -> bool:
 	return CorpseIncidentRegistry.try_claim(self, investigator)
@@ -250,80 +240,13 @@ func has_active_investigator() -> bool:
 func is_investigation_complete() -> bool:
 	return CorpseIncidentRegistry.is_complete(self)
 
-func get_cleanup_type() -> String:
-	return "corpse"
-
-func get_cleanup_cost() -> int:
-	return 10
-
-func get_cleanup_progress() -> float:
-	return 1.0 if bagged else bag_progress
-
-func get_interaction_position() -> Vector2:
-	# While a ragdoll is active its torso can settle several pixels away from the
-	# CharacterBody2D origin. All prompts, reach checks and packaging must follow
-	# the visible body rather than the obsolete death-spawn coordinate.
-	if not bagged and is_instance_valid(ragdoll):
-		return ragdoll.to_global(ragdoll.get_body_anchor_local())
-	return global_position
-
-func _align_root_to_ragdoll() -> void:
-	if not is_instance_valid(ragdoll): return
-	var visible_anchor := ragdoll.to_global(ragdoll.get_body_anchor_local())
-	var local_shift := ragdoll.rebase_to_body_anchor()
-	if local_shift.length_squared() <= 0.0001: return
-	global_position = visible_anchor
-	last_drag_position = global_position
-
-func apply_cleanup_tool(tool_name: String) -> bool:
-	if tool_name != "body_bag": return false
-	if bagged: return true
-	bag_progress = 1.0
-	if bag_progress >= 1.0:
-		# Preserve the visible landing position when replacing articulated limbs
-		# with the single sealed-bag silhouette.
-		_align_root_to_ragdoll()
-		bagged = true
-		velocity = Vector2.ZERO
-		spin = 0.0
-		bleed_time = 0.0
-		bleed_tick = INF
-		drag_stain_distance = 0.0
-		collision_layer = 0
-		overkill_window = 0.0
-		if is_instance_valid(ragdoll):
-			ragdoll.freeze_pose()
-			ragdoll.visible = false
-		_configure_body_bag_collision()
-	queue_redraw()
-	return true
-
-func _configure_body_bag_collision() -> void:
-	var bag_shape := RectangleShape2D.new()
-	# The collider stays one or two pixels inside the tapered visual silhouette,
-	# which keeps a long bag from snagging on every doorway corner while dragging.
-	bag_shape.size = Vector2(23, 7)
-	$CollisionShape2D.shape = bag_shape
-	var shadow := get_node_or_null("FakeShadow") as Polygon2D
-	if is_instance_valid(shadow):
-		shadow.polygon = PackedVector2Array([
-			Vector2(-12, -2), Vector2(-10, -4), Vector2(10, -4), Vector2(12, -2),
-			Vector2(13, 0), Vector2(12, 2), Vector2(10, 4), Vector2(-10, 4),
-			Vector2(-12, 2), Vector2(-13, 0),
-		])
-
-func is_bagged() -> bool:
-	return bagged
-
 func can_receive_overkill() -> bool:
-	return not bagged and overkill_window > 0.0 and overkill_hits < 3
+	return overkill_window > 0.0 and overkill_hits < 3
 
 func receive_projectile_overkill(direction: Vector2, hit_position: Vector2, weapon_id: String, impact_speed: float) -> bool:
 	if not can_receive_overkill(): return false
 	overkill_hits += 1
 	wound_severity = minf(2.2, wound_severity + 0.16)
-	bleed_time = maxf(bleed_time, 0.55)
-	bleed_tick = minf(bleed_tick, 0.12)
 	var followup := RAGDOLL_IMPACT.resolve(weapon_id, travel_distance, "torso", rig_kind)
 	if is_instance_valid(ragdoll):
 		ragdoll.apply_impact(direction, float(followup.limb_force) * 0.46, to_local(hit_position))
@@ -331,54 +254,6 @@ func receive_projectile_overkill(direction: Vector2, hit_position: Vector2, weap
 	spin += randf_range(-0.9, 0.9) * float(followup.spin_force)
 	queue_redraw()
 	return true
-
-func set_cleanup_tracking(enabled: bool) -> void:
-	cleanup_tracking = enabled
-	if enabled:
-		CleanupRegistry.register_target(self)
-	else:
-		CleanupRegistry.unregister_target(self)
-		CorpseIncidentRegistry.unregister_corpse(self)
-
-func enter_cleanup_stable_state() -> void:
-	overkill_window = 0.0
-	collision_layer = 0
-	if not is_instance_valid(ragdoll): return
-	# The final enemy used to become rigid the instant cleanup started, cutting
-	# off the most visible portion of its death animation. Keep a short safe
-	# presentation tail, then freeze the settled pose for cleanup interactions.
-	if ragdoll.active_time > 0.35 and not ragdoll.frozen:
-		cleanup_freeze_delay = minf(0.85, ragdoll.active_time - 0.25)
-		set_physics_process(true)
-	else:
-		ragdoll.freeze_pose()
-		_align_root_to_ragdoll()
-
-func extract_bag() -> bool:
-	if not bagged: return false
-	if is_instance_valid(dragging_actor): dragging_actor.set("dragged_corpse", null)
-	CorpseIncidentRegistry.unregister_corpse(self)
-	CleanupRegistry.unregister_target(self)
-	queue_free()
-	return true
-
-func begin_drag(actor: Node2D) -> bool:
-	if not is_instance_valid(actor) or (is_instance_valid(dragging_actor) and dragging_actor != actor): return false
-	dragging_actor = actor
-	set_physics_process(true)
-	return true
-
-func end_drag(actor: Node2D) -> void:
-	if dragging_actor != actor: return
-	dragging_actor = null
-	velocity = Vector2.ZERO
-	set_physics_process(not bagged and bleed_time > 0.0)
-
-func is_being_dragged() -> bool:
-	return is_instance_valid(dragging_actor)
-
-func clean_step() -> void:
-	return
 
 func _exit_tree() -> void:
 	CorpseIncidentRegistry.unregister_corpse(self)
@@ -388,9 +263,9 @@ func _draw_compact_pixel_corpse() -> void:
 	# of hard-edged blocks. Damage changes missing blocks, not overall canvas size.
 	var ink := Color("17141b")
 	var cloth := Color("d8e2df")
-	var cloth_shadow := Color("8e244f")
-	var skin := Color("e1a07f")
-	var blood := NeonPalette.BLOOD_DARK
+	var cloth_shadow := Color("666666")
+	var skin := NeonPalette.SKIN
+	var wound_gray := Color("4b4b4b")
 	var tissue := NeonPalette.TISSUE
 	var pose_y := int([-1, -2, 1, 2][corpse_pose_variant])
 	var paint := func(area: Rect2, color: Color, seed: int, pattern: StringName = &"fabric") -> void:
@@ -406,7 +281,7 @@ func _draw_compact_pixel_corpse() -> void:
 		paint.call(Rect2(0, pose_y - 2, 2, 4), tissue, 13, &"grain")
 	elif dismemberment_state in ["upper_destroyed", "torso_torn", "torso_cavity", "side_torn"]:
 		paint.call(Rect2(-3, pose_y - 3, 5, 6), cloth_shadow, 17)
-		paint.call(Rect2(2, pose_y - 2, 3, 4), blood, 19, &"grain")
+		paint.call(Rect2(2, pose_y - 2, 3, 4), wound_gray, 19, &"grain")
 		paint.call(Rect2(2, pose_y - 1, 2, 2), tissue, 23, &"grain")
 	else:
 		paint.call(Rect2(-3, pose_y - 3, 8, 6), ink, 29, &"grain")
@@ -420,12 +295,12 @@ func _draw_compact_pixel_corpse() -> void:
 		paint.call(Rect2(5, pose_y - 2, 4, 4), ink, 47, &"grain")
 		paint.call(Rect2(6, pose_y - 1, 2, 2), skin, 53, &"grain")
 	else:
-		paint.call(Rect2(5, pose_y - 2, 3, 4), blood, 59, &"grain")
+		paint.call(Rect2(5, pose_y - 2, 3, 4), wound_gray, 59, &"grain")
 		paint.call(Rect2(6, pose_y - 1, 1, 2), tissue, 61, &"grain")
 		# Detached head remains beside the body instead of disappearing into blood.
 		paint.call(Rect2(11, pose_y - 6, 4, 4), ink, 67, &"grain")
 		paint.call(Rect2(12, pose_y - 5, 2, 2), skin, 71, &"grain")
-		paint.call(Rect2(11, pose_y - 4, 2, 2), blood, 73, &"grain")
+		paint.call(Rect2(11, pose_y - 4, 2, 2), wound_gray, 73, &"grain")
 	if missing_modules.has("arm_front"):
 		paint.call(Rect2(1, pose_y - 10, 7, 2), ink, 79)
 		paint.call(Rect2(6, pose_y - 10, 2, 2), tissue, 83, &"grain")
@@ -437,7 +312,7 @@ func _draw_compact_pixel_corpse() -> void:
 		paint.call(Rect2(-5, pose_y + 7, 2, 3), tissue, 103, &"grain")
 	# One small wound mark keeps firearm identity without burying the silhouette.
 	if dismemberment_state != "intact":
-		PIXEL_PAINTER.material_circle(self, (wound_offset * 0.45).round(), 1, blood, blood.lightened(0.16), blood.darkened(0.24), 107)
+		PIXEL_PAINTER.material_circle(self, (wound_offset * 0.45).round(), 1, wound_gray, wound_gray.lightened(0.16), wound_gray.darkened(0.24), 107)
 
 func _draw_body_bag() -> void:
 	# A compact human-scale 26x9 px zippered bag. Every visible mark is a native one-pixel
@@ -482,17 +357,7 @@ func _draw() -> void:
 	# still compact beside a living actor but leaves 2–4 physical pixels for each
 	# missing module, cavity, and detached piece at the final viewport scale.
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if is_instance_valid(ragdoll):
-		if bagged:
-			_draw_body_bag()
-		elif bag_progress > 0.0:
-			PIXEL_PAINTER.arc(self, Vector2.ZERO, 15, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, NeonPalette.CYAN, 24)
-		return
-	if bagged:
-		_draw_body_bag()
-		return
-	if bag_progress > 0.0:
-		PIXEL_PAINTER.arc(self, Vector2.ZERO, 15, -PI * 0.5, -PI * 0.5 + TAU * bag_progress, NeonPalette.CYAN, 24)
+	if is_instance_valid(ragdoll): return
 	_draw_compact_pixel_corpse()
 	return
 	# Authored corpse sprites now carry the human silhouette and major trauma.

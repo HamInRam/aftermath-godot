@@ -230,8 +230,8 @@ func get_cleanup_progress() -> float:
 func _draw() -> void:
 	if ultraviolet_residue:
 		if ultraviolet_visible:
-			PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 4, Color(0.20, 1.0, 0.46, 0.18), Color(0.45, 1.0, 0.72, 0.34), Color(0.1, 0.45, 0.26, 0.2), 17)
-			PIXEL_PAINTER.circle(self, Vector2.ZERO, 6, Color(0.45, 1.0, 0.72, 0.22), true)
+			PIXEL_PAINTER.material_circle(self, Vector2.ZERO, 4, Color(0.62, 0.12, 1.0, 0.22), Color(0.80, 0.38, 1.0, 0.38), Color(0.30, 0.03, 0.60, 0.24), 17)
+			PIXEL_PAINTER.circle(self, Vector2.ZERO, 6, Color(0.72, 0.24, 1.0, 0.30), true)
 		return
 	var dilution := 1.0 - amount
 	var coagulation := floorf(clampf(stain_age / maxf(8.0, 18.0 / surface_absorption), 0.0, 0.99) * 4.0) / 3.0

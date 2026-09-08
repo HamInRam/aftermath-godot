@@ -6,6 +6,11 @@ extends Resource
 @export_enum("human", "dog") var actor_type := "human"
 @export var default_weapon_id := ""
 @export var display_name := "GUNNER"
+@export_range(1, 200, 1) var max_health := 75
+@export_range(0.0, 3.0, 0.05) var armor_protection := 0.0
+@export_range(0.0, 0.7, 0.01) var armor_damage_reduction := 0.0
+@export_range(0.0, 150.0, 1.0) var armor_durability := 0.0
+@export var armor_covers_head := false
 @export var move_speed := 42.0
 @export var chase_speed_multiplier := 1.35
 @export var preferred_distance := 68.0

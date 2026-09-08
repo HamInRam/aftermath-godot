@@ -5,7 +5,6 @@
 level_title = "ROOM SERVICE"
 enemy_spawns = PackedVector2Array(52,52, 148,52, 212,52, 308,52, 340,84, 52,188, 180,188, 308,188)
 enemy_types = PackedStringArray("melee","gunner","dog","assault","gunner","melee","gunner","heavy")
-fixed_sentry_indices = PackedInt32Array(1,7)
 mission_profile = ExtResource("2")
 visual_theme = "neon"
 ammo_pickup_positions = PackedVector2Array(52,108, 164,108, 276,108, 348,204)

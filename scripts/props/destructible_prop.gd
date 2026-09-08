@@ -17,7 +17,7 @@ var prop_kind := "table"
 var state := PropState.INTACT
 var hp := 2
 var last_impact_direction := Vector2.RIGHT
-var accent := Color("b25a38")
+var accent := Color("777777")
 var _collision: CollisionShape2D
 var material_profile: Dictionary = {}
 var structural_stage := 0
@@ -40,9 +40,9 @@ var snap_radius := 11.0
 var physics_active := false
 var restoration_locked := false
 
-func setup(kind: String, tint := Color("b25a38")) -> void:
+func setup(kind: String, tint := Color("777777")) -> void:
 	prop_kind = kind
-	accent = tint
+	accent = Color(tint.v, tint.v, tint.v)
 	material_profile = DestructionMaterial.for_kind(kind)
 	hp = 2
 	structural_stage = 0
@@ -64,7 +64,6 @@ func _ready() -> void:
 	home_global_position = global_position
 	home_rotation = rotation
 	simulated_rotation = rotation
-	if is_movable(): call_deferred("_create_restoration_anchor")
 	set_physics_process(false)
 
 func _create_restoration_anchor() -> void:
@@ -88,8 +87,12 @@ func receive_projectile_impact(projectile_velocity: Vector2, hit_position: Vecto
 	receive_projectile_impact_context(projectile_velocity, hit_position, "pistol", 1)
 
 func receive_projectile_impact_context(projectile_velocity: Vector2, hit_position: Vector2, weapon_id: String, damage: int) -> void:
-	var speed_energy := clampf(projectile_velocity.length() / 650.0, 0.45, 1.8) * maxi(1, damage)
-	var attack_kind := "shotgun" if weapon_id == "shotgun" else "projectile"
+	# HP damage uses a 100-point character-health scale, not physical joules.
+	# Multiplying by 30-100 damage made every pistol pellet act like an explosive.
+	# Normalize the wound value and retain weapon speed/material differences.
+	var damage_energy := clampf(sqrt(float(maxi(1, damage)) / 35.0), 0.65, 1.6)
+	var speed_energy := clampf(projectile_velocity.length() / 650.0, 0.45, 1.8) * damage_energy
+	var attack_kind := "shotgun" if AttackCatalog.get_gun_data(weapon_id).weapon_class == "shotgun" else "projectile"
 	_apply_impact(DestructionMaterial.energy_for_attack(attack_kind, speed_energy), projectile_velocity.normalized(), hit_position, attack_kind)
 
 func receive_melee_impact(direction: Vector2, melee_type: String) -> void:
@@ -140,7 +143,7 @@ func _apply_impact(energy: float, direction: Vector2, world_hit_point: Vector2, 
 func _destroy(energy := 1.0, attack_kind := "generic") -> void:
 	state = PropState.DESTROYED
 	if is_instance_valid(_collision): _collision.set_deferred("disabled", true)
-	add_to_group("resettable_furniture")
+	if cleanup_ready: add_to_group("resettable_furniture")
 	Events.prop_destroyed.emit(global_position, prop_kind)
 	Events.publish_combat_noise(global_position, float(material_profile.get("noise", 86.0)), "%s_break" % material_profile.material)
 	_spawn_physical_chunks(energy)
@@ -179,10 +182,10 @@ func _mark_displaced() -> void:
 	if displaced: return
 	displaced = true
 	add_to_group("displaced_prop")
-	add_to_group("resettable_furniture")
-	CleanupRegistry.register_target(self)
-	if is_instance_valid(restoration_anchor): restoration_anchor.mark_needed()
-	else: call_deferred("_mark_anchor_needed")
+	if cleanup_ready:
+		add_to_group("resettable_furniture")
+		CleanupRegistry.register_target(self)
+		if is_instance_valid(restoration_anchor): restoration_anchor.mark_needed()
 	_release_home_navigation()
 	if not displacement_reported:
 		displacement_reported = true
@@ -246,6 +249,10 @@ func _physics_process(delta: float) -> void:
 
 func enter_cleanup_restore_state() -> void:
 	cleanup_ready = true
+	# Compatibility for archived cleanup scenes. Rogue combat never creates the
+	# old restoration ghosts, drag targets, or registry entries in the first place.
+	if is_movable(): _create_restoration_anchor()
+	if displaced: CleanupRegistry.register_target(self)
 	velocity = Vector2.ZERO
 	spin_velocity = 0.0
 	physics_active = false
@@ -380,72 +387,103 @@ func _get_size() -> Vector2:
 func _draw() -> void:
 	var size := _get_size()
 	var half := size * 0.5
-	var outline := Color("17131b")
-	if state != PropState.DESTROYED:
-		PIXELS.stipple_rect(self, Rect2(-half + Vector2(2, 2), size), Color(0.03, 0.02, 0.04, 0.46), 2, 3)
+	var ink := Color("151515")
 	if state == PropState.DESTROYED:
-		_draw_debris(outline)
+		_draw_debris(ink)
 		return
-	var base := accent.darkened(0.2 if state in [PropState.INTACT, PropState.RESTORED] else 0.42)
+	# One crisp contact shadow, never a dither halo around the silhouette.
+	PIXELS.rect(self, Rect2(-half + Vector2(1, 2), size), Color(0.02, 0.02, 0.02, 0.38))
+	var base := _prop_body_color()
 	match prop_kind:
 		"sofa":
 			_prop_panel(Rect2(-half, size), base, &"fabric", 1)
-			PIXELS.line(self, Vector2(0, -3), Vector2(0, 3), outline)
+			PIXELS.rect(self, Rect2(-6,-3,12,2), Color("a9a9a9"))
+			PIXELS.rect(self, Rect2(-6,-1,1,4), Color("bdbdbd"))
+			PIXELS.rect(self, Rect2(5,-1,1,4), Color("bdbdbd"))
+			PIXELS.line(self, Vector2(0,-1), Vector2(0,2), ink)
 		"bed":
-			_prop_panel(Rect2(-half, size), Color("c98782"), &"fabric", 2)
-			PIXELS.material_rect(self, Rect2(-half + Vector2(1, 1), Vector2(4, 6)), Color("ead8c5"), Color("fff2db"), Color("b99b88"), 2, &"fabric")
+			_prop_panel(Rect2(-half, size), base, &"fabric", 2)
+			PIXELS.rect(self, Rect2(-6,-3,4,6), Color("e4e4e4"))
+			PIXELS.rect(self, Rect2(-1,-3,7,2), Color("a3a3a3"))
+			PIXELS.line(self, Vector2(-1,2), Vector2(5,2), Color("888888"))
 		"table":
 			_prop_panel(Rect2(-half, size), base, &"wood", 3)
-			PIXELS.line(self, Vector2(-4, -2), Vector2(4, -2), accent.lightened(0.2))
+			PIXELS.rect(self, Rect2(-5,-2,3,2), Color("d8d8d8"))
+			PIXELS.pixel(self, Vector2(3,1), Color("c6c6c6"))
 		"tv":
-			_prop_panel(Rect2(-half, size), Color("29313b"), &"metal", 4)
-			PIXELS.material_rect(self, Rect2(-half + Vector2(2, 2), size - Vector2(4, 4)), Color("43cbd1") if state in [PropState.INTACT, PropState.RESTORED] else Color("312b35"), Color("b9ffff"), Color("226b78"), 4, &"glass")
-		"vending":
+			_prop_panel(Rect2(-half, size), Color("555555"), &"metal", 4)
+			PIXELS.rect(self, Rect2(-2,-2,4,3), Color("c5c5c5") if state != PropState.DAMAGED else Color("343434"))
+			PIXELS.rect(self, Rect2(-1,-1,2,1), Color("e7e7e7"))
+			PIXELS.rect(self, Rect2(-2,3,4,1), ink)
+		"vending", "slot_machine":
 			_prop_panel(Rect2(-half, size), base, &"metal", 5)
-			for point in [Vector2(-2,-2), Vector2(0,-2), Vector2(1,-1)]: PIXELS.pixel(self, point, Color("ff3d99"))
+			PIXELS.rect(self, Rect2(-2,-2,3,3), Color("d7d7d7"))
+			PIXELS.line(self, Vector2(-2,-1), Vector2(0,-1), Color("5b5b5b"))
+			PIXELS.pixel(self, Vector2(2,-2), Color("f0f0f0"))
+			PIXELS.rect(self, Rect2(-1,2,3,1), ink)
 		"speaker":
-			_prop_panel(Rect2(-half, size), Color("302a38"), &"fabric", 6)
-			PIXELS.material_circle(self, Vector2(0, 1), 2, accent.darkened(0.15), accent.lightened(0.25), outline, 6)
-			PIXELS.pixel(self, Vector2(0, -2), Color("8ae8eb"))
+			_prop_panel(Rect2(-half, size), Color("393939"), &"metal", 6)
+			PIXELS.circle(self, Vector2(0,1), 2, Color("a3a3a3"))
+			PIXELS.circle(self, Vector2(0,1), 1, ink)
+			PIXELS.pixel(self, Vector2(0,-2), Color("dddddd"))
 		"bar", "counter":
 			_prop_panel(Rect2(-half, size), base, &"wood", 7)
-			PIXELS.line(self, Vector2(-5,-2), Vector2(5,-2), accent.lightened(0.25))
+			PIXELS.rect(self, Rect2(-6,-3,12,2), Color("d6d6d6"))
+			PIXELS.line(self, Vector2(-5,1), Vector2(5,1), Color("515151"))
 		"crate":
-			_prop_panel(Rect2(-half, size), Color("8f572f"), &"wood", 8)
-			PIXELS.line(self, Vector2(-3,-3), Vector2(3,3), Color("4a2b21")); PIXELS.line(self, Vector2(3,-3), Vector2(-3,3), Color("4a2b21"))
+			_prop_panel(Rect2(-half, size), base, &"wood", 8)
+			PIXELS.line(self, Vector2(-2,-2), Vector2(2,2), Color("c1c1c1"))
+			PIXELS.pixel(self, Vector2(2,-2), Color("333333"))
+			PIXELS.pixel(self, Vector2(-2,2), Color("333333"))
 		"shelf", "evidence_cabinet", "freezer":
 			_prop_panel(Rect2(-half, size), base, &"metal", 9)
-			PIXELS.line(self, Vector2(-5,0), Vector2(5,0), outline)
-			for x in [-4.0, 0.0, 4.0]: PIXELS.pixel(self, Vector2(x,-2), accent.lightened(0.2))
-		"slot_machine":
-			_prop_panel(Rect2(-half, size), Color("5d234e"), &"metal", 10)
-			for x in range(-2, 2): PIXELS.pixel(self, Vector2(x,-2 + posmod(x,2)), Color("ffd34e"))
-			PIXELS.pixel(self, Vector2(2,2), accent)
+			PIXELS.line(self, Vector2(-5,0), Vector2(5,0), ink)
+			PIXELS.rect(self, Rect2(-2,-2,4,1), Color("dddddd"))
+			PIXELS.rect(self, Rect2(-2,2,4,1), Color("b6b6b6"))
 		"conveyor", "console":
-			_prop_panel(Rect2(-half, size), Color("4e5860"), &"metal", 11)
-			for x in range(-5, 6, 3): PIXELS.pixel(self, Vector2(x,-1), accent)
+			_prop_panel(Rect2(-half, size), base, &"metal", 11)
+			if prop_kind == "console":
+				PIXELS.rect(self, Rect2(-5,-2,5,3), Color("cacaca"))
+				for x in [2,4]: PIXELS.pixel(self, Vector2(x,1), Color("eeeeee"))
+			else:
+				for x in [-4,0,4]: PIXELS.line(self, Vector2(x,-2), Vector2(x,2), Color("333333"))
 		"sink", "toilet":
-			_prop_panel(Rect2(-half, size), Color("d6e3dc"), &"glass", 12)
-			PIXELS.material_rect(self, Rect2(-2, -2, 4, 3), Color("548b94"), Color("b9ffff"), Color("315c69"), 12, &"glass")
+			_prop_panel(Rect2(-half, size), base, &"ceramic", 12)
+			PIXELS.rect(self, Rect2(-2,-1,4,3), Color("737373"))
+			PIXELS.rect(self, Rect2(-1,0,2,1), Color("333333"))
+			PIXELS.rect(self, Rect2(-1,-3,2,2), Color("f5f5f5"))
 		"plant":
-			_prop_panel(Rect2(-3, 1, 6, 4), Color("553126"), &"wood", 13)
-			PIXELS.line(self, Vector2(0, 1), Vector2(0, -4), Color("39784d"))
-			for point in [Vector2(-3,-4),Vector2(-2,-3),Vector2(-1,-4),Vector2(1,-3),Vector2(2,-2),Vector2(3,-3),Vector2(0,-5)]: PIXELS.pixel(self, point, Color("54a85f") if int(point.x + point.y) % 2 == 0 else Color("39784d"))
+			_prop_panel(Rect2(-3,1,6,3), base, &"ceramic", 13)
+			PIXELS.line(self, Vector2(0,1), Vector2(0,-4), Color("333333"))
+			PIXELS.rect(self, Rect2(-3,-3,3,2), Color("545454"))
+			PIXELS.rect(self, Rect2(1,-4,3,3), Color("515151"))
+			PIXELS.line(self, Vector2(1,-3), Vector2(3,-3), Color("9d9d9d"))
 		_:
-			_prop_panel(Rect2(-half, size), base, &"grain", 14)
+			_prop_panel(Rect2(-half, size), base, &"metal", 14)
 	if state == PropState.DAMAGED:
-		var crack_color: Color = material_profile.get("secondary", Color("f1d4be"))
-		PIXELS.damage_crack(self, impact_point, crack_color, outline)
+		PIXELS.damage_crack(self, impact_point, Color("d3d3d3"), ink)
 
-func _prop_panel(area: Rect2, color: Color, pattern: StringName, seed: int) -> void:
-	PIXELS.material_panel(self, area, Color("17131b"), color, color.lightened(0.18), color.darkened(0.22), seed, pattern)
+func _prop_body_color() -> Color:
+	var body: Color = material_profile.get("primary", Color("777777"))
+	# State changes expose the same material instead of tinting the whole prop.
+	return body
+
+func _prop_panel(area: Rect2, color: Color, pattern: StringName, _seed: int) -> void:
+	PIXELS.rect(self, area, Color("151515"))
+	PIXELS.rect(self, Rect2(area.position + Vector2.ONE, area.size - Vector2(2,2)), color)
+	PIXELS.line(self, area.position + Vector2.ONE, Vector2(area.end.x - 2, area.position.y + 1), color.lightened(0.3))
+	# Quiet top face, dark underside and one lit edge establish object height
+	# without patterned noise or changing its physical footprint.
+	PIXELS.line(self, Vector2(area.position.x + 1, area.end.y - 2), area.end - Vector2(2, 2), color.darkened(0.28))
+	if pattern == &"wood" and area.size.x > 9:
+		PIXELS.line(self, area.position + Vector2(2,4), area.position + Vector2(6,4), color.darkened(0.18))
 
 func _draw_debris(outline: Color) -> void:
 	var direction := last_impact_direction.normalized()
+	var debris_color := _prop_body_color()
 	for index in range(5):
 		var side := -1.0 if index % 2 == 0 else 1.0
 		var offset := (direction * float(index - 1) * 2.2 + direction.orthogonal() * side * float(1 + index % 3)).round()
-		var debris_color: Color = material_profile.get("primary", accent)
 		PIXELS.pixel(self, offset, outline)
-		PIXELS.pixel(self, offset + direction.round(), debris_color.darkened(0.2))
-		if index < 2: PIXELS.pixel(self, offset + direction.orthogonal().round(), debris_color.lightened(0.12))
+		PIXELS.pixel(self, offset + direction.round(), debris_color)
+		if index < 2: PIXELS.pixel(self, offset + direction.orthogonal().round(), debris_color.lightened(0.3))

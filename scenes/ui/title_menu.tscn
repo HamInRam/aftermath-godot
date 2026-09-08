@@ -1,6 +1,9 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource path="res://scripts/ui/title_menu.gd" type="Script" id="1_menu"]
+[ext_resource path="res://scripts/ui/descent_menu_art.gd" type="Script" id="2_art"]
+
+[sub_resource type="StyleBoxEmpty" id="NoPanel"]
 
 [node name="TitleMenu" type="Control"]
 layout_mode = 3
@@ -18,14 +21,42 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.035, 0.018, 0.047, 1)
+color = Color(0.035, 0.035, 0.035, 1)
+
+[node name="InkPlate" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_art")
+
+[node name="Masthead" type="Label" parent="."]
+offset_left = 18.0
+offset_top = 11.0
+offset_right = 310.0
+offset_bottom = 36.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "AFTERMATH"
+
+[node name="Edition" type="Label" parent="."]
+offset_left = 19.0
+offset_top = 35.0
+offset_right = 165.0
+offset_bottom = 44.0
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 5
+text = "THE DESCENT / NO WAY BACK"
 
 [node name="Panel" type="PanelContainer" parent="."]
 layout_mode = 0
-offset_left = 34.0
-offset_top = 6.0
-offset_right = 286.0
-offset_bottom = 174.0
+offset_left = 18.0
+offset_top = 51.0
+offset_right = 157.0
+offset_bottom = 172.0
+theme_override_styles/panel = SubResource("NoPanel")
 
 [node name="VBox" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
@@ -33,6 +64,7 @@ theme_override_constants/separation = 0
 alignment = 1
 
 [node name="Title" type="Label" parent="Panel/VBox"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.24, 0.48, 1)
 theme_override_font_sizes/font_size = 11
@@ -41,43 +73,44 @@ horizontal_alignment = 1
 
 [node name="Subtitle" type="Label" parent="Panel/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.68, 0.57, 0.7, 1)
-theme_override_font_sizes/font_size = 6
-text = "CAMPAIGN // CASE FILES"
-horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 5
+text = "ROGUELIKE // RANDOMIZED ROOM RUN"
+horizontal_alignment = 0
 
 [node name="ProgressLabel" type="Label" parent="Panel/VBox"]
-custom_minimum_size = Vector2(0, 16)
+custom_minimum_size = Vector2(0, 15)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.35, 1, 0.84, 1)
-theme_override_font_sizes/font_size = 7
-text = "CASES CLOSED // 0/3"
-horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 5
+text = "BEST ROOMS 0 // BEGIN A NEW DESCENT"
+horizontal_alignment = 0
 vertical_alignment = 1
 
 [node name="NightclubButton" type="Button" parent="Panel/VBox"]
 custom_minimum_size = Vector2(0, 16)
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
-text = "FLOOR 01 // NIGHTCLUB"
+text = "START NEW RUN"
 
 [node name="SandwichButton" type="Button" parent="Panel/VBox"]
 custom_minimum_size = Vector2(0, 16)
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
-text = "FLOOR 02 // SANDWICH SHOP"
+text = "ARMORY"
 
 [node name="TacticalLabButton" type="Button" parent="Panel/VBox"]
 custom_minimum_size = Vector2(0, 16)
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
-text = "TRAINING // TACTICAL LAB"
+text = ""
+visible = false
 
 [node name="AfterHoursButton" type="Button" parent="Panel/VBox"]
 custom_minimum_size = Vector2(0, 16)
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
-text = "FLOOR 03 // AFTER HOURS"
+text = "GUNSMITH"
 
 [node name="QuitButton" type="Button" parent="Panel/VBox"]
 custom_minimum_size = Vector2(0, 16)
@@ -90,3 +123,9 @@ custom_minimum_size = Vector2(0, 16)
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
 text = "SETTINGS // ACCESSIBILITY"
+
+[node name="HelpButton" type="Button" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "HOW TO PLAY"

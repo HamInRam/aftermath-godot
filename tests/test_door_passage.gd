@@ -29,6 +29,11 @@ func _verify_mission_doors(mission_id: String, scene_path: String) -> void:
 	add_child(level)
 	await get_tree().process_frame
 	await get_tree().physics_frame
+	# Isolate geometry from the live room-run director. Moving the probe player
+	# across room boundaries otherwise re-arms enemy collision midway through this
+	# door-only test now that ambient patrols remain simulated.
+	level.set_process(false)
+	level.set_physics_process(false)
 	var player := level.player as CharacterBody2D
 	player.set_physics_process(false)
 	for enemy in level.get_node("Enemies").get_children():

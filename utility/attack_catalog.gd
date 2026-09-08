@@ -1,12 +1,8 @@
+@static_unload
 class_name AttackCatalog
 extends RefCounted
 
-const GUNS := {
-	"pistol": preload("res://resources/weapons/pistol.tres"),
-	"smg": preload("res://resources/weapons/smg.tres"),
-	"lmg": preload("res://resources/weapons/lmg.tres"),
-	"shotgun": preload("res://resources/weapons/shotgun.tres"),
-}
+static var GUNS: Dictionary = WeaponPlatformCatalog.get_all_gun_data()
 
 const MELEE := {
 	"fist": {"blood_power": 0.7, "range": 36.0, "wall_reach": 24.0, "pattern": "line", "cone": 0.25, "knockback": 8.0, "style": "blunt", "hit_stop": 0.0, "trauma": 0.16},
@@ -18,10 +14,10 @@ const MELEE := {
 }
 
 const VIOLENCE := {
-	"pistol": {"entry": 1.0, "exit": 1.9, "mist": 0.85, "drops": 8, "gore": 2, "limbs": 0, "pool_bias": 1.15, "wound": "puncture", "flash": Color("fff0d0")},
-	"smg": {"entry": 0.9, "exit": 1.6, "mist": 1.0, "drops": 11, "gore": 3, "limbs": 0, "pool_bias": 1.2, "wound": "cluster", "flash": Color("ffe7be")},
-	"lmg": {"entry": 1.4, "exit": 3.4, "mist": 1.45, "drops": 16, "gore": 8, "limbs": 1, "pool_bias": 1.55, "wound": "torn", "flash": Color("fff5d8")},
-	"shotgun": {"entry": 2.0, "exit": 4.8, "mist": 1.9, "drops": 20, "gore": 12, "limbs": 2, "pool_bias": 1.85, "wound": "blast", "flash": Color("fff8e8")},
+	"pistol": {"entry": 1.15, "exit": 2.35, "mist": 1.15, "drops": 13, "gore": 4, "limbs": 1, "pool_bias": 1.32, "wound": "puncture", "flash": Color("ffffff")},
+	"smg": {"entry": 1.05, "exit": 2.15, "mist": 1.35, "drops": 18, "gore": 6, "limbs": 1, "pool_bias": 1.42, "wound": "cluster", "flash": Color("ffffff")},
+	"lmg": {"entry": 1.7, "exit": 4.25, "mist": 1.9, "drops": 25, "gore": 12, "limbs": 2, "pool_bias": 1.9, "wound": "torn", "flash": Color("ffffff")},
+	"shotgun": {"entry": 2.35, "exit": 6.2, "mist": 2.55, "drops": 34, "gore": 18, "limbs": 3, "pool_bias": 2.35, "wound": "blast", "flash": Color("ffffff")},
 	"fist": {"entry": 0.6, "exit": 0.5, "mist": 0.35, "drops": 3, "gore": 1, "limbs": 0, "pool_bias": 0.85, "wound": "bruise", "flash": Color("ffffff")},
 	"knife": {"entry": 1.1, "exit": 1.2, "mist": 0.7, "drops": 12, "gore": 3, "limbs": 0, "pool_bias": 1.35, "wound": "slash", "flash": Color("bfffff")},
 	"bat": {"entry": 1.8, "exit": 1.0, "mist": 1.25, "drops": 10, "gore": 7, "limbs": 0, "pool_bias": 1.45, "wound": "crush", "flash": Color("ffb8e8")},
@@ -30,8 +26,10 @@ const VIOLENCE := {
 	"execution_bat": {"entry": 2.4, "exit": 2.0, "mist": 1.8, "drops": 18, "gore": 12, "limbs": 0, "pool_bias": 1.8, "wound": "crush", "flash": Color("ffd0ef")},
 }
 
-static func get_gun_data(weapon_id: String) -> GunData:
-	return GUNS.get(weapon_id, GUNS.pistol) as GunData
+static func get_gun_data(weapon_id: String, attachment_ids := PackedStringArray()) -> GunData:
+	var resolved := WeaponPlatformCatalog.canonical_id(weapon_id)
+	if not attachment_ids.is_empty(): return WeaponPlatformCatalog.create_gun_data(resolved, attachment_ids)
+	return GUNS.get(resolved, GUNS["glock_17_gen5_mos"]) as GunData
 
 static func get_blood_profile(attack_id: String) -> Dictionary:
 	if GUNS.has(attack_id):
@@ -53,6 +51,21 @@ static func get_impact_profile(attack_id: String) -> Dictionary:
 
 static func get_violence_profile(attack_id: String) -> Dictionary:
 	var resolved := attack_id
+	if WeaponPlatformCatalog.has_weapon(attack_id):
+		var data := get_gun_data(attack_id)
+		var template_id := "pistol"
+		match data.weapon_class:
+			"pdw", "smg", "carbine": template_id = "smg"
+			"shotgun": template_id = "shotgun"
+			"dmr", "sniper", "lmg": template_id = "lmg"
+		var profile := (VIOLENCE[template_id] as Dictionary).duplicate(true)
+		var burden_ratio := clampf(data.cleanup_burden, 0.65, 3.0)
+		profile.drops = maxi(9, roundi(float(profile.drops) * burden_ratio * 0.94))
+		profile.gore = maxi(3, roundi(float(profile.gore) * burden_ratio * 0.86))
+		profile.limbs = 3 if burden_ratio >= 2.4 else (2 if burden_ratio >= 1.55 else 1)
+		profile.pool_bias = burden_ratio
+		profile.wound = "blast" if data.weapon_class == "shotgun" else ("torn" if burden_ratio >= 1.55 else "puncture")
+		return profile
 	if not VIOLENCE.has(resolved):
 		if attack_id.begins_with("execution"): resolved = "execution"
 		elif GUNS.has(attack_id): resolved = attack_id

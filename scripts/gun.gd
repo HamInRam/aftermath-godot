@@ -5,6 +5,8 @@ signal fired(origin: Vector2, direction: Vector2, enemy_owned: bool, damage: int
 
 const DRY_FIRE_STREAM := preload("res://assets/audio/sfx/dry_fire.wav")
 const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
+const WEAPON_ART := preload("res://utility/weapon_pixel_art.gd")
+const PRESENTATION := preload("res://utility/weapon_presentation_profile.gd")
 
 @export var gun_data: Resource
 @export var enemy_owned := false
@@ -35,6 +37,9 @@ var bullet_speed := 650.0
 var knockback := 24.0
 var hearing_radius := 190.0
 var hit_stop := 0.035
+var penetration_power := 0.8
+var property_damage := 0.8
+var cleanup_burden := 1.0
 var shot_volume_db := -10.0
 var mechanical_pitch := 1.0
 var punch_pitch := 0.73
@@ -71,6 +76,16 @@ var precision_primed := false
 var perfect_reload_active := false
 var active_reload_duration := 1.05
 var combat_time_scale := 1.0
+var presentation_profile: Dictionary = {}
+var presentation_cells: Array[Dictionary] = []
+var shot_age := 999.0
+var visual_offset := Vector2.ZERO
+var visual_angle := 0.0
+var magazine_offset := Vector2.ZERO
+var mechanism_amount := 0.0
+var reload_phase := "idle"
+var reload_feed_click := -1
+var last_render_transform := Transform2D.IDENTITY
 
 func _ready() -> void:
 	set_gun_data(gun_data, true)
@@ -109,32 +124,40 @@ func _apply_gun_data() -> void:
 	knockback = gun_data.knockback
 	hearing_radius = gun_data.hearing_radius
 	hit_stop = gun_data.hit_stop
+	penetration_power = gun_data.penetration_power
+	property_damage = gun_data.property_damage
+	cleanup_burden = gun_data.cleanup_burden
 	shot_volume_db = gun_data.shot_volume_db
 	mechanical_pitch = gun_data.mechanical_pitch
 	punch_pitch = gun_data.punch_pitch
 	movement_speed_multiplier = gun_data.movement_speed_multiplier
 	reload_movement_multiplier = gun_data.reload_movement_multiplier
+	presentation_profile = PRESENTATION.for_weapon(gun_data)
+	presentation_cells = WEAPON_ART.get_shape(gun_data)
 
 func clear_equipped_weapon() -> void:
-	if is_reloading:
-		reload_timer.stop()
-		is_reloading = false
+	cancel_reload(false)
 	gun_data = null
 	weapon_id = ""
 	ammo = 0
+	reserve_ammo = 0
 	max_ammo = 0
 	automatic = false
 	cooldown = 0.0
 	shot_heat = 0.0
+	_reset_presentation()
+	presentation_cells = []
 	queue_redraw()
 
 func set_gun_data(data: Resource, refill := true) -> void:
 	if data == null: return
+	cancel_reload(false)
 	if gun_data != null and not weapon_id.is_empty():
 		ammo_by_weapon[weapon_id] = ammo
 		reserve_by_weapon[weapon_id] = reserve_ammo
 	gun_data = data
 	_apply_gun_data()
+	cooldown = 0.0
 	if ammo_by_weapon.has(weapon_id):
 		ammo = clampi(int(ammo_by_weapon[weapon_id]), 0, max_ammo)
 	elif refill:
@@ -149,14 +172,19 @@ func set_gun_data(data: Resource, refill := true) -> void:
 	precision_primed = false
 	perfect_reload_active = false
 	active_reload_duration = reload_duration
+	_reset_presentation()
 	if is_instance_valid(reload_timer): reload_timer.stop()
 	if is_instance_valid(shot_audio):
-		shot_audio.stream = ProceduralAudioLibrary.get_sfx("shotgun_shot") if weapon_id == "shotgun" else gun_data.shot_stream
+		shot_audio.stream = ProceduralAudioLibrary.get_sfx("shotgun_shot" if gun_data.weapon_class == "shotgun" else "weapon_" + gun_data.weapon_class)
 		shot_audio.volume_db = shot_volume_db
-		reload_audio.stream = ProceduralAudioLibrary.get_sfx("shotgun_reload") if weapon_id == "shotgun" else gun_data.reload_stream
+		reload_audio.stream = ProceduralAudioLibrary.get_sfx("shotgun_reload") if gun_data.weapon_class == "shotgun" else gun_data.reload_stream
 		dry_fire_audio.stream = gun_data.dry_fire_stream if gun_data.dry_fire_stream != null else DRY_FIRE_STREAM
 		mechanical_audio.stream = dry_fire_audio.stream
 		punch_audio.stream = shot_audio.stream
+		# Keep the attack's main transient intelligible during automatic bursts.
+		# A quiet, class-pitched mechanical layer is texture, not a second loud gun.
+		mechanical_audio.volume_db = -27.0 if automatic else -22.0
+		punch_audio.volume_db = shot_volume_db - (15.0 if automatic else 10.0)
 		var weapon_length := _weapon_visual_length()
 		weapon_sprite.position.x = weapon_length * 0.5
 		weapon_shadow.position.x = weapon_length * 0.5
@@ -168,11 +196,7 @@ func set_gun_data(data: Resource, refill := true) -> void:
 	queue_redraw()
 
 func _weapon_visual_length() -> float:
-	match weapon_id:
-		"smg": return 12.0
-		"shotgun": return 15.0
-		"lmg": return 14.0
-		_: return 9.0
+	return float(gun_data.visual_length_pixels) * gun_data.weapon_length_multiplier if gun_data != null else 9.0
 
 func set_weapon_ammo(target_weapon_id: String, rounds: int) -> void:
 	ammo_by_weapon[target_weapon_id] = maxi(0, rounds)
@@ -202,51 +226,96 @@ func add_reserve_ammo(target_weapon_id: String, rounds: int) -> int:
 
 func _process(delta: float) -> void:
 	delta *= combat_time_scale
-	cooldown = maxf(0.0, cooldown - delta)
+	# At most one frame of cadence credit; never accumulate an idle burst.
+	cooldown = maxf(-minf(delta, fire_interval * 0.5), cooldown - delta)
 	recoil = move_toward(recoil, 0.0, 24.0 * delta)
 	shot_heat = move_toward(shot_heat, 0.0, spread_recovery * delta)
 	aim_turn_instability = move_toward(aim_turn_instability, 0.0, aim_follow_speed * delta)
-	if is_reloading and reload_duration > 0.0:
-		var reload_progress := 1.0 - reload_timer.time_left / maxf(0.001, active_reload_duration)
-		var reload_arc := sin(clampf(reload_progress, 0.0, 1.0) * PI)
-		weapon_pivot.rotation = snappedf(lerpf(weapon_pivot.rotation, -0.62 * reload_arc, 1.0 - exp(-24.0 * delta)), PI / 16.0)
-		weapon_pivot.scale = Vector2.ONE
-	else:
-		var recoil_angle := -0.035 * recoil * recoil_strength
-		weapon_pivot.rotation = snappedf(lerpf(weapon_pivot.rotation, recoil_angle, 1.0 - exp(-28.0 * delta)), PI / 32.0)
+	_update_weapon_presentation(delta)
+
+func _reset_presentation() -> void:
+	shot_age = 999.0
+	visual_offset = Vector2.ZERO
+	visual_angle = 0.0
+	magazine_offset = Vector2.ZERO
+	mechanism_amount = 0.0
+	reload_phase = "idle"
+	reload_feed_click = -1
+	if is_instance_valid(animation_player): animation_player.stop()
+	if is_instance_valid(weapon_pivot):
+		weapon_pivot.position = Vector2(3, 0)
+		weapon_pivot.rotation = 0.0
 		weapon_pivot.scale = Vector2.ONE
 	queue_redraw()
+
+func _update_weapon_presentation(delta: float) -> void:
+	if presentation_profile.is_empty() or gun_data == null: return
+	shot_age += delta
+	var previous_offset := visual_offset
+	var previous_angle := visual_angle
+	var previous_magazine := magazine_offset
+	var previous_mechanism := mechanism_amount
+	var pose := PRESENTATION.recoil_pose(presentation_profile, shot_age, clampf(0.75 + recoil_strength * 0.25, 0.7, 1.3))
+	visual_offset = pose.offset
+	visual_angle = float(pose.angle)
+	magazine_offset = Vector2.ZERO
+	var cycle_time := float(presentation_profile.cycle)
+	mechanism_amount = sin(clampf(shot_age / cycle_time, 0.0, 1.0) * PI)
+	if is_reloading:
+		var progress := get_reload_progress()
+		var feed := str(gun_data.feed_type)
+		var reload_pose := PRESENTATION.reload_pose(presentation_profile, progress, feed, str(gun_data.action_type), max_ammo - ammo)
+		visual_offset = reload_pose.offset
+		visual_angle = float(reload_pose.angle)
+		magazine_offset = reload_pose.magazine_offset
+		mechanism_amount = float(reload_pose.chamber)
+		var new_phase := str(reload_pose.phase)
+		if new_phase != reload_phase:
+			reload_phase = new_phase
+			if new_phase in ["exchange", "feed", "chamber", "ready"]:
+				_play_reload_mechanism(new_phase == "ready")
+		if feed == "tube" and new_phase == "feed":
+			var next_click := floori(inverse_lerp(0.16, 0.70, progress) * float(clampi(max_ammo - ammo, 1, 8)))
+			if next_click != reload_feed_click:
+				reload_feed_click = next_click
+				_play_reload_mechanism(false)
+	else:
+		reload_phase = "idle"
+	if previous_offset != visual_offset or not is_equal_approx(previous_angle, visual_angle) or previous_magazine != magazine_offset or not is_equal_approx(previous_mechanism, mechanism_amount) or last_render_transform != global_transform:
+		last_render_transform = global_transform
+		queue_redraw()
+
+func _play_reload_mechanism(seated: bool) -> void:
+	if not is_instance_valid(mechanical_audio) or DisplayServer.get_name() == "headless": return
+	mechanical_audio.pitch_scale = float(presentation_profile.get("sound", 1.0)) * (1.16 if seated else 0.86)
+	mechanical_audio.play()
+
+func get_presentation_state() -> Dictionary:
+	return {"phase": reload_phase, "offset": visual_offset, "angle": visual_angle, "magazine_offset": magazine_offset, "mechanism": mechanism_amount, "class": gun_data.weapon_class if gun_data != null else ""}
 
 func set_combat_time_scale(value: float) -> void:
 	combat_time_scale = clampf(value, 0.2, 1.0) if enemy_owned else 1.0
 	if is_instance_valid(animation_player): animation_player.speed_scale = combat_time_scale
 
 func _draw() -> void:
-	if weapon_id.is_empty(): return
-	# Render the weapon from native one-world-pixel cells. Texture resources stay
-	# available as metadata/preview art but never enter the live world renderer.
-	var local_angle := snappedf(global_rotation + weapon_pivot.rotation, PI / 8.0) - global_rotation
-	var direction := Vector2.RIGHT.rotated(local_angle)
-	var side := direction.orthogonal()
-	var length := 9
-	var body_color := Color("d8e2df")
-	var accent := Color("27c9ca")
-	match weapon_id:
-		"smg": length = 12; body_color = Color("6f7f86"); accent = Color("ff3d84")
-		"shotgun": length = 15; body_color = Color("9b5b36"); accent = Color("ffe06b")
-		"lmg": length = 14; body_color = Color("59666b"); accent = Color("ff6a3d")
-		_: length = 9
-	var start := direction * 3.0
-	var finish := direction * float(length)
-	PIXEL_PAINTER.material_line(self, start, finish, Color("17141b"), 3 if weapon_id in ["shotgun", "lmg"] else 2, weapon_id.hash(), &"metal")
-	PIXEL_PAINTER.line(self, start + side, finish + side, body_color)
-	PIXEL_PAINTER.pixel(self, finish.round(), accent)
-	var grip := (start + direction * 2.0 - side * 2.0).round()
-	PIXEL_PAINTER.line(self, grip, grip - direction + side * 2.0, Color("38222a"))
+	if weapon_id.is_empty() or not is_instance_valid(weapon_pivot): return
+	var direction := Vector2.RIGHT.rotated(global_rotation + visual_angle)
+	var origin := to_global(weapon_pivot.position + visual_offset)
+	WEAPON_ART.draw_cells(self, presentation_cells, origin, direction, magazine_offset, mechanism_amount)
+	if is_reloading and gun_data.feed_type == "tube" and reload_phase == "feed":
+		# A shell moving into the receiver, not a fake detached box magazine.
+		draw_set_transform_matrix(global_transform.affine_inverse())
+		var shell_position := origin + direction * magazine_offset.x + direction.orthogonal() * magazine_offset.y
+		PIXEL_PAINTER.pixel(self, shell_position.round(), Color("f1f1f1"))
+		PIXEL_PAINTER.pixel(self, (shell_position + direction).round(), Color("929292"))
+		draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
-	if is_reloading or direction.length_squared() < 0.001: return false
+	if gun_data == null or is_reloading or direction.length_squared() < 0.001: return false
 	if cooldown > 0.0: return false
+	if ammo <= 0:
+		play_dry_fire()
+		return false
 	var requested_angle := direction.angle()
 	if has_requested_angle:
 		aim_turn_instability = minf(1.0, aim_turn_instability + absf(angle_difference(last_requested_angle, requested_angle)) / 0.55)
@@ -257,27 +326,28 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 		mechanical_audio.pitch_scale = 0.72
 		mechanical_audio.play()
 		return false
-	if ammo <= 0:
-		cooldown = 0.13
-		dry_fire_audio.pitch_scale = randf_range(0.92, 1.08)
-		dry_fire_audio.play()
-		if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
-		return false
-	cooldown = maxf(0.035, fire_interval + randf_range(-fire_interval_variance, fire_interval_variance))
+	# Preserve overshoot from the previous frame so a 750 RPM weapon does not
+	# quantize down to 600 RPM at 60 Hz. Idle time cannot bank catch-up bullets.
+	cooldown = maxf(0.001, maxf(0.035, fire_interval + randf_range(-fire_interval_variance, fire_interval_variance)) + minf(0.0, cooldown))
 	ammo -= 1
 	ammo_by_weapon[weapon_id] = ammo
 	recoil = 2.0
-	shot_audio.pitch_scale = randf_range(pitch_min, pitch_max)
+	shot_age = 0.0
+	_update_weapon_presentation(0.0)
+	_update_fire_mix()
+	shot_audio.pitch_scale = randf_range(pitch_min, pitch_max) * float(presentation_profile.sound)
 	shot_audio.play()
-	mechanical_audio.pitch_scale = mechanical_pitch * randf_range(0.98, 1.03)
+	mechanical_audio.pitch_scale = mechanical_pitch * float(presentation_profile.get("sound", 1.0)) * randf_range(0.99, 1.01)
 	mechanical_audio.play()
 	punch_audio.pitch_scale = punch_pitch * randf_range(0.97, 1.03)
 	punch_audio.play()
 	animation_player.stop()
-	animation_player.play("kick", -1.0, 0.85 + recoil_strength * 0.45)
 	var dynamic_spread := minf(maximum_spread_bonus, shot_heat * spread_growth_per_shot)
 	var movement_ratio := _get_actor_movement_ratio()
-	var current_spread := (spread_degrees + dynamic_spread + movement_ratio * movement_spread_degrees + aim_turn_instability * turn_spread_degrees) * maxf(0.1, accuracy_spread_multiplier)
+	# AFTERMATH is an arcade room shooter now: weapon identity remains in base
+	# spread and recoil, while sprinting and fast target swaps no longer turn the
+	# reticle into a realism tax.
+	var current_spread := (spread_degrees * 0.82 + dynamic_spread * 0.72 + movement_ratio * movement_spread_degrees * 0.38 + aim_turn_instability * turn_spread_degrees * 0.34) * maxf(0.1, accuracy_spread_multiplier)
 	# A triangular distribution keeps most rounds near the intended center while
 	# preserving readable edge misses. Uniform random spread made mastery feel
 	# like a coin toss because edge shots were as likely as center shots.
@@ -285,11 +355,13 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 	var spread_radians := deg_to_rad(centered_random * current_spread)
 	shot_heat += 1.0
 	var normalized_direction := direction.normalized().rotated(spread_radians)
-	var origin := muzzle.global_position
+	var origin := _get_safe_projectile_origin()
 	current_shot_id += 1
 	# Register the trigger pull before spawning projectiles so the level can bind
 	# every pellet to this exact shot for precision scoring.
-	Events.weapon_fired.emit(origin, normalized_direction, enemy_owned, weapon_id)
+	# Art stays at the visible barrel tip, even when a close body/wall forces the
+	# physical projectile to begin before that surface instead of behind it.
+	Events.weapon_fired.emit(muzzle.global_position, normalized_direction, enemy_owned, weapon_id)
 	for pellet_index in range(pellet_count):
 		var pellet_offset := 0.0
 		if pellet_count > 1:
@@ -307,6 +379,13 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
 	return true
 
+func play_dry_fire() -> void:
+	if gun_data == null or is_reloading or cooldown > 0.0: return
+	cooldown = 0.13
+	dry_fire_audio.pitch_scale = randf_range(0.92, 1.08)
+	dry_fire_audio.play()
+	if not enemy_owned: Events.publish_ammo(ammo, max_ammo, false)
+
 func _get_actor() -> CharacterBody2D:
 	var owner_node := get_parent()
 	while is_instance_valid(owner_node) and owner_node is not CharacterBody2D: owner_node = owner_node.get_parent()
@@ -319,9 +398,19 @@ func _get_actor_movement_ratio() -> float:
 	var reference_speed := maxf(1.0, float(speed_value) if speed_value != null else 100.0)
 	return clampf(actor.velocity.length() / reference_speed, 0.0, 1.25)
 
+func _update_fire_mix() -> void:
+	var attenuation := 0.0
+	if enemy_owned:
+		var listener := get_tree().get_first_node_in_group("player") as Node2D
+		var distance := global_position.distance_to(listener.global_position) if is_instance_valid(listener) else 0.0
+		attenuation = -4.0 - 14.0 * clampf(distance / 500.0, 0.0, 1.0)
+	shot_audio.volume_db = shot_volume_db + attenuation
+	punch_audio.volume_db = shot_volume_db - (15.0 if automatic else 10.0) + attenuation
+	mechanical_audio.volume_db = (-27.0 if automatic else -22.0) + attenuation
+
 func get_current_spread_degrees() -> float:
 	var dynamic_spread := minf(maximum_spread_bonus, shot_heat * spread_growth_per_shot)
-	return spread_degrees + dynamic_spread + _get_actor_movement_ratio() * movement_spread_degrees + aim_turn_instability * turn_spread_degrees
+	return spread_degrees * 0.82 + dynamic_spread * 0.72 + _get_actor_movement_ratio() * movement_spread_degrees * 0.38 + aim_turn_instability * turn_spread_degrees * 0.34
 
 func get_spread_feedback_ratio() -> float:
 	var readable_max := maxf(1.0, spread_degrees + maximum_spread_bonus + movement_spread_degrees + turn_spread_degrees)
@@ -335,10 +424,12 @@ func get_reload_progress() -> float:
 	return clampf(1.0 - reload_timer.time_left / maxf(0.001, active_reload_duration), 0.0, 1.0)
 
 func get_precision_threshold() -> int:
-	match weapon_id:
+	var weapon_class: String = gun_data.weapon_class if gun_data != null else "handgun"
+	match weapon_class:
 		"shotgun": return 3
-		"smg": return 6
+		"pdw", "smg": return 6
 		"lmg": return 8
+		"dmr", "sniper": return 3
 	return 4
 
 func report_shot_result(hit_enemy: bool, lethal: bool = false) -> void:
@@ -352,8 +443,6 @@ func report_shot_result(hit_enemy: bool, lethal: bool = false) -> void:
 		precision_streak = 0
 		precision_primed = false
 	Events.precision_chain_updated.emit(precision_streak, precision_primed)
-	if precision_primed and ammo <= 0 and not is_reloading:
-		call_deferred("_start_perfect_reload")
 	if lethal: recoil = maxf(recoil, 1.2)
 
 func get_aim_feedback() -> Dictionary:
@@ -375,22 +464,62 @@ func _is_muzzle_obstructed() -> bool:
 	query.exclude = [actor.get_rid()]
 	return not get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
+func _get_safe_projectile_origin() -> Vector2:
+	var visual_origin := muzzle.global_position
+	var actor := _get_actor()
+	if not is_instance_valid(actor) or not is_inside_tree(): return visual_origin
+	var barrel := visual_origin - actor.global_position
+	var barrel_length := barrel.length()
+	if barrel_length < 0.001: return visual_origin
+	var barrel_direction := barrel / barrel_length
+	# A 19px barrel can extend entirely past a radius-5 enemy at touching range.
+	# Sweep the barrel ONCE per shell, not once per pellet. Include doors/walls
+	# and glass so a close opponent behind cover can never cause a bypass.
+	var query_mask := (1 if enemy_owned else 2) | 4 | 8
+	var query := PhysicsRayQueryParameters2D.create(actor.global_position, visual_origin + barrel_direction * 2.0, query_mask)
+	query.exclude = [actor.get_rid()]
+	query.hit_from_inside = true
+	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	if hit.is_empty(): return visual_origin
+	# Bullet's 2x2 collision square has a sqrt(2) diagonal radius. Starting clear
+	# of the surface keeps move_and_collide from recovering to its far side.
+	var contact: Vector2 = hit.position
+	var clear_distance := clampf(actor.global_position.distance_to(contact) - 1.6, 0.0, barrel_length)
+	return actor.global_position + barrel_direction * clear_distance
+
 func is_muzzle_blocked() -> bool:
 	return _is_muzzle_obstructed()
 
 func reload() -> void:
-	if is_reloading or ammo >= max_ammo or reserve_ammo == 0: return
+	if gun_data == null or is_reloading or ammo >= max_ammo or reserve_ammo == 0: return
+	if not enemy_owned and ammo <= 0 and precision_primed:
+		_start_perfect_reload()
+		return
 	is_reloading = true
 	perfect_reload_active = false
 	active_reload_duration = reload_duration
 	reload_timer.start(active_reload_duration)
-	reload_audio.pitch_scale = randf_range(0.97, 1.03)
+	reload_audio.pitch_scale = randf_range(0.97, 1.03) * float(presentation_profile.sound)
 	reload_audio.play()
 	if not enemy_owned:
 		Events.reload_started.emit(reload_duration)
 		Events.publish_ammo(ammo, max_ammo, true)
 
+func cancel_reload(publish := true) -> void:
+	var was_reloading := is_reloading
+	is_reloading = false
+	perfect_reload_active = false
+	active_reload_duration = reload_duration
+	if is_instance_valid(reload_timer): reload_timer.stop()
+	if is_instance_valid(reload_audio): reload_audio.stop()
+	_reset_presentation()
+	if was_reloading and publish and not enemy_owned:
+		Events.publish_ammo(ammo, max_ammo, false)
+
 func _on_reload_timer_timeout() -> void:
+	# A weapon switch/throw may cancel a timer on the same frame it expires.
+	# Such stale completions must never load the newly equipped weapon.
+	if not is_reloading or gun_data == null: return
 	var required := max_ammo - ammo
 	var loaded := required if reserve_ammo < 0 else mini(required, reserve_ammo)
 	ammo += loaded
@@ -399,6 +528,7 @@ func _on_reload_timer_timeout() -> void:
 		reserve_by_weapon[weapon_id] = reserve_ammo
 	ammo_by_weapon[weapon_id] = ammo
 	is_reloading = false
+	_reset_presentation()
 	var completed_perfect_reload := perfect_reload_active
 	perfect_reload_active = false
 	active_reload_duration = reload_duration

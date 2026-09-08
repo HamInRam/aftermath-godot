@@ -1,0 +1,55 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/ui/run_help.gd" id="1"]
+
+[node name="RunHelp" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.025, 0.025, 0.025, 1)
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = 8.0
+offset_right = -18.0
+offset_bottom = -8.0
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="Label" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "SURVIVE THE DESCENT"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+follow_focus = true
+
+[node name="Body" type="Label" parent="Panel/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 7
+autowrap_mode = 2
+text = "MOVE / AIM\nWASD moves. Mouse aims. Shift looks farther.\n\nFIRE / RELOAD\nLeft click fires. Empty magazine + a fresh click reloads from reserve. R also reloads. No ammunition? Q throws the gun; E picks one up. Throwing is always your choice.\n\nBLOOD STANCE\nHold right mouse near enemy blood. Pixel blood flows into you and disappears from the floor. You move slowly but can still shoot. Shots spend blood for extra power and penetration.\n\nBLOOD ABILITIES\nWhile holding right mouse: Q dashes, E pulses, R guards. B spends stored blood to heal. Enhanced shots always return less blood than they cost.\n\nFOCUS / FINISHERS\nX spends one Focus charge to slow hostiles, not your aim. Space executes a nearby downed enemy.\n\nTHE RUN\nClear every occupied room, then Enter opens the floor report. Six different venues form one descent. Health, ammo, armor and blood persist between floors. No mid-fight upgrade popups.\n\nDEATH / RETRY\nR retries the same floor with its entry resources and loadout. Retries are counted. Escape pauses; Enter in the pause menu returns to the title.\n\nACCESSIBILITY\nScreen shake, flashes, Focus effects and aim assistance can be adjusted in Settings."
+
+[node name="Back" type="Button" parent="Panel/Layout"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 16)
+theme_override_font_sizes/font_size = 7
+text = "BACK"

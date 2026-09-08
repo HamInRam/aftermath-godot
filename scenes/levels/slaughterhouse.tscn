@@ -5,7 +5,6 @@
 level_title = "PACKING LINE"
 enemy_spawns = PackedVector2Array(52,44, 148,44, 236,44, 340,44, 76,108, 156,116, 228,108, 324,116, 132,188, 300,188)
 enemy_types = PackedStringArray("heavy","melee","dog","heavy","assault","dog","heavy","melee","assault","gunner")
-fixed_sentry_indices = PackedInt32Array(0,3,6,9)
 mission_profile = ExtResource("2")
 visual_theme = "crimson"
 ammo_pickup_positions = PackedVector2Array(60,76, 180,116, 284,116, 348,188)

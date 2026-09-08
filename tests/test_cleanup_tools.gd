@@ -122,7 +122,7 @@ func _run() -> void:
 	bleeding_corpse.bleed_time = 2.0
 	_expect(bleeding_corpse.begin_drag(player), "fresh corpse should begin dragging")
 	bleeding_corpse.end_drag(player)
-	_expect(bleeding_corpse.is_physics_processing(), "dropping an unbagged corpse must preserve remaining postmortem bleeding")
+	_expect(not bleeding_corpse.is_physics_processing(), "dropping a settled corpse must not restart passive postmortem bleeding")
 	bleeding_corpse.queue_free()
 	await get_tree().process_frame
 	_expect(CleanupRegistry.get_remaining_count() == 0, "extracted body bag should resolve its evidence")

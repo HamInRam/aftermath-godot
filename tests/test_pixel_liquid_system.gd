@@ -28,19 +28,19 @@ func _ready() -> void:
 	_expect(not liquids.has_conductive_connection(Vector2(50, 40), Vector2(82, 40), 38.0), "electricity must not jump across a dry floor gap")
 	liquids.set_electric_source(101, Vector2(50, 40), 28.0, true)
 	liquids._process(0.09)
-	_expect(liquids.get_debug_energized_pixel_count() >= 18, "a live electrical source should energize the connected water pixels for gold charge rendering")
+	_expect(liquids.get_debug_energized_pixel_count() >= 18, "a live electrical source should energize connected water pixels for lethal-crimson charge rendering")
 	var energized_sample := liquids.energized_cells.keys()[0] as Vector2i
-	var shows_gold_charge := false
+	var shows_crimson_charge := false
 	for phase in range(23):
 		liquids.electric_visual_tick = phase
 		var charged_color: Color = liquids._apply_electric_tint(energized_sample, Color("48cce0"))
-		if charged_color.r > 0.9 and charged_color.g > 0.45:
-			shows_gold_charge = true
+		if charged_color.r > charged_color.g * 2.0 and charged_color.r > charged_color.b * 1.5:
+			shows_crimson_charge = true
 			break
-	_expect(shows_gold_charge, "energized water should animate sparse gold and white charge pixels")
+	_expect(shows_crimson_charge, "energized water should animate sparse crimson and white lethal charge pixels")
 	liquids.set_electric_source(101, Vector2(50, 40), 28.0, false)
 	liquids._process(0.09)
-	_expect(liquids.get_debug_energized_pixel_count() == 0, "isolating the electrical source should remove the gold charge overlay")
+	_expect(liquids.get_debug_energized_pixel_count() == 0, "isolating the electrical source should remove the lethal charge overlay")
 
 	liquids.deposit_source(Vector2(92, 52), &"oil", 10.0, 1.0)
 	_expect(liquids.is_flammable_near(Vector2(92, 52), 12.0), "oil pixels must expose a flammable surface query")

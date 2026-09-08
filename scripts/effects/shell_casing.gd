@@ -17,8 +17,7 @@ var launch_speed := 0.0
 var played_bounce := false
 var allow_bounce := false
 var cleanup_amount := 1.0
-var bloodied := false
-var casing_tint := Color("ffe06b")
+var casing_tint := Color("d8d8d8")
 var simulated_position := Vector2.ZERO
 var simulated_rotation := 0.0
 
@@ -33,18 +32,26 @@ func _ready() -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	PIXELS.pixel(self, Vector2(1, 1), Color(0.035, 0.02, 0.05, 0.42))
-	var casing_color := casing_tint
-	PIXELS.material_rect(self, Rect2(0, 0, 2, 1), casing_color, casing_color.lightened(0.22), casing_color.darkened(0.24), get_instance_id(), &"metal")
+	var axis := Vector2.RIGHT.rotated(simulated_rotation)
+	draw_set_transform_matrix(global_transform.affine_inverse())
+	PIXELS.pixel(self, (global_position + Vector2.ONE).round(), Color(0, 0, 0, 0.42))
+	PIXELS.pixel(self, global_position.round(), casing_tint)
+	PIXELS.pixel(self, (global_position + axis).round(), Color("777777"))
+	draw_set_transform_matrix(Transform2D.IDENTITY)
 
-func setup(shot_direction: Vector2, enemy_owned: bool) -> void:
+func setup(shot_direction: Vector2, _enemy_owned: bool) -> void:
 	var side := shot_direction.normalized().rotated(-PI * 0.5)
 	velocity = side.rotated(randf_range(-0.45, 0.45)) * randf_range(18.0, 31.0)
 	velocity += -shot_direction.normalized() * randf_range(2.0, 7.0)
 	spin = randf_range(-18.0, 18.0)
 	launch_speed = velocity.length()
 	allow_bounce = randf() < 0.38
-	casing_tint = Color("c87558") if enemy_owned else Color("ffe06b")
+	# Main positions the casing after add_child/_ready. Capture the true ejection
+	# point now; otherwise its first frame jumps back to the scene origin.
+	simulated_position = position
+	simulated_rotation = rotation
+	rotation = 0.0
+	casing_tint = Color("d8d8d8")
 	queue_redraw()
 
 func _process(delta: float) -> void:
@@ -52,7 +59,8 @@ func _process(delta: float) -> void:
 	simulated_position += velocity * delta
 	simulated_rotation += spin * delta
 	position = simulated_position.round()
-	rotation = snappedf(simulated_rotation, PI / 8.0)
+	rotation = 0.0
+	queue_redraw()
 	velocity *= exp(-8.5 * delta)
 	spin *= exp(-7.0 * delta)
 	if allow_bounce and not played_bounce and velocity.length() < 8.5:
@@ -60,21 +68,12 @@ func _process(delta: float) -> void:
 		_play_clink(-18.5, 1.08, 1.28)
 	if velocity.length_squared() < 0.3:
 		settled = true
+		set_process(false)
 		position = position.round()
-		rotation = snappedf(rotation, PI * 0.5)
+		simulated_rotation = snappedf(simulated_rotation, PI * 0.5)
 		simulated_position = position
-		simulated_rotation = rotation
 		var impact_volume := remap(clampf(launch_speed, 16.0, 34.0), 16.0, 34.0, -16.0, -8.0)
-		_check_blood_contact()
-		_play_clink(impact_volume - (4.0 if bloodied else 0.0), 0.82 if bloodied else 0.88, 1.02 if bloodied else 1.18)
-
-func _check_blood_contact() -> void:
-	for source in get_tree().get_nodes_in_group("blood_source"):
-		if source is Node2D and global_position.distance_squared_to(source.global_position) <= 49.0:
-			bloodied = true
-			casing_tint = casing_tint.lerp(Color("7f1731"), 0.58)
-			queue_redraw()
-			return
+		_play_clink(impact_volume, 0.88, 1.18)
 
 func _play_clink(volume: float, pitch_low: float, pitch_high: float) -> void:
 	var surface_volume := 0.0

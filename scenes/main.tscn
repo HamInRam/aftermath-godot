@@ -31,17 +31,16 @@ shader = ExtResource("7_screen_shader")
 shader = ExtResource("8_hue_shader")
 
 [sub_resource type="Environment" id="Environment_post"]
-glow_enabled = true
-glow_intensity = 0.42
+glow_enabled = false
+glow_intensity = 0.0
 glow_blend_mode = 0
 adjustment_enabled = true
-adjustment_contrast = 1.08
-adjustment_saturation = 1.2
+adjustment_contrast = 1.02
+adjustment_saturation = 1.0
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 mission_profile = ExtResource("10_mission")
-fixed_sentry_indices = PackedInt32Array(4, 9)
 disposal_positions = PackedVector2Array(356, 204)
 disposal_types = PackedStringArray("dumpster")
 cleanup_secret_positions = PackedVector2Array(52, 44, 212, 76, 348, 188)
@@ -91,7 +90,7 @@ modulate = Color(0.035, 0.02, 0.05, 0.5)
 z_index = 1
 
 [node name="CanvasModulate" type="CanvasModulate" parent="."]
-color = Color(0.86, 0.84, 0.82, 1)
+color = Color(0.97, 0.97, 0.97, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_post")
@@ -100,9 +99,8 @@ environment = SubResource("Environment_post")
 
 [node name="RedHallLight" type="PointLight2D" parent="Lighting"]
 position = Vector2(77, 72)
-color = Color(0.82, 0.16, 0.2, 1)
+color = Color(0.76, 0.12, 0.4, 1)
 energy = 1.1
-texture = SubResource("GradientTexture_light")
 texture_scale = 1.0
 script = ExtResource("9_neon_light")
 base_energy = 0.62
@@ -110,9 +108,8 @@ wave_amplitude = 0.1
 
 [node name="GreenRoomLight" type="PointLight2D" parent="Lighting"]
 position = Vector2(270, 122)
-color = Color(0.2, 0.68, 0.46, 1)
+color = Color(0.12, 0.58, 0.62, 1)
 energy = 0.95
-texture = SubResource("GradientTexture_light")
 texture_scale = 1.0
 script = ExtResource("9_neon_light")
 base_energy = 0.54
@@ -122,7 +119,6 @@ wave_amplitude = 0.08
 position = Vector2(241, 43)
 color = Color(0.9, 0.55, 0.3, 1)
 energy = 1.05
-texture = SubResource("GradientTexture_light")
 texture_scale = 1.0
 script = ExtResource("9_neon_light")
 base_energy = 0.58
@@ -133,7 +129,6 @@ is_flickering = true
 position = Vector2(166, 151)
 color = Color(0.58, 0.24, 0.62, 1)
 energy = 0.92
-texture = SubResource("GradientTexture_light")
 texture_scale = 1.0
 script = ExtResource("9_neon_light")
 base_energy = 0.52
@@ -165,6 +160,7 @@ script = ExtResource("3_camera")
 layer = 20
 
 [node name="Scanlines" type="ColorRect" parent="RetroTreatment"]
+visible = false
 material = SubResource("ShaderMaterial_screen")
 offset_right = 320.0
 offset_bottom = 180.0

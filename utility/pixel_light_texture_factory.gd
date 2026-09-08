@@ -3,6 +3,9 @@ extends RefCounted
 
 static var cached_texture: ImageTexture
 
+static func clear_cache() -> void:
+	cached_texture = null
+
 static func create_texture() -> ImageTexture:
 	if is_instance_valid(cached_texture): return cached_texture
 	# The previous 32px mask was enlarged four times at runtime, making one

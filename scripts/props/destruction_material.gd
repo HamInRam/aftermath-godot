@@ -2,13 +2,13 @@ class_name DestructionMaterial
 extends RefCounted
 
 const PROFILES := {
-	"wood": {"resistance": 0.82, "noise": 92.0, "chunks": 3, "burst": 12, "primary": Color("9b5a32"), "secondary": Color("e0a45d"), "hazard": "none", "bounce": 0.18},
-	"glass": {"resistance": 0.48, "noise": 108.0, "chunks": 2, "burst": 18, "primary": Color("70dbe2"), "secondary": Color("e6ffff"), "hazard": "glass", "bounce": 0.08},
-	"metal": {"resistance": 1.28, "noise": 118.0, "chunks": 2, "burst": 10, "primary": Color("697681"), "secondary": Color("ffd45d"), "hazard": "electric", "bounce": 0.46},
-	"plastic": {"resistance": 0.68, "noise": 82.0, "chunks": 2, "burst": 12, "primary": Color("d33b86"), "secondary": Color("67e0cf"), "hazard": "none", "bounce": 0.38},
-	"fabric": {"resistance": 0.72, "noise": 66.0, "chunks": 2, "burst": 7, "primary": Color("7c3667"), "secondary": Color("d77ab2"), "hazard": "none", "bounce": 0.04},
-	"ceramic": {"resistance": 0.58, "noise": 104.0, "chunks": 3, "burst": 16, "primary": Color("dce7de"), "secondary": Color("7fb5b7"), "hazard": "water", "bounce": 0.12},
-	"liquid": {"resistance": 0.55, "noise": 88.0, "chunks": 2, "burst": 9, "primary": Color("62c9b1"), "secondary": Color("d5ff9a"), "hazard": "spill", "bounce": 0.1},
+	"wood": {"resistance": 0.82, "noise": 92.0, "chunks": 3, "burst": 12, "primary": Color("777777"), "secondary": Color("bcbcbc"), "hazard": "none", "bounce": 0.18},
+	"glass": {"resistance": 0.48, "noise": 108.0, "chunks": 2, "burst": 18, "primary": Color("bcbcbc"), "secondary": Color("ffffff"), "hazard": "glass", "bounce": 0.08},
+	"metal": {"resistance": 1.28, "noise": 118.0, "chunks": 2, "burst": 10, "primary": Color("737373"), "secondary": Color("eeeeee"), "hazard": "electric", "bounce": 0.46},
+	"plastic": {"resistance": 0.68, "noise": 82.0, "chunks": 2, "burst": 12, "primary": Color("949494"), "secondary": Color("d8d8d8"), "hazard": "none", "bounce": 0.38},
+	"fabric": {"resistance": 0.72, "noise": 66.0, "chunks": 2, "burst": 7, "primary": Color("5b5b5b"), "secondary": Color("a3a3a3"), "hazard": "none", "bounce": 0.04},
+	"ceramic": {"resistance": 0.58, "noise": 104.0, "chunks": 3, "burst": 16, "primary": Color("dedede"), "secondary": Color("a9a9a9"), "hazard": "water", "bounce": 0.12},
+	"liquid": {"resistance": 0.55, "noise": 88.0, "chunks": 2, "burst": 9, "primary": Color("a2a2a2"), "secondary": Color("e6e6e6"), "hazard": "spill", "bounce": 0.1},
 }
 
 static func for_kind(kind: String) -> Dictionary:

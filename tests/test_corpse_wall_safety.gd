@@ -26,7 +26,6 @@ func _run() -> void:
 	corpse.position = Vector2.ZERO
 	add_child(corpse)
 	corpse.setup(0.0, Vector2.RIGHT, 999.0, 2.0, "firearm_gib", "torso", "shotgun", 8.0, "human", "enemy")
-	corpse.bleed_time = 0.0
 	_expect(corpse.velocity.length() <= 52.01, "a point-blank shotgun must obey the authored corpse root cap")
 
 	for frame in 90: await get_tree().physics_frame
@@ -34,6 +33,8 @@ func _run() -> void:
 	# must remain on the near side even under an intentionally absurd input force.
 	_expect(corpse.global_position.x <= 6.75, "a capped corpse must not tunnel or become embedded through a thin wall")
 	_expect(corpse.velocity.length() < 1.0, "wall contact must dissipate corpse root velocity instead of preserving a corner-slide")
+	_expect(corpse.collision_layer == 0, "a settled corpse must still finish its overkill timeout and release combat collision")
+	_expect(not corpse.can_receive_overkill(), "a settled corpse must not preserve an infinite overkill window")
 
 	Settings.update_values({"ragdoll_enabled": original_ragdoll}, false)
 	corpse.queue_free()

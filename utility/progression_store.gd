@@ -1,21 +1,26 @@
 class_name ProgressionStore
 extends Node
 
-const SCHEMA_VERSION := 6
+const SCHEMA_VERSION := 7
 const DEFAULT_SAVE_PATH := "user://aftermath_progress.json"
-const UPGRADE_ORDER := ["mop", "capacity", "scanner", "body_handling", "pressure_washer"]
+const UPGRADE_ORDER := ["mop", "capacity", "scanner", "body_handling", "pressure_washer", "gunsmith"]
 const UPGRADE_DEFINITIONS := {
 	"mop": {"name": "MOP POWER", "description": "Stronger passes; level 3 unlocks a wider professional finish.", "base_cost": 120, "cost_step": 140},
 	"capacity": {"name": "FIELD CAPACITY", "description": "Larger reservoir; level 2 expands batch evidence collection.", "base_cost": 110, "cost_step": 120},
 	"scanner": {"name": "FORENSIC SCAN", "description": "Longer scan reach; level 2 prioritizes high-risk evidence.", "base_cost": 150, "cost_step": 150},
 	"body_handling": {"name": "BODY HANDLING", "description": "Faster hauling; level 2 unlocks rapid two-stage sealing.", "base_cost": 140, "cost_step": 145},
 	"pressure_washer": {"name": "PRESSURE WASHER", "description": "Faster pump, wider nozzle; level 3 detergent strips diluted and UV residue.", "base_cost": 180, "cost_step": 170},
+	"gunsmith": {"name": "GUNSMITH BENCH", "description": "Build presets and advanced fitment; level 3 permits a fourth compatible attachment.", "base_cost": 180, "cost_step": 190},
 }
 
 var save_path := DEFAULT_SAVE_PATH
 var data: Dictionary = {}
 var current_mission_id := "nightclub"
 var last_result: Dictionary = {}
+var editing_loadout_slot := "primary"
+var editing_weapon_id := "colt_m4a1"
+var pending_mission_restart_scene := ""
+var run_session := RoguelikeRunSession.new()
 
 func _init(custom_save_path := DEFAULT_SAVE_PATH) -> void:
 	save_path = custom_save_path
@@ -25,12 +30,13 @@ func _ready() -> void:
 	load_progress()
 
 func _reset_data() -> void:
+	run_session = RoguelikeRunSession.new()
 	data = {
 		"schema_version": SCHEMA_VERSION,
 		"completed_missions": [],
 		"best_results": {},
 		"credits": 0,
-		"upgrades": {"mop": 0, "capacity": 0, "scanner": 0, "body_handling": 0, "pressure_washer": 0},
+		"upgrades": {"mop": 0, "capacity": 0, "scanner": 0, "body_handling": 0, "pressure_washer": 0, "gunsmith": 0},
 		"cleaner_mode": "normal",
 		"specialization_points": 0,
 		"specializations": {"executioner": 0, "ghost": 0, "cleaner": 0},
@@ -43,11 +49,26 @@ func _reset_data() -> void:
 		"mastery": {},
 		"current_modifier_id": "standard",
 		"gauntlet_streak": 0,
+		"roguelike_run_serial": 0,
+		"roguelike_floor": 0,
+		"roguelike_previous_mission": "",
+		"roguelike_records": {"best_rooms": 0, "best_score": 0, "victories": 0},
 		"career_stats": {"cases": 0, "shots": 0, "alarms": 0, "perfect_cleans": 0, "stolen_valuables": 0},
 		"challenge_records": {},
+		"weapon_loadout": {"primary": "colt_m4a1", "secondary": "glock_17_gen5_mos"},
+		"weapon_builds": {},
 	}
 	current_mission_id = "nightclub"
 	last_result = {}
+	pending_mission_restart_scene = ""
+
+func prepare_mission_restart(scene_path: String) -> void:
+	pending_mission_restart_scene = scene_path
+
+func consume_mission_restart(scene_path: String) -> bool:
+	var is_matching_restart := not scene_path.is_empty() and pending_mission_restart_scene == scene_path
+	if is_matching_restart: pending_mission_restart_scene = ""
+	return is_matching_restart
 
 func load_progress() -> bool:
 	if not FileAccess.file_exists(save_path):
@@ -88,8 +109,14 @@ func load_progress() -> bool:
 		"mastery": (parsed.get("mastery", {}) as Dictionary).duplicate(true),
 		"current_modifier_id": str(parsed.get("current_modifier_id", "standard")),
 		"gauntlet_streak": maxi(0, int(parsed.get("gauntlet_streak", 0))),
+		"roguelike_run_serial": maxi(0, int(parsed.get("roguelike_run_serial", 0))),
+		"roguelike_floor": maxi(0, int(parsed.get("roguelike_floor", 0))),
+		"roguelike_previous_mission": str(parsed.get("roguelike_previous_mission", "")),
+		"roguelike_records": (parsed.get("roguelike_records", {}) as Dictionary).duplicate(true),
 		"career_stats": (parsed.get("career_stats", {}) as Dictionary).duplicate(true),
 		"challenge_records": (parsed.get("challenge_records", {}) as Dictionary).duplicate(true),
+		"weapon_loadout": (parsed.get("weapon_loadout", {"primary": "colt_m4a1", "secondary": "glock_17_gen5_mos"}) as Dictionary).duplicate(true),
+		"weapon_builds": (parsed.get("weapon_builds", {}) as Dictionary).duplicate(true),
 	}
 	for upgrade_id in UPGRADE_ORDER:
 		if not (data.upgrades as Dictionary).has(upgrade_id): data.upgrades[upgrade_id] = 0
@@ -97,6 +124,7 @@ func load_progress() -> bool:
 	for branch in ["executioner", "ghost", "cleaner"]:
 		if not (data.specializations as Dictionary).has(branch): data.specializations[branch] = 0
 	if str(data.run_mode) not in ["standard", "score_attack", "new_game_plus", "daily_challenge", "gauntlet"]: data.run_mode = "standard"
+	_sanitize_weapon_configuration()
 	if source_version < SCHEMA_VERSION: save_progress()
 	return true
 
@@ -110,6 +138,68 @@ func save_progress() -> bool:
 func begin_mission(mission_id: String) -> bool:
 	var profile := MissionCatalog.get_mission(mission_id)
 	if profile == null or not is_mission_unlocked(profile): return false
+	return _activate_mission(profile)
+
+func begin_roguelike_run() -> MissionProfile:
+	run_session.begin()
+	# Retired career modifiers must not silently carry cleaning-era darkness,
+	# scarce-ammo or NG+ rules into a new room-shooter run.
+	data.run_mode = "standard"
+	pending_mission_restart_scene = ""
+	last_result.clear()
+	data.roguelike_run_serial = int(data.get("roguelike_run_serial", 0)) + 1
+	data.roguelike_floor = 1
+	data.roguelike_previous_mission = ""
+	var profile := _select_roguelike_floor(int(data.roguelike_run_serial), 1, "")
+	if profile == null or not _activate_mission(profile, false): return null
+	return profile
+
+func begin_next_roguelike_floor() -> MissionProfile:
+	# Scene fades are asynchronous. A second Enter must not advance the deck
+	# again while only the first requested level is being loaded.
+	if not run_session.active or not run_session.completed_floors.has(get_roguelike_floor()): return null
+	if get_roguelike_floor() >= RoguelikeRunSession.FLOOR_LIMIT: return null
+	var serial := maxi(1, int(data.get("roguelike_run_serial", 1)))
+	var floor_number := maxi(1, int(data.get("roguelike_floor", 1))) + 1
+	var previous := current_mission_id
+	var profile := _select_roguelike_floor(serial, floor_number, previous)
+	if profile == null: return null
+	data.roguelike_floor = floor_number
+	data.roguelike_previous_mission = previous
+	if not _activate_mission(profile, false): return null
+	return profile
+
+func get_roguelike_floor() -> int:
+	return maxi(0, int(data.get("roguelike_floor", 0)))
+
+func _select_roguelike_floor(serial: int, floor_number: int, _previous_id: String) -> MissionProfile:
+	var candidates := MissionCatalog.get_campaign_missions()
+	if candidates.is_empty(): return null
+	# A seeded deck, not repeated independent dice rolls: all six venues differ.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = absi(("aftermath:rogue:%d" % serial).hash())
+	for index in range(candidates.size() - 1, 0, -1):
+		var other := rng.randi_range(0, index)
+		var swap := candidates[index]
+		candidates[index] = candidates[other]
+		candidates[other] = swap
+	return candidates[posmod(floor_number - 1, candidates.size())]
+
+func record_roguelike_floor(mission_id: String, score: int, grade: String, elapsed_seconds: float, report: Dictionary, state: Dictionary) -> void:
+	if run_session.active:
+		if not run_session.finish_floor(get_roguelike_floor(), report, score, state): return
+		report["run"] = run_session.summary()
+		report["floor"] = get_roguelike_floor()
+		var records: Dictionary = data.get("roguelike_records", {})
+		records["best_rooms"] = maxi(int(records.get("best_rooms", 0)), int(run_session.totals.rooms))
+		records["best_score"] = maxi(int(records.get("best_score", 0)), int(run_session.totals.score))
+		if run_session.is_complete(): records["victories"] = int(records.get("victories", 0)) + 1
+		data.roguelike_records = records
+	record_mission_result(mission_id, score, grade, elapsed_seconds, 1.0, int(report.get("alarms", 0)), 0, report)
+
+func _activate_mission(profile: MissionProfile, enforce_unlock := true) -> bool:
+	if profile == null or (enforce_unlock and not is_mission_unlocked(profile)): return false
+	var mission_id := profile.mission_id
 	current_mission_id = mission_id
 	var attempts: Dictionary = data.mission_attempts
 	attempts[mission_id] = int(attempts.get(mission_id, 0)) + 1
@@ -134,6 +224,7 @@ func record_mission_result(mission_id: String, score: int, grade: String, elapse
 		"evidence_left": maxi(0, evidence_left),
 		"forensic_report": forensic_report.duplicate(true) if forensic_report is Dictionary else {},
 	}
+	var is_roguelike := str((forensic_report as Dictionary).get("mode", "")) == "roguelike" if forensic_report is Dictionary else false
 	_update_career_stats(cleanup_ratio, alarms, forensic_report)
 	var contract_multiplier := float((forensic_report as Dictionary).get("contract_multiplier", 1.0)) if forensic_report is Dictionary else 1.0
 	var contract_success := bool((forensic_report as Dictionary).get("contract_success", true)) if forensic_report is Dictionary else true
@@ -141,10 +232,11 @@ func record_mission_result(mission_id: String, score: int, grade: String, elapse
 	if get_run_mode() == "gauntlet":
 		data.gauntlet_streak = get_gauntlet_streak() + 1
 		gauntlet_multiplier = 1.0 + minf(0.5, get_gauntlet_streak() * 0.04)
-	var payout := maxi(50, roundi((float(score) * 0.12 + cleanup_ratio * 120.0 - float(evidence_left) * 2.0) * (contract_multiplier if contract_success else 0.75) * gauntlet_multiplier))
+	var base_payout := float(score) * 0.12 if is_roguelike else float(score) * 0.12 + cleanup_ratio * 120.0 - float(evidence_left) * 2.0
+	var payout := maxi(50, roundi(base_payout * (contract_multiplier if contract_success else 0.75) * gauntlet_multiplier))
 	data.credits = int(data.get("credits", 0)) + payout
 	if first_completion: data.specialization_points = get_specialization_points() + 1
-	var heat_delta := alarms * 7 + evidence_left - (8 if cleanup_ratio >= 0.999 else 0)
+	var heat_delta := alarms * 7 if is_roguelike else alarms * 7 + evidence_left - (8 if cleanup_ratio >= 0.999 else 0)
 	data.heat = clampi(get_heat() + heat_delta, 0, 100)
 	if mission_id == "last_call":
 		var ending_id := _resolve_campaign_ending(cleanup_ratio, forensic_report)
@@ -218,6 +310,99 @@ func get_current_contract_id() -> String:
 func get_current_kit_id() -> String:
 	return str(data.get("current_kit_id", "balanced"))
 
+func get_weapon_loadout() -> Dictionary:
+	var loadout := (data.get("weapon_loadout", {}) as Dictionary).duplicate(true)
+	loadout.primary = WeaponPlatformCatalog.canonical_id(str(loadout.get("primary", "colt_m4a1")))
+	loadout.secondary = WeaponPlatformCatalog.canonical_id(str(loadout.get("secondary", "glock_17_gen5_mos")))
+	return loadout
+
+func get_loadout_weapon_ids() -> PackedStringArray:
+	var loadout := get_weapon_loadout()
+	return PackedStringArray([str(loadout.primary), str(loadout.secondary)])
+
+func select_loadout_weapon(slot: String, weapon_id: String) -> bool:
+	if slot not in ["primary", "secondary"]: return false
+	var resolved := WeaponPlatformCatalog.canonical_id(weapon_id)
+	if not WeaponPlatformCatalog.has_weapon(resolved) or not is_weapon_unlocked(resolved): return false
+	var weapon_class := str(WeaponPlatformCatalog.get_platform(resolved).get("class", "handgun"))
+	if slot == "secondary" and weapon_class not in ["handgun", "pdw"]: return false
+	if slot == "primary" and weapon_class == "handgun": return false
+	data.weapon_loadout[slot] = resolved
+	data.current_kit_id = "custom"
+	return save_progress()
+
+func get_weapon_build(weapon_id: String) -> PackedStringArray:
+	var resolved := WeaponPlatformCatalog.canonical_id(weapon_id)
+	var builds: Dictionary = data.get("weapon_builds", {}) as Dictionary
+	return PackedStringArray(builds.get(resolved, []))
+
+func set_weapon_attachment(weapon_id: String, slot: String, attachment_id: String) -> Dictionary:
+	var resolved := WeaponPlatformCatalog.canonical_id(weapon_id)
+	if not WeaponPlatformCatalog.has_weapon(resolved): return {"success": false, "reason": "UNKNOWN WEAPON"}
+	if slot not in AttachmentCatalog.SLOT_ORDER: return {"success": false, "reason": "UNKNOWN SLOT"}
+	var build := get_weapon_build(resolved)
+	for existing_id in build.duplicate():
+		var existing := AttachmentCatalog.get_attachment(existing_id)
+		if str(existing.get("slot", "")) == slot: build.remove_at(build.find(existing_id))
+	if not attachment_id.is_empty():
+		var attachment := AttachmentCatalog.get_attachment(attachment_id)
+		if attachment.is_empty() or str(attachment.get("slot", "")) != slot: return {"success": false, "reason": "INVALID PART"}
+		if not AttachmentCatalog.is_compatible(attachment, WeaponPlatformCatalog.get_platform(resolved)): return {"success": false, "reason": "INCOMPATIBLE"}
+		if build.size() >= get_attachment_limit(): return {"success": false, "reason": "ATTACHMENT LIMIT"}
+		build.append(attachment_id)
+	data.weapon_builds[resolved] = Array(build)
+	save_progress()
+	return {"success": true, "weapon_id": resolved, "attachments": build}
+
+func get_attachment_limit() -> int:
+	return 4 if get_upgrade_level("gunsmith") >= 3 else 3
+
+func is_weapon_unlocked(weapon_id: String) -> bool:
+	var resolved := WeaponPlatformCatalog.canonical_id(weapon_id)
+	if resolved in WeaponPlatformCatalog.STARTER_WEAPONS: return true
+	var unlock_order := _get_weapon_unlock_order()
+	var unlocked_count := mini(unlock_order.size(), get_campaign_completion_count() * 4)
+	return resolved in unlock_order.slice(0, unlocked_count)
+
+func get_unlocked_weapon_ids() -> PackedStringArray:
+	var result := PackedStringArray()
+	for weapon_class in WeaponPlatformCatalog.CLASS_ORDER:
+		for weapon_id in WeaponPlatformCatalog.get_class_weapon_ids(weapon_class):
+			if is_weapon_unlocked(weapon_id): result.append(weapon_id)
+	return result
+
+func _get_weapon_unlock_order() -> PackedStringArray:
+	var result := PackedStringArray()
+	for weapon_class in WeaponPlatformCatalog.CLASS_ORDER:
+		for weapon_id in WeaponPlatformCatalog.get_class_weapon_ids(weapon_class):
+			if weapon_id not in WeaponPlatformCatalog.STARTER_WEAPONS: result.append(weapon_id)
+	return result
+
+func _sanitize_weapon_configuration() -> void:
+	if not data.weapon_loadout is Dictionary: data.weapon_loadout = {"primary": "colt_m4a1", "secondary": "glock_17_gen5_mos"}
+	var primary := WeaponPlatformCatalog.canonical_id(str(data.weapon_loadout.get("primary", "colt_m4a1")))
+	var secondary := WeaponPlatformCatalog.canonical_id(str(data.weapon_loadout.get("secondary", "glock_17_gen5_mos")))
+	if not WeaponPlatformCatalog.has_weapon(primary) or str(WeaponPlatformCatalog.get_platform(primary).get("class", "handgun")) == "handgun": primary = "colt_m4a1"
+	if not WeaponPlatformCatalog.has_weapon(secondary) or str(WeaponPlatformCatalog.get_platform(secondary).get("class", "handgun")) not in ["handgun", "pdw"]: secondary = "glock_17_gen5_mos"
+	data.weapon_loadout = {"primary": primary, "secondary": secondary}
+	if not data.weapon_builds is Dictionary: data.weapon_builds = {}
+	var sanitized_builds := {}
+	for weapon_id in (data.weapon_builds as Dictionary).keys():
+		var canonical_weapon_id := WeaponPlatformCatalog.canonical_id(str(weapon_id))
+		if not WeaponPlatformCatalog.has_weapon(canonical_weapon_id): continue
+		var sanitized := PackedStringArray()
+		var platform := WeaponPlatformCatalog.get_platform(canonical_weapon_id)
+		var used_slots := {}
+		for attachment_id in PackedStringArray(data.weapon_builds[weapon_id]):
+			var attachment := AttachmentCatalog.get_attachment(attachment_id)
+			var slot := str(attachment.get("slot", ""))
+			if attachment.is_empty() or used_slots.has(slot) or not AttachmentCatalog.is_compatible(attachment, platform): continue
+			used_slots[slot] = true
+			sanitized.append(attachment_id)
+			if sanitized.size() >= get_attachment_limit(): break
+		sanitized_builds[canonical_weapon_id] = Array(sanitized)
+	data.weapon_builds = sanitized_builds
+
 func select_kit(kit_id: String) -> bool:
 	if not LoadoutCatalog.KITS.has(kit_id): return false
 	data.current_kit_id = kit_id
@@ -265,17 +450,27 @@ func _update_career_stats(cleanup_ratio: float, alarms: int, forensic_report: Di
 	stats.cases = int(stats.get("cases", 0)) + 1
 	stats.shots = int(stats.get("shots", 0)) + int(forensic_report.get("shots", 0))
 	stats.alarms = int(stats.get("alarms", 0)) + alarms
-	if cleanup_ratio >= 0.999: stats.perfect_cleans = int(stats.get("perfect_cleans", 0)) + 1
+	if cleanup_ratio >= 0.999 and str(forensic_report.get("mode", "")) != "roguelike": stats.perfect_cleans = int(stats.get("perfect_cleans", 0)) + 1
 	if bool(forensic_report.get("valuables_stolen", false)): stats.stolen_valuables = int(stats.get("stolen_valuables", 0)) + 1
 
 func _record_mastery(mission_id: String, cleanup_ratio: float, alarms: int, forensic_report: Dictionary) -> Dictionary:
-	var earned := {
-		"ghost": alarms == 0,
-		"restraint": int(forensic_report.get("shots", 999)) <= 8,
-		"immaculate": cleanup_ratio >= 0.999,
-		"total_recovery": int(forensic_report.get("bodies", 999)) == 0 and int(forensic_report.get("ballistic", 999)) == 0,
-		"preservation": int(forensic_report.get("property_damage", 999)) == 0,
-	}
+	var earned := {}
+	if str(forensic_report.get("mode", "")) == "roguelike":
+		earned = {
+			"ghost": alarms == 0,
+			"restraint": int(forensic_report.get("shots", 999)) <= maxi(8, int(forensic_report.get("kills", 0)) * 2),
+			"immaculate": alarms == 0 and int(forensic_report.get("property_damage", 999)) == 0,
+			"total_recovery": int(forensic_report.get("rooms_cleared", 0)) > 0,
+			"preservation": int(forensic_report.get("property_damage", 999)) == 0,
+		}
+	else:
+		earned = {
+			"ghost": alarms == 0,
+			"restraint": int(forensic_report.get("shots", 999)) <= 8,
+			"immaculate": cleanup_ratio >= 0.999,
+			"total_recovery": int(forensic_report.get("bodies", 999)) == 0 and int(forensic_report.get("ballistic", 999)) == 0,
+			"preservation": int(forensic_report.get("property_damage", 999)) == 0,
+		}
 	var previous: Dictionary = (data.mastery as Dictionary).get(mission_id, {})
 	for key in earned: earned[key] = bool(earned[key]) or bool(previous.get(key, false))
 	data.mastery[mission_id] = earned.duplicate(true)

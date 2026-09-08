@@ -5,7 +5,6 @@
 level_title = "HOUSE EDGE"
 enemy_spawns = PackedVector2Array(44,52, 44,180, 124,52, 212,68, 284,52, 132,180, 236,180, 340,68, 340,188)
 enemy_types = PackedStringArray("gunner","assault","heavy","gunner","melee","dog","assault","heavy","gunner")
-fixed_sentry_indices = PackedInt32Array(2,7,8)
 mission_profile = ExtResource("2")
 visual_theme = "gold"
 ammo_pickup_positions = PackedVector2Array(60,108, 156,188, 276,188, 348,108)

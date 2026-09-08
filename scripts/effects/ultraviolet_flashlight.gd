@@ -63,10 +63,10 @@ func _draw() -> void:
 	for point in world_polygon: local_polygon.append(to_local(point))
 	# Two restrained additive layers make the beam readable without turning the
 	# floor into a solid purple UI overlay.
-	draw_colored_polygon(local_polygon, Color(0.32, 0.08, 0.56, 0.075))
+	draw_colored_polygon(local_polygon, Color(0.48, 0.08, 0.92, 0.10))
 	var inner := PackedVector2Array([local_polygon[0]])
 	var center := floori(float(local_polygon.size() - 1) / 2.0)
 	var span := 7
 	for index in range(center - span, center + span + 1): inner.append(local_polygon[index])
-	draw_colored_polygon(inner, Color(0.38, 0.12, 0.70, 0.045))
-	draw_polyline(local_polygon.slice(1), Color(0.74, 0.43, 1.0, 0.24), 1.0, false)
+	draw_colored_polygon(inner, Color(0.58, 0.10, 1.0, 0.07))
+	draw_polyline(local_polygon.slice(1), Color(0.68, 0.22, 1.0, 0.34), 1.0, false)
