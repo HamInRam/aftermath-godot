@@ -20,8 +20,15 @@ func transition_to(scene_path: String, fade_out := 0.16, fade_in := 0.24) -> boo
 	var out_tween := create_tween().set_ignore_time_scale(true)
 	out_tween.tween_property(overlay, "color:a", 1.0, fade_out)
 	await out_tween.finished
-	var error := get_tree().change_scene_to_file(scene_path)
+	while ResourceLoader.load_threaded_get_status(scene_path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		await get_tree().process_frame
+	var error: Error
+	if ResourceLoader.load_threaded_get_status(scene_path) == ResourceLoader.THREAD_LOAD_LOADED:
+		error = get_tree().change_scene_to_packed(ResourceLoader.load_threaded_get(scene_path) as PackedScene)
+	else:
+		error = get_tree().change_scene_to_file(scene_path)
 	if error != OK:
+		overlay.color.a = 0.0
 		busy = false
 		overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		return false

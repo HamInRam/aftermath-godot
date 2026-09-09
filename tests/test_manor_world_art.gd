@@ -11,7 +11,7 @@ func _ready() -> void:
 	var atlas := PixelEnvironmentAtlas.create_texture().get_image()
 	_expect(atlas.get_size() == Vector2i(320,8), "atlas must retain native tile geometry")
 	_expect(_neutral(atlas), "atlas source pixels must already be grayscale")
-	_expect(HandcraftedRoomCatalog.validate_catalog().is_empty(), "48 authored formations must remain valid")
+	_expect(HandcraftedRoomCatalog.validate_catalog().is_empty(), "100 authored formations must remain valid")
 	_test_material_fields()
 	for venue: String in VENUES:
 		var world := TileWorld.new()
@@ -61,7 +61,7 @@ func _ready() -> void:
 		world.queue_free()
 		await get_tree().process_frame
 		print("manor world: %s checked" % venue)
-	_expect(modules_seen.size() >= 48, "seed coverage must include all 48 authored room formations")
+	_expect(modules_seen.size() == 100, "seed coverage must include all 100 authored room formations")
 	PixelEnvironmentAtlas.clear_cache()
 	if failures == 0: print("manor world art regression: PASS (12 venues, %d seed layouts, %d formations)" % [layouts_checked,modules_seen.size()])
 	get_tree().quit(failures)

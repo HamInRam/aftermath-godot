@@ -92,7 +92,9 @@ func _exercise_run(profile: MissionProfile) -> void:
 	level.player.gun.set_reserve_ammo("hk_mp5a5", 7)
 	level.player.gun.set_weapon_ammo("glock_17_gen5_mos", 2)
 	level.player.gun.set_reserve_ammo("glock_17_gen5_mos", 9)
-	level.player.blood_guard_points = 4
+	# Blood-ammo mode retired the legacy shield; it deliberately drops old guard
+	# state on restore. Resource equality must use a valid current-mode state.
+	level.player.blood_guard_points = 0
 	level.blood_resource.capacity = 120.0
 	level.blood_resource.reserve = 13.25
 	level.blood_resource.skill_cooldowns.q = 1.1
@@ -102,15 +104,30 @@ func _exercise_run(profile: MissionProfile) -> void:
 	for enemy in level.enemies_container.get_children(): enemy.is_dead = true
 	level.enemies_killed = level.started_enemy_count
 	level.room_run.update_room(level.player)
-	_expect(level.run_over and not level.final_grade.is_empty(), "clearing the actual room controller must complete the floor")
+	_expect(level.floor_cleared and not level.run_over and level.player.controls_enabled, "clear must retain control for scavenging and exit")
 	_expect(Progression.run_session.transfer_state == outgoing, "floor clear must capture exact outgoing resources once")
 	_expect(Progression.run_session.completed_floors.has(1), "cleared floor must be recorded in the active run")
-	var next_profile := Progression.begin_next_roguelike_floor()
+	var next_profile := Progression.peek_next_roguelike_floor()
+	# Recover more blood after the final kill, then use the actual walking exit.
+	level.blood_resource.reserve = 29.5
+	outgoing = level._capture_run_resources()
+	var cleared_level_id: int = level.get_instance_id()
+	level.floor_exit.armed = true
+	level.floor_exit.delay = 0.0
+	level.player.global_position = level.floor_exit.global_position
+	level.floor_exit._process(0.016)
+	var deadline := Time.get_ticks_msec() + 6000
+	while Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		var candidate := get_tree().current_scene
+		if is_instance_valid(candidate) and candidate.get_instance_id() != cleared_level_id:
+			active_level = candidate
+			break
 	_expect(next_profile != null and Progression.get_roguelike_floor() == 2, "continuation must select floor two")
 	if next_profile == null: return
-	await _dispose_level()
-	active_level = _spawn_level(next_profile.scene_path)
 	level = active_level
+	_quiet_level(level)
+	_expect(level.get_instance_id() != cleared_level_id, "walking through exit loads a different floor without Enter")
 	_expect(level.deployment_started and not level.entry_loadout_active and not level.player.predeployment_mode, "second floor must enter with carried equipment without another bench")
 	_expect(level._capture_run_resources() == outgoing, "the actual second-floor main must retain health, armor, guard, blood, focus, guns, attachments, magazines and reserves exactly")
 	_expect(Progression.run_session.checkpoint_floor == 2 and Progression.run_session.floor_checkpoint == outgoing, "the next floor checkpoint must use carried resources rather than refill defaults")

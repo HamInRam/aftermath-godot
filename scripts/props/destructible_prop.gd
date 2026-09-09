@@ -437,6 +437,15 @@ func _draw() -> void:
 	PIXELS.rect(self, Rect2(-half + Vector2(1, 2), size), Color(0.02, 0.02, 0.02, 0.38))
 	var base := _prop_body_color()
 	match prop_kind:
+		"glass_partition":
+			PIXELS.rect(self, Rect2(-4,-4,8,8), Color("777777"))
+			PIXELS.rect(self, Rect2(-4,-4,8,1), Color("eeeeee"))
+			PIXELS.rect(self, Rect2(-4,3,8,1), Color("eeeeee"))
+			PIXELS.rect(self, Rect2(-2,-2,1,4), Color("bcbcbc"))
+		"paper_stack":
+			PIXELS.rect(self, Rect2(-4,-4,8,8), Color("777777"))
+			PIXELS.rect(self, Rect2(-3,-4,6,6), Color("eeeeee"))
+			PIXELS.rect(self, Rect2(-2,-2,4,1), Color("aaaaaa"))
 		"sofa":
 			_prop_panel(Rect2(-half, size), base, &"fabric", 1)
 			PIXELS.rect(self, Rect2(-6,-3,12,2), Color("a9a9a9"))

@@ -169,6 +169,10 @@ func begin_next_roguelike_floor() -> MissionProfile:
 	if not _activate_mission(profile, false): return null
 	return profile
 
+func peek_next_roguelike_floor() -> MissionProfile:
+	if not run_session.active or get_roguelike_floor() >= RoguelikeRunSession.FLOOR_LIMIT: return null
+	return _select_roguelike_floor(maxi(1, int(data.get("roguelike_run_serial", 1))), get_roguelike_floor() + 1, current_mission_id)
+
 func get_roguelike_floor() -> int:
 	return maxi(0, int(data.get("roguelike_floor", 0)))
 

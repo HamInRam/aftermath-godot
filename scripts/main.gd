@@ -66,6 +66,9 @@ var enemies_killed := 0
 var started_enemy_count := 0
 var remaining_enemies := 0
 var run_over := false
+var floor_cleared := false
+var exit_transition_pending := false
+var floor_exit: FloorExit
 var elapsed := 0.0
 var combo := 0
 var best_combo := 0
@@ -312,8 +315,9 @@ func _process(delta: float) -> void:
 		var finished_audio := get_node_or_null("CombatAudioDirector")
 		if is_instance_valid(finished_audio): finished_audio.set_blood_level(1.0, false)
 		return
-	elapsed += frame_real_delta
-	combat_phase_elapsed += frame_real_delta
+	if not floor_cleared:
+		elapsed += frame_real_delta
+		combat_phase_elapsed += frame_real_delta
 	if is_instance_valid(player):
 		if roguelike_mode and is_instance_valid(blood_resource):
 			blood_resource.global_position = player.global_position
@@ -741,10 +745,13 @@ func _start_run() -> void:
 	_spawn_tactical_lures()
 	if roguelike_mode and is_instance_valid(world) and world.has_method("get_handcrafted_encounter_layout"):
 		var encounter_layout: Dictionary = world.get_handcrafted_encounter_layout()
+		encounter_layout = SwarmLayout.build(world, encounter_layout)
 		enemy_spawns = encounter_layout.get("spawns", enemy_spawns)
 		enemy_patrol_offsets = encounter_layout.get("patrols", enemy_patrol_offsets)
 		enemy_types = encounter_layout.get("types", enemy_types)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
+	if roguelike_mode:
+		SwarmLayout.add_clutter(world, enemies_container, int(world._get_room_run_seed()))
 	if roguelike_mode and deployment_started and is_instance_valid(room_run): room_run.configure(world, enemies_container)
 	for index in ammo_pickup_positions.size(): _spawn_ammo_pickup(index)
 	started_enemy_count = enemy_spawns.size()
@@ -888,12 +895,12 @@ func _spawn_enemy(pos: Vector2, patrol_index := -1) -> void:
 	enemy.global_position = resolved_position
 	enemy.debug_draw_vision = vision_debug_enabled
 	var configured_type := enemy_types[patrol_index] if patrol_index >= 0 and patrol_index < enemy_types.size() else "gunner"
-	if str(active_modifier.get("id", "standard")) == "armed_response" and patrol_index >= 0 and patrol_index % 3 == 1:
+	if configured_type != "bleeder" and str(active_modifier.get("id", "standard")) == "armed_response" and patrol_index >= 0 and patrol_index % 3 == 1:
 		configured_type = "heavy" if patrol_index % 2 == 1 else "assault"
 	enemy.configure_combat(configured_type)
 	# A deterministic minority gives room decks an overpainting threat without
 	# changing gunner AI or spawning surprise reinforcements.
-	if roguelike_mode and patrol_index >= 0 and patrol_index % 8 == 5 and enemy.actor_type != "dog":
+	if configured_type != "bleeder" and roguelike_mode and patrol_index >= 0 and patrol_index % 8 == 5 and enemy.actor_type != "dog":
 		enemy.set_meta("polluter", true)
 		enemy.queue_redraw()
 	if enemy.has_method("set_combat_time_scale"): enemy.set_combat_time_scale(hostile_combat_time_scale)
@@ -1256,9 +1263,8 @@ func _on_rogue_room_cleared(_room_id: String, index: int) -> void:
 	hud.show_banner("ROOM %02d CLEARED // KEEP MOVING" % index, Color("f4f4f4"))
 
 func _on_rogue_run_cleared(room_count: int) -> void:
-	if run_over: return
-	run_over = true
-	blood_resource.set_stance_active(false)
+	if run_over or floor_cleared: return
+	floor_cleared = true
 	combat_focus_active = false
 	combat_focus_time_remaining = 0.0
 	_set_hostile_combat_time_scale(1.0)
@@ -1292,11 +1298,52 @@ func _on_rogue_run_cleared(room_count: int) -> void:
 	}
 	if record_progress and mission_tracker.profile != null:
 		Progression.record_roguelike_floor(mission_tracker.profile.mission_id, final_score, final_grade, elapsed, report, _capture_run_resources())
+	if not Progression.run_session.is_complete():
+		_open_floor_exit()
+		return
+	run_over = true
+	blood_resource.set_stance_active(false)
 	if is_instance_valid(player): player.set_controls_enabled(false)
 	status_label.text = "DESCENT COMPLETE" if Progression.run_session.is_complete() else "FLOOR CLEARED"
 	detail_label.text = "GRADE %s // %04d // %d ROOMS // ENTER REPORT" % [final_grade, final_score, room_count]
 	hud.show_banner("THE FLOOR REMEMBERS YOU", Color("d10b32"))
 	_show_run_end_prompt("DESCENT COMPLETE" if Progression.run_session.is_complete() else "FLOOR CLEARED // GRADE %s" % final_grade, true)
+
+func _open_floor_exit() -> void:
+	var world := get_node("TileMap")
+	floor_exit = FloorExit.new()
+	floor_exit.player = player
+	floor_exit.position = world.get_default_player_spawn()
+	add_child(floor_exit)
+	floor_exit.entered.connect(_enter_floor_exit)
+	status_label.text = "AREA CLEAR // EXIT OPEN"
+	detail_label.text = "%d KILLS // COMBO %d // %.1fs" % [enemies_killed, best_combo, elapsed]
+	hud.show_banner("AREA CLEAR // RETURN TO ENTRY EXIT", Color.WHITE)
+	var next := Progression.peek_next_roguelike_floor()
+	if next != null: ResourceLoader.load_threaded_request(next.scene_path)
+
+func _enter_floor_exit() -> void:
+	if not floor_cleared or run_over or exit_transition_pending or player.is_dead or SceneTransition.busy: return
+	exit_transition_pending = true
+	# Capture at departure, not at the final kill: scavenging and siphoning count.
+	Progression.run_session.transfer_state = _capture_run_resources()
+	var previous_data: Dictionary = Progression.data.duplicate(true)
+	var previous_mission: String = Progression.current_mission_id
+	var profile := Progression.begin_next_roguelike_floor()
+	if profile == null:
+		exit_transition_pending = false
+		floor_exit.spent = false
+		return
+	player.set_controls_enabled(false)
+	blood_resource.set_stance_active(false)
+	var changed: bool = await SceneTransition.transition_to(profile.scene_path)
+	if not changed:
+		Progression.data = previous_data
+		Progression.current_mission_id = previous_mission
+		exit_transition_pending = false
+		floor_exit.spent = false
+		player.set_controls_enabled(true)
+		hud.show_banner("EXIT LOAD FAILED // TRY AGAIN", Color.WHITE)
 
 func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: int, attachment_ids := PackedStringArray()) -> void:
 	# Merge coincident drops to keep evidence readable without ever deleting it.
@@ -1559,6 +1606,7 @@ func _reward_combat_focus(attack_id: String, hit_zone: String, current_combo: in
 
 func _on_player_died(source_position := Vector2.ZERO) -> void:
 	if run_over: return
+	final_grade = ""
 	blood_resource.set_stance_active(false)
 	if is_instance_valid(playtest_telemetry):
 		var world := get_node_or_null("TileMap")

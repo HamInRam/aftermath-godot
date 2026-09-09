@@ -7,7 +7,7 @@ extends RefCounted
 # fit thresholds on any side. Nothing here uses unconstrained random placement.
 
 static func get_modules() -> Array[Dictionary]:
-	return [
+	var modules: Array[Dictionary] = [
 		_m("crossfire_gate", [Vector2(.18,.24),Vector2(.78,.26),Vector2(.32,.72),Vector2(.72,.70)], [Vector2.RIGHT,Vector2.LEFT,Vector2.UP,Vector2.UP], [Vector2(.48,.35),Vector2(.52,.68)], ["gunner","gunner","assault","melee"]),
 		_m("broken_diamond", [Vector2(.50,.18),Vector2(.80,.48),Vector2(.46,.80),Vector2(.20,.54)], [Vector2.DOWN,Vector2.LEFT,Vector2.UP,Vector2.RIGHT], [Vector2(.36,.38),Vector2(.66,.62)], ["assault","gunner","heavy","melee"]),
 		_m("staggered_line", [Vector2(.18,.24),Vector2(.40,.42),Vector2(.64,.58),Vector2(.82,.76)], [Vector2.RIGHT,Vector2.RIGHT,Vector2.LEFT,Vector2.LEFT], [Vector2(.32,.68),Vector2(.70,.30)], ["melee","gunner","assault","heavy"]),
@@ -58,6 +58,9 @@ static func get_modules() -> Array[Dictionary]:
 		_m("courtyard_exchange", [Vector2(.16,.46),Vector2(.46,.18),Vector2(.84,.54),Vector2(.56,.82)], [Vector2.RIGHT,Vector2.DOWN,Vector2.LEFT,Vector2.UP], [Vector2(.34,.64),Vector2(.66,.36)], ["gunner","assault","gunner","melee"]),
 	]
 
+	modules.append_array(preload("res://utility/expanded_room_compositions.gd").get_modules())
+	return modules
+
 static func get_assignments(seed_value: int, count: int) -> Array[Dictionary]:
 	var modules := get_modules()
 	var indices: Array[int] = []
@@ -98,11 +101,16 @@ static func _combat_kind(id: String) -> String:
 
 static func validate_catalog() -> PackedStringArray:
 	var errors := PackedStringArray()
+	if get_modules().size() != 100: errors.append("catalog must contain exactly 100 base compositions")
 	var ids := {}
+	var signatures := {}
 	for module: Dictionary in get_modules():
 		var module_id := str(module.get("id", ""))
 		if module_id.is_empty() or ids.has(module_id): errors.append("duplicate or empty module id: " + module_id)
 		ids[module_id] = true
+		var signature := str(module.enemies) + str(module.props)
+		if signatures.has(signature): errors.append(module_id + " repeats another base composition")
+		signatures[signature] = true
 		var enemies: Array = module.get("enemies", [])
 		var patrols: Array = module.get("patrols", [])
 		var roles: Array = module.get("roles", [])

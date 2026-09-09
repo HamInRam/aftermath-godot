@@ -34,6 +34,10 @@ func _verify_mission_doors(mission_id: String, scene_path: String) -> void:
 	# door-only test now that ambient patrols remain simulated.
 	level.set_process(false)
 	level.set_physics_process(false)
+	# The independent swarm listener must also be isolated in this geometry-only
+	# probe: opening a test door otherwise recruits the deliberately parked actor.
+	level.room_run.initialized = false
+	level.room_run.swarm_queue.clear()
 	var player := level.player as CharacterBody2D
 	player.set_physics_process(false)
 	for enemy in level.get_node("Enemies").get_children():

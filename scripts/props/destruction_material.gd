@@ -18,6 +18,8 @@ static func for_kind(kind: String) -> Dictionary:
 	return profile
 
 static func material_for_kind(kind: String) -> String:
+	if kind == "paper_stack": return "fabric"
+	if kind == "glass_partition": return "glass"
 	if kind in ["sofa", "bed"]: return "fabric"
 	if kind in ["tv", "speaker", "console", "conveyor", "evidence_cabinet", "freezer"]: return "metal"
 	if kind in ["sink", "toilet"]: return "ceramic"

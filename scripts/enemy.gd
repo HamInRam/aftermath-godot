@@ -580,6 +580,7 @@ func configure_combat(type_name: String) -> void:
 			"assault": role_color = Color("4a4a4a"); role_accent = Color("d0d0d0")
 			"heavy": role_color = Color("242424"); role_accent = Color("9a9a9a")
 			"melee": role_color = Color("343434"); role_accent = Color("eeeeee")
+			"bleeder": role_color = Color("aaaaaa"); role_accent = Color("eeeeee")
 		legs_visual.configure("dog" if actor_type == "dog" else "enemy", role_color, role_accent)
 		if is_instance_valid(lifecycle_rig): lifecycle_rig.configure("hound" if actor_type == "dog" else "enemy", Color("555555") if actor_type == "dog" else role_color, Color("d8d8d8") if actor_type == "dog" else role_accent, "hound" if actor_type == "dog" else archetype_id)
 
@@ -648,7 +649,7 @@ func _execute_melee_attack() -> void:
 		var attack_id := "hound_bite" if actor_type == "dog" else "fist"
 		var physical := RAGDOLL_IMPACT.resolve(attack_id, global_position.distance_to(player.global_position), "torso", "human")
 		player.apply_lifecycle_impact(global_position.direction_to(player.global_position), float(physical.limb_force) * 0.72, "torso")
-	player.take_damage(62 if actor_type == "dog" else 48, global_position)
+	player.take_damage(16 if archetype_id == "bleeder" else (62 if actor_type == "dog" else 48), global_position)
 
 func _begin_attack() -> void:
 	if state == State.ATTACK: return

@@ -17,8 +17,61 @@ var waiting_for_reward := false
 var initialized := false
 var run_finished := false
 var updating_rooms := false
+var swarm_queue: Array[Dictionary] = []
+# Retained for isolated legacy tests, disabled in the room-paced game.
+var swarm_recruitment_enabled := false
+var swarm_cooldown := 0.0
+var swarm_tick := 0.0
+
+func _physics_process(delta: float) -> void:
+	swarm_cooldown = maxf(0.0, swarm_cooldown - delta)
+	swarm_tick -= delta
+	if not initialized or run_finished or swarm_queue.is_empty() or swarm_tick > 0.0: return
+	swarm_tick = 0.18
+	var entry: Dictionary = swarm_queue.pop_front()
+	var enemy = entry.enemy
+	if not is_instance_valid(enemy) or bool(enemy.get("is_dead")): return
+	if bool(enemy.get_meta("rogue_room_active", false)): return
+	_set_enemy_active(enemy, true)
+	if enemy.has_method("react_to_room_attack"): enemy.react_to_room_attack(entry.position)
+
+func _on_swarm_noise(position: Vector2, _radius: float, kind: String) -> void:
+	if not swarm_recruitment_enabled: return
+	if not initialized or run_finished or swarm_cooldown > 0.0: return
+	if not kind.begins_with("gunshot_") and kind != "door": return
+	if not is_instance_valid(world) or not is_instance_valid(enemy_container): return
+	var source_id := str(world.get_tactical_room_id(position))
+	# Do not summon the floor onto its exterior deployment threshold.
+	if source_id == "exterior_approach": return
+	swarm_cooldown = 3.0
+	var rooms: Array[Dictionary] = []
+	var active_melee := 0
+	for enemy in enemy_container.get_children():
+		if not bool(enemy.get("is_dead")) and str(enemy.get("enemy_type")) == "melee" and bool(enemy.get_meta("rogue_room_active", false)): active_melee += 1
+	for id in room_members:
+		if str(id) == source_id or cleared_rooms.has(id): continue
+		var nearest := INF
+		for enemy in room_members[id]:
+			if is_instance_valid(enemy) and not bool(enemy.get("is_dead")): nearest = minf(nearest, position.distance_squared_to(enemy.global_position))
+		if nearest < 320.0 * 320.0: rooms.append({"id": id, "distance": nearest})
+	rooms.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.distance) < float(b.distance))
+	var budget := maxi(0, 18 - active_melee - swarm_queue.size())
+	for index in range(mini(2, rooms.size())):
+		for enemy in room_members[rooms[index].id]:
+			if budget <= 0: return
+			if not is_instance_valid(enemy) or bool(enemy.get("is_dead")) or str(enemy.get("enemy_type")) != "melee" or bool(enemy.get_meta("rogue_room_active", false)): continue
+			var pending := false
+			for entry in swarm_queue:
+				if entry.enemy == enemy: pending = true; break
+			if pending: continue
+			swarm_queue.append({"enemy": enemy, "position": position})
+			budget -= 1
 
 func configure(level_world: Node, enemies: Node) -> void:
+	swarm_queue.clear()
+	swarm_cooldown = 0.0
+	swarm_tick = 0.0
+	if not Events.combat_noise.is_connected(_on_swarm_noise): Events.combat_noise.connect(_on_swarm_noise)
 	world = level_world
 	enemy_container = enemies
 	initialized = false
@@ -144,5 +197,7 @@ func _completed_room_count() -> int:
 
 func get_active_enemy_count() -> int:
 	var count := 0
-	for room_id in engaged_rooms: count += _alive_count(str(room_id))
+	if not is_instance_valid(enemy_container): return count
+	for enemy in enemy_container.get_children():
+		if not bool(enemy.get("is_dead")) and bool(enemy.get_meta("rogue_room_active", false)): count += 1
 	return count

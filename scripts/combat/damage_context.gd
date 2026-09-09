@@ -33,6 +33,7 @@ func configure_blood_yield(blood_ammo_mode: bool, chain: int) -> void:
 	if not is_instance_valid(target) or not target is Actor: return
 	if not target.is_in_group("enemy") or target.is_dead or target.hp <= 0 or target.get_meta("polluter", false): return
 	blood_yield_multiplier = 1.0 + 0.1 * clampi(chain + (1 if lethal else 0), 0, 10)
+	if target.get("archetype_id") == "bleeder": blood_yield_multiplier = minf(2.0, blood_yield_multiplier * 1.3)
 
 var gore_force_multiplier := 1.0
 var bleed_rate := 0.0

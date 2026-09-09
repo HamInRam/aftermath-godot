@@ -88,6 +88,7 @@ func _refresh_eroded_topology() -> void:
 	_build_acoustic_topology()
 var light_occluder_container: Node2D
 var room_run_seed_override := -1
+var room_entry_nonce := randi()
 var geometry_expanded := false
 
 func _ready() -> void:
@@ -284,17 +285,18 @@ func _get_room_run_seed() -> int:
 	if room_run_seed_override >= 0: return absi((layout_variant + ":preview:" + str(room_run_seed_override)).hash())
 	# Child TileWorld._ready runs before Main._ready. Read the active run identity
 	# here so cover built now and enemy formations requested later share one seed.
-	# Retrying a floor changes neither value; beginning a run advances the serial.
+	# One nonce per scene entry re-deals the room modules (including retries).
+	# The explicit preview override remains deterministic for reproduction/tests.
 	if is_instance_valid(Progression) and Progression.run_session.active:
 		var serial := maxi(1, int(Progression.data.get("roguelike_run_serial", 1)))
 		var floor_number := maxi(1, Progression.get_roguelike_floor())
-		return absi(("aftermath:rooms:%s:%d:%d" % [layout_variant, serial, floor_number]).hash())
+		return absi(("aftermath:rooms:%s:%d:%d:%d" % [layout_variant, serial, floor_number, room_entry_nonce]).hash())
 	# Standalone level previews retain their existing mission-attempt seed.
 	var attempt := 1
 	if is_instance_valid(Progression):
 		var attempts: Dictionary = Progression.data.get("mission_attempts", {})
 		attempt = maxi(1, int(attempts.get(layout_variant, attempts.get(Progression.current_mission_id, 1))))
-	return absi((layout_variant + ":" + str(attempt) + ":" + str(Progression.get_run_mode())).hash())
+	return absi((layout_variant + ":" + str(attempt) + ":" + str(Progression.get_run_mode()) + ":" + str(room_entry_nonce)).hash())
 
 func get_handcrafted_encounter_layout() -> Dictionary:
 	# A seed chooses complete validated modules instead of independent random

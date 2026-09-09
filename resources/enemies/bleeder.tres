@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyProfile" load_steps=2 format=3]
+[ext_resource path="res://scripts/enemy_profile.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+archetype_id = "bleeder"
+combat_type = "melee"
+display_name = "BLEEDER"
+max_health = 12
+move_speed = 78.0
+chase_speed_multiplier = 1.5
+preferred_distance = 17.0
+reaction_time_min = 0.18
+reaction_time_max = 0.3
+melee_interval = 0.85
+sprite_modulate = Color(1, 1, 1, 1)

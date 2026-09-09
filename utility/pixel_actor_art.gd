@@ -33,6 +33,7 @@ static func palette(role: String) -> Dictionary:
 		"assault": cloth = Color("494949"); edge = Color("ababab"); seam = Color("272727")
 		"heavy": cloth = Color("555555"); sleeve = Color("bcbcbc"); edge = Color("d0d0d0"); seam = Color("2c2c2c")
 		"melee": cloth = Color("c8c8c8"); sleeve = cloth; seam = Color("909090")
+		"bleeder": cloth = Color("eeeeee"); sleeve = Color("b5b5b5"); seam = Color("777777")
 		"hound": cloth = Color("555555"); sleeve = cloth; edge = Color("bcbcbc"); seam = Color("343434")
 	return {"i": Color("090909"), "c": cloth, "e": edge, "s": seam,
 		"h": Color("b5b5b5"), "p": Color("f5f5f5"), "k": Color("202020"),
@@ -55,7 +56,7 @@ static func human_pixels(role: String, angle: float, hands: Array[Vector2], offs
 		_segment(cells, shoulder, elbow, 3.0, colors.i, "arm_a" if index == 0 else "arm_b")
 		_segment(cells, elbow, hand - Vector2(1, 0), 3.0, colors.i, "arm_a" if index == 0 else "arm_b")
 		_segment(cells, shoulder, elbow, 1.0, colors.u, "arm_a" if index == 0 else "arm_b")
-		_segment(cells, elbow, hand - Vector2(1, 0), 1.0, colors.h if role == "melee" else colors.u, "arm_a" if index == 0 else "arm_b")
+		_segment(cells, elbow, hand - Vector2(1, 0), 1.0, colors.h if role in ["melee", "bleeder"] else colors.u, "arm_a" if index == 0 else "arm_b")
 		_put(cells, (hand - Vector2(1, 0)).round(), colors.p if role != "player" else colors.e, "cuff")
 		_stamp(cells, [".ii", "ihh", ".ii"], hand, colors, "hand_a" if index == 0 else "hand_b")
 	_stamp(cells, HEAVY_TORSO if heavy else TORSO, Vector2(-1, 0), colors, "torso")

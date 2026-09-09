@@ -2,6 +2,7 @@ class_name EnemyCatalog
 extends RefCounted
 
 const PROFILES := {
+	"bleeder": preload("res://resources/enemies/bleeder.tres"),
 	"gunner": preload("res://resources/enemies/gunner.tres"),
 	"melee": preload("res://resources/enemies/melee.tres"),
 	"assault": preload("res://resources/enemies/assault.tres"),
