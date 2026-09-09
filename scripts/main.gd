@@ -307,6 +307,8 @@ func _process(delta: float) -> void:
 	# A result screen must not keep draining the floor or cooling down abilities.
 	# Effects/physics have their own processors and may finish settling normally.
 	if run_over:
+		var scrap := get_node_or_null("MicroDebrisField") as MicroDebrisField
+		if scrap != null: scrap.set_magnet(player, false)
 		var finished_audio := get_node_or_null("CombatAudioDirector")
 		if is_instance_valid(finished_audio): finished_audio.set_blood_level(1.0, false)
 		return
@@ -317,6 +319,7 @@ func _process(delta: float) -> void:
 			blood_resource.global_position = player.global_position
 			if not player.controls_enabled or player.is_dead: blood_resource.set_stance_active(false)
 			blood_resource.update_system(delta, player, blood_system)
+			MicroDebrisField.for_scene(self).set_magnet(player, blood_resource.stance_active and player.controls_enabled and not player.is_dead)
 			var audio_director := get_node_or_null("CombatAudioDirector")
 			if is_instance_valid(audio_director): audio_director.set_blood_level(blood_resource.reserve / maxf(1.0, blood_resource.capacity), player.controls_enabled and not player.is_dead)
 			player.set_blood_stance_movement_multiplier(blood_resource.get_movement_multiplier())
@@ -1381,7 +1384,8 @@ func _on_damage_impact(context: DamageContext) -> void:
 	# Only living hostile flesh feeds the roguelike blood economy. Player hits,
 	# player death and corpse overkill retain impact feedback without creating a
 	# self-recycling blood source under the player.
-	if is_instance_valid(context.target) and context.target.is_in_group("enemy"):
+	context.configure_blood_yield(is_instance_valid(blood_resource) and blood_resource.blood_ammo_mode, combo if combo_timer > 0.0 else 0)
+	if is_instance_valid(context.target) and context.target.is_in_group("enemy") and context.target is Actor and not context.target.is_dead and context.target.hp > 0 and context.damage > 0:
 		if context.target.get_meta("polluter", false):
 			# Lethal patch is stamped once in _on_enemy_died. Limit repeated
 			# nonlethal pellet hits to one surface upload burst per 150 ms.

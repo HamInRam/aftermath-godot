@@ -141,10 +141,15 @@ func _physics_process(delta: float) -> void:
 			return
 		var tile_world = collider.get_parent() if collider is TileMapLayer else null
 		if tile_world != null and tile_world.has_method("shatter_glass_at") and tile_world.shatter_glass_at(collision.get_position(), direction):
+			MicroDebrisField.for_scene(self).emit_impact(collision.get_position() - direction, direction, "glass")
 			global_position = collision.get_position() + direction * 9.0
 			return
 		var hit_solid_surface: bool = collider is TileMapLayer or (collider is CollisionObject2D and collider.get_collision_layer_value(3))
+		if collider is TileMapLayer and tile_world != null and tile_world.has_method("chip_wall_at"):
+			tile_world.chip_wall_at(collision.get_position(), direction, damage)
 		if hit_solid_surface:
+			if not collider.has_method("receive_projectile_impact_context") and not collider.has_method("receive_projectile_impact"):
+				MicroDebrisField.for_scene(self).emit_impact(collision.get_position() - direction, direction, "concrete")
 			var sparks = WALL_SPARKS_SCENE.instantiate()
 			var effect_parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
 			if RuntimeBudget.try_add("transient_fx", sparks, effect_parent):

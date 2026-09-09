@@ -167,6 +167,7 @@ func _begin_open(pusher_node: Node2D, pusher_position: Vector2, pusher_velocity:
 		Events.publish_combat_noise(global_position, 100.0, "door")
 
 func receive_projectile_impact(impact_velocity: Vector2, world_point: Vector2) -> void:
+	MicroDebrisField.for_scene(self).emit_impact(world_point, impact_velocity.normalized(), "wood", 0.7)
 	var source_position := world_point - impact_velocity.normalized() * 4.0
 	_begin_open(null, source_position, impact_velocity.limit_length(dangerous_speed_threshold + 1.0))
 

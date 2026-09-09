@@ -12,7 +12,7 @@ The world, six actor roles, corpse anatomy, eight firearm classes, title menu an
 - The first floor offers the entry loadout bench. Death retries restore that floor's entry checkpoint without reopening the bench or issuing free resources; retries are counted in the final report. The sixth floor ends the run and offers a new descent.
 - Buildings now occupy 768×448 native world pixels rather than 384×224. Actors, furniture, 8px tiles and 24px doors retain their original scale. This expands physical combat space, not the art pixels or camera alone.
 - 48 authored enemy/cover formations with eight safe transformations supply room variation. Standard floors have 16–20 hostiles. Seeded layouts remain identical on a death retry and change on a new run.
-- Empty magazine plus a fresh left click reloads if reserves remain. A completely empty gun dry-fires; only Q throws it. Throws rotate, sweep against thin walls, rebound, knock down enemies and remain recoverable without duplicating ammunition.
+- Current player fire consumes shared blood directly; magazines and reloads do not gate it. Empty blood dry-fires; only Q throws the gun. Throws rotate, sweep against thin walls, rebound and knock down enemies.
 - Grayscale detached anatomy matches the corpse's missing parts. Limbs and ragdolls collide with walls, preserve angular motion, settle, and remain readable above crimson blood. Blood-enhanced shots retain a strictly lossy resource return budget.
 - Active cleanup transitions, tool handlers, extraction scoring and title-menu links to the retired cleaning workshop are removed. Old save fields and isolated legacy resources remain compatible; they do not gate the current run.
 - HOW TO PLAY is a scrollable page with a fixed Back action. Death/clear actions stay onscreen rather than disappearing with transient HUD hints. See [runtime design and verification](docs/ROGUELIKE_RUNTIME.md).
@@ -304,37 +304,28 @@ The version sections below are historical notes, not the current gameplay contra
 - Enemy art uses a distinct imported 16x16 PNG, and SMG enemies carry a dedicated AK-style pixel sprite
 
 ## Controls
+- `WASD` or arrow keys — move; mouse — aim.
+- Left mouse — fire using the shared blood reserve. No player magazine limit, reload animation or automatic reload; insufficient blood triggers a rate-limited dry fire.
+- Hold right mouse — siphon enemy blood in an invisible 90°/224px forward sector plus a 48px proximity circle. Movement remains available; the reserve fills at a bounded global rate.
+- `Space` — directional dodge roll with an invulnerability window. Actual blood underfoot gives a dynamic 35% roll-speed bonus, without extending invulnerability.
+- `1` — cycle owned guns; `2` fists / `3` knife / `4` bat.
+- `Q` — throw the equipped gun; `E` — pick up weapons or interact with the entrance loadout case.
+- `R` — no combat reload; retry the floor-entry checkpoint after death.
+- Focus, blood active skills and blood healing are disabled in the current blood-ammunition mode.
+- Move into a closed door — push it open; fast contact can slam it.
+- Hold `Shift` — extend the camera toward the cursor.
+- `F3` enemy vision debug; `F4` screen FX; `F6` performance diagnostics.
+- `Esc` — pause/resume; `Enter` from pause returns to the run launcher.
 
-- `WASD` or arrow keys — move
-- Mouse — aim
-- `1` gun; press repeatedly to cycle owned guns / `2` fists / `3` knife / `4` bat
-- The starting kit is selected at the first entry bench; armed enemies drop their actual gun and remaining magazine, and `E` collects it
-- Ammunition boxes replenish only their marked weapon reserve
-- Each owned gun preserves its own partially used magazine when cycling weapons
-- Left mouse — fire or melee attack; a fresh click with an empty magazine starts reloading when reserve ammunition exists
-- Hold right mouse while armed — siphon nearby enemy blood along the cursor direction; firing during the stance spends reserve on empowered crimson ammunition
-- `X` — spend one finite Focus charge; Focus and blood reserve are tracked independently in the compact HUD
-- `Q`, `E`, `R` while holding right mouse — blood-powered active abilities; `B` converts stored blood into health
-- Melee is deliberately unforgiving: fists 12px, knife 16px and bat 28px, with forward-anchored compact trails
-- `R` — reload during combat; retry this floor's entry checkpoint after death
-- `Space` — execute a nearby knocked-down enemy
-- `E` — context action such as picking up a dropped weapon or using the entry loadout case
-- `Q` — throw the equipped gun; the weapon remains recoverable with its current magazine
-- Move into a closed door — contact opens it once; ≥81 px/s is a dangerous slam, slower contact is a quiet non-damaging push
-- Hold `Shift` — extend the camera toward the cursor
-- `F3` — toggle enemy vision debug cones
-- `F4` — toggle and save the CRT/screen post-processing preference
-- `F5` — toggle exterior hue cycling
-- `F6` — toggle the performance diagnostics overlay
-- All other presentation options are available from the title-screen Settings menu
-- `Esc` — pause/resume; press `Enter` on the pause screen to return to the run launcher
+Enemy ammunition and legacy save/test interfaces remain conventional. They do not limit the player's blood-powered weapons. Historical release notes below/above may describe retired modes.
 
 ## Game loop
 
-1. Start a new run; the game chooses a venue and a non-repeating set of authored room modules.
-2. Confirm the first-floor loadout at the entrance, then clear combat rooms while managing ammunition, wounds, Focus and stored blood.
-3. Siphon enemy blood and spend it on empowered rounds, active abilities or healing. Room clears never interrupt combat with upgrade choices.
-4. Clear the floor, review the result and advance with your remaining resources. After six different venues, view the complete run report. Death retries preserve the current floor and its entry loadout/resources.
+1. Start a randomized descent and confirm the first-floor entrance loadout.
+2. Shoot to create enemy blood, roll through it for mobility, and hold right mouse to recover ammunition.
+3. Live-enemy impact droplets gain 10% recoverable mass per active combo kill, capped at 2×. A lethal hit includes its own kill; the existing combo timeout resets the bonus. Geometry, crimson color and particle counts do not grow with this bonus. Saturated pixels can yield less than the nominal multiplier.
+4. Walls and corpse overkill generate no new recoverable resource. Legacy enhanced rounds retain their finite lossy budget and receive no combo bonus.
+5. Advance with remaining resources; death retries restore the floor-entry checkpoint without issuing free resources.
 
 ## Levels and AI
 

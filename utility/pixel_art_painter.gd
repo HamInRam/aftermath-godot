@@ -42,6 +42,13 @@ const GLYPHS := {
 
 static func pixel(canvas: CanvasItem, position: Vector2, color: Color, size := 1) -> void:
 	var snapped := Vector2(floori(position.x), floori(position.y))
+	if canvas.has_meta("erosion_mask"):
+		var mask: PixelErosionMask = canvas.get_meta("erosion_mask")
+		for y in maxi(1, size):
+			for x in maxi(1, size):
+				var cell := Vector2i(snapped) + Vector2i(x,y)
+				if mask.solid(cell): canvas.draw_rect(Rect2(Vector2(cell), Vector2.ONE), color)
+		return
 	canvas.draw_rect(Rect2(snapped, Vector2.ONE * maxi(1, size)), color)
 
 static func rect(canvas: CanvasItem, area: Rect2, color: Color, dither := 0) -> void:
@@ -52,7 +59,7 @@ static func rect(canvas: CanvasItem, area: Rect2, color: Color, dither := 0) -> 
 	for y in range(top, bottom):
 		for x in range(left, right):
 			if dither > 0 and ((x * 3 + y * 5) & 3) >= dither: continue
-			canvas.draw_rect(Rect2(x, y, 1, 1), color)
+			pixel(canvas, Vector2(x,y), color)
 
 ## Paints a surface one world pixel at a time.  Unlike a flat rect, every
 ## visible cell is selected independently from a compact material palette, so
@@ -86,7 +93,7 @@ static func material_rect(canvas: CanvasItem, area: Rect2, base: Color, highligh
 				_:
 					if hash % 13 == 0: color = highlight
 					elif hash % 7 == 0: color = shadow
-			canvas.draw_rect(Rect2(x, y, 1, 1), color)
+			pixel(canvas, Vector2(x,y), color)
 
 ## One-pixel outline plus a one-pixel material field. No stroke in this helper
 ## can ever become two world pixels thick.

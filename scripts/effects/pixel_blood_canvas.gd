@@ -51,6 +51,8 @@ class PixelBloodChunk extends Node2D:
 	var transition_material: ShaderMaterial
 	var transition_age := 0.08
 	var disposal_pending := false
+	var texture_upload_count := 0
+	var history_upload_count := 0
 
 	func configure(owner_canvas: PixelBloodCanvas, coordinate: Vector2i) -> void:
 		canvas = owner_canvas
@@ -88,6 +90,9 @@ class PixelBloodChunk extends Node2D:
 		transition_material.set_shader_parameter("removal_progress", transition_age / 0.08)
 		if transition_age < 0.08: return
 		set_process(false)
+		if dirty:
+			canvas.request_chunk_upload(self)
+			return
 		if disposal_pending and not has_visible_or_residual_blood() and not pollution.has(1): queue_free()
 
 	func _mark_active(index: int) -> void:
@@ -206,8 +211,21 @@ class PixelBloodChunk extends Node2D:
 	func flush_texture() -> void:
 		upload_queued = false
 		if not dirty: return
+		# Finish the current removal batch before replacing its history. A 40ms
+		# siphon tick must not truncate or restart the previous 80ms transition.
+		if transition_age < 0.08: return
 		dirty = false
-		previous_texture.update(image)
+		var changed := false
+		var removed := false
+		for index in dirty_pixels:
+			var old := image.get_pixel(index % PixelBloodCanvas.CHUNK_SIZE, index / PixelBloodCanvas.CHUNK_SIZE)
+			var next := _pixel_color(index)
+			if old != next:
+				changed = true
+				if old.r > old.g + 0.1 and next.a == 0.0: removed = true
+		if removed:
+			previous_texture.update(image)
+			history_upload_count += 1
 		# Preserve the exact same RGBA image, but repaint only cells changed since
 		# the last upload instead of rebuilding the complete 32x32 chunk.
 		var pending := dirty_pixels
@@ -215,10 +233,15 @@ class PixelBloodChunk extends Node2D:
 		for index in pending:
 			dirty_flags[index] = 0
 			image.set_pixel(index % PixelBloodCanvas.CHUNK_SIZE, index / PixelBloodCanvas.CHUNK_SIZE, _pixel_color(index))
+		if not changed:
+			if disposal_pending and not has_visible_or_residual_blood() and not pollution.has(1): queue_free()
+			return
 		texture.update(image)
-		transition_age = 0.0
-		transition_material.set_shader_parameter("removal_progress", 0.0)
-		set_process(true)
+		texture_upload_count += 1
+		if removed:
+			transition_age = 0.0
+			transition_material.set_shader_parameter("removal_progress", 0.0)
+			set_process(true)
 
 	func _pixel_color(index: int) -> Color:
 		if pollution[index] > 0:
@@ -527,13 +550,15 @@ func stamp_weapon_footprint(center: Vector2, direction: Vector2, weapon_class: S
 					total += row_chunk.add_local_pixel(cell - coordinate * CHUNK_SIZE, mini(2, raw_budget - total) if raw_budget >= 0 else 2)
 	return total
 
-func stamp_splatter(world_position: Vector2, direction: Vector2, intensity: float, pattern: String, cone: float, wound_kind := "", raw_budget := -1, stain_radius := -1.0) -> int:
+func stamp_splatter(world_position: Vector2, direction: Vector2, intensity: float, pattern: String, cone: float, wound_kind := "", raw_budget := -1, stain_radius := -1.0, yield_multiplier := 1.0) -> int:
 	var forward := direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
 	var count := clampi(roundi(10.0 + intensity * 9.0), 8, 54)
 	var reach := 7.0 + intensity * (8.0 if pattern == "fan" else 11.0)
 	var coverage := clampf(splash_coverage, 1.0, 2.0)
 	# Spread thinner opaque crimson over more floor, not more resource per pixel.
 	var mass_scale := 1.0 / (coverage * coverage * coverage)
+	# Finite-budget legacy shots cannot gain mass through the combo modifier.
+	if raw_budget < 0: mass_scale *= clampf(yield_multiplier, 1.0, 2.0)
 	reach *= coverage
 	if stain_radius > 0.0: reach = stain_radius * clampf(0.65 + intensity * 0.15, 0.65, 1.6)
 	count = roundi(count * coverage)

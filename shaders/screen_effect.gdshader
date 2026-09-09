@@ -103,6 +103,9 @@ void fragment() {
 	float crimson_value = clamp(max(raw_color.r, luma * 0.74), 0.28, 1.0);
 	color = vec3(luma);
 	color = mix(color, vec3(crimson_value, crimson_value * 0.018, crimson_value * 0.035), crimson_signal);
+	// Narrow authored brass exception; cyan/green/purple remain monochrome.
+	float gold_signal = step(0.55, raw_color.r) * step(0.35, raw_color.g) * step(raw_color.g + 0.10, raw_color.r) * (1.0 - step(0.20, raw_color.b));
+	color = mix(color, raw_color, gold_signal);
 	if (enable_effect) {
 		float scanline = mod(floor(uv.y * pixel_grid.y), 2.0);
 		// Bright one-pixel glyphs and icons stay untouched; scanlines live in the

@@ -39,6 +39,53 @@ var acoustic_portals: Array[Dictionary] = []
 var acoustic_sector_count := 0
 var material_detail_sprite: Sprite2D
 var wall_detail_sprite: Sprite2D
+var eroded_cells: Dictionary = {}
+var erosion_topology_pending := false
+var eroded_wall_image: Image
+
+func chip_wall_at(point: Vector2, direction: Vector2, damage: int) -> void:
+	# Tile physics updates happen outside the collision callback.
+	call_deferred("_chip_wall_deferred", point, direction, damage)
+
+func _chip_wall_deferred(point: Vector2, direction: Vector2, damage: int) -> void:
+	var cell := wall_layer.local_to_map(wall_layer.to_local(point + direction.normalized() * 0.8))
+	if cell.x <= 0 or cell.y <= 0 or cell.x >= world_size.x - 1 or cell.y >= world_size.y - 1: return
+	if eroded_cells.has(cell):
+		eroded_cells[cell].receive_projectile_impact_context(direction, point, "pistol", damage)
+		return
+	if wall_layer.get_cell_source_id(cell) < 0: return
+	if eroded_wall_image == null: eroded_wall_image = wall_detail_sprite.texture.get_image()
+	var region := Rect2i(cell * 8, Vector2i(8,8))
+	var pixels := eroded_wall_image.get_region(region)
+	eroded_wall_image.fill_rect(region, Color.TRANSPARENT)
+	var body := ErodingWallCell.new()
+	body.position = Vector2(cell * 8)
+	add_child(body)
+	eroded_cells[cell] = body
+	body.setup(self, cell, pixels)
+	wall_layer.erase_cell(cell)
+	wall_cap_layer.erase_cell(cell)
+	wall_shadow_layer.erase_cell(cell)
+	body.receive_projectile_impact_context(direction, point, "pistol", damage)
+	_queue_erosion_topology()
+
+func finish_eroded_cell(cell: Vector2i) -> void:
+	if path_grid.is_in_boundsv(cell): path_grid.set_point_solid(cell, false)
+	_queue_erosion_topology()
+
+func _queue_erosion_topology() -> void:
+	if erosion_topology_pending: return
+	erosion_topology_pending = true
+	call_deferred("_refresh_eroded_topology")
+
+func _refresh_eroded_topology() -> void:
+	erosion_topology_pending = false
+	if eroded_wall_image != null: wall_detail_sprite.texture.update(eroded_wall_image)
+	if is_instance_valid(light_occluder_container):
+		remove_child(light_occluder_container)
+		light_occluder_container.queue_free()
+	_build_light_occluders()
+	_build_acoustic_topology()
 var light_occluder_container: Node2D
 var room_run_seed_override := -1
 var geometry_expanded := false
@@ -157,6 +204,7 @@ func _build_material_detail_canvas() -> void:
 	add_child(material_detail_sprite)
 
 func _build_wall_detail_canvas() -> void:
+	eroded_wall_image = null
 	var material_by_cell := {}
 	for cell: Vector2i in wall_layer.get_used_cells():
 		var atlas_coordinate := wall_layer.get_cell_atlas_coords(cell)
@@ -1446,6 +1494,7 @@ func _door_has_open_approaches(opening_cell: Vector2i, door_rotation: float) -> 
 	return negative_open and positive_open
 
 func _is_bare_floor_cell(cell: Vector2i) -> bool:
+	if eroded_cells.has(cell) and eroded_cells[cell].erosion.remaining() > 0: return false
 	if cell.x < 0 or cell.y < 0 or cell.x >= world_size.x or cell.y >= world_size.y: return false
 	return floor_layer.get_cell_source_id(cell) >= 0 and wall_layer.get_cell_source_id(cell) < 0
 
@@ -1595,6 +1644,7 @@ func _build_acoustic_topology() -> void:
 			_append_acoustic_portal(left, right, "window", floor_layer.map_to_local(cell))
 
 func _is_acoustic_floor_cell(cell: Vector2i) -> bool:
+	if eroded_cells.has(cell) and eroded_cells[cell].erosion.remaining() > 0: return false
 	if cell.x < 0 or cell.y < 0 or cell.x >= world_size.x or cell.y >= world_size.y: return false
 	return floor_layer.get_cell_source_id(cell) >= 0 and wall_layer.get_cell_source_id(cell) < 0
 
@@ -1741,6 +1791,8 @@ func is_near_sink(world_position: Vector2, radius := 20.0) -> bool:
 func shatter_glass_at(hit_position: Vector2, flight_direction: Vector2) -> bool:
 	var cell := wall_layer.local_to_map(wall_layer.to_local(hit_position + flight_direction.normalized()))
 	if wall_layer.get_cell_atlas_coords(cell).x != Tile.WINDOW:
+		# A solid wall beside a window must chip itself, not shatter the neighbor.
+		if wall_layer.get_cell_source_id(cell) >= 0: return false
 		var found := false
 		for offset in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 			var neighbor: Vector2i = cell + Vector2i(offset)

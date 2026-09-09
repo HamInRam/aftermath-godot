@@ -43,6 +43,7 @@ func setup(material_name: String, profile: Dictionary, direction: Vector2, inten
 	call_deferred("_configure_launch_state")
 	body_entered.connect(_on_body_entered)
 	add_to_group("environment_debris")
+	add_to_group("siphon_scrap")
 	z_index = 2
 	queue_redraw()
 
@@ -100,6 +101,15 @@ func receive_projectile_glance(impact_velocity: Vector2, hit_position: Vector2, 
 	Events.publish_combat_noise(global_position, 26.0, "%s_debris_ping" % debris_material)
 
 func get_cleanup_type() -> String: return "debris"
+
+func siphon_toward(target: Vector2) -> void:
+	var offset := target - global_position
+	if offset.length() <= 12.0: return
+	impact_spent = true # Cosmetic magnetism cannot become free damage.
+	launch_delay = 0.0
+	settle_time = 0.3
+	set_physics_process(true)
+	call_deferred("_wake_with_velocity", offset.normalized() * minf(95.0, offset.length() * 4.0), 3.0)
 func get_cleanup_cost() -> int: return 1
 func get_cleanup_progress() -> float: return 1.0 - float(cleanup_steps)
 

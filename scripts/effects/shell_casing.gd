@@ -17,13 +17,19 @@ var launch_speed := 0.0
 var played_bounce := false
 var allow_bounce := false
 var cleanup_amount := 1.0
-var casing_tint := Color("d8d8d8")
+var casing_tint := Color("ffc800")
+static var next_clink_ms := 0
 var simulated_position := Vector2.ZERO
 var simulated_rotation := 0.0
 
 @onready var clink_audio: AudioStreamPlayer2D = $ClinkAudio
 
 func _ready() -> void:
+	add_to_group("siphon_scrap")
+	z_index = 3
+	var brass_material := CanvasItemMaterial.new()
+	brass_material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = brass_material
 	CleanupRegistry.register_target(self)
 	clink_audio.stream = CLINK_STREAMS.pick_random()
 	simulated_position = position
@@ -36,7 +42,9 @@ func _draw() -> void:
 	draw_set_transform_matrix(global_transform.affine_inverse())
 	PIXELS.pixel(self, (global_position + Vector2.ONE).round(), Color(0, 0, 0, 0.42))
 	PIXELS.pixel(self, global_position.round(), casing_tint)
-	PIXELS.pixel(self, (global_position + axis).round(), Color("777777"))
+	PIXELS.pixel(self, (global_position + axis).round(), Color("d99a00"))
+	PIXELS.pixel(self, (global_position + Vector2.DOWN).round(), Color("d99a00"))
+	PIXELS.pixel(self, (global_position + axis + Vector2.DOWN).round(), casing_tint)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func setup(shot_direction: Vector2, _enemy_owned: bool) -> void:
@@ -51,12 +59,18 @@ func setup(shot_direction: Vector2, _enemy_owned: bool) -> void:
 	simulated_position = position
 	simulated_rotation = rotation
 	rotation = 0.0
-	casing_tint = Color("d8d8d8")
+	casing_tint = Color("ffc800")
 	queue_redraw()
 
 func _process(delta: float) -> void:
 	if settled: return
-	simulated_position += velocity * delta
+	var destination := simulated_position + velocity * delta
+	var query := PhysicsRayQueryParameters2D.create(global_position, get_parent().to_global(destination), 4)
+	var hit := get_world_2d().direct_space_state.intersect_ray(query)
+	if hit.is_empty(): simulated_position = destination
+	else:
+		simulated_position = get_parent().to_local(hit.position + hit.normal)
+		velocity = velocity.bounce(hit.normal) * 0.25
 	simulated_rotation += spin * delta
 	position = simulated_position.round()
 	rotation = 0.0
@@ -76,6 +90,9 @@ func _process(delta: float) -> void:
 		_play_clink(impact_volume, 0.88, 1.18)
 
 func _play_clink(volume: float, pitch_low: float, pitch_high: float) -> void:
+	var now := Time.get_ticks_msec()
+	if now < next_clink_ms: return
+	next_clink_ms = now + 45
 	var surface_volume := 0.0
 	var surface_pitch := 1.0
 	var world := get_tree().get_first_node_in_group("pathfinding_world")
@@ -96,6 +113,15 @@ func _exit_tree() -> void:
 	if not is_instance_valid(clink_audio): return
 	clink_audio.stop()
 	clink_audio.stream = null
+
+func siphon_toward(target: Vector2) -> void:
+	var offset := target - global_position
+	if offset.length() <= 10.0: return
+	settled = false
+	simulated_position = position
+	velocity = offset.normalized() * minf(125.0, offset.length() * 5.0)
+	spin = 12.0
+	set_process(true)
 
 func clean_step() -> void:
 	cleanup_amount -= 0.5

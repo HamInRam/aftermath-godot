@@ -83,6 +83,10 @@ jobs:
             tests/test_blood_terrain.tscn \
             tests/test_siphon_sector.tscn \
             tests/test_blood_juice.tscn \
+            tests/test_blood_combo.tscn \
+            tests/test_blood_transition.tscn \
+            tests/test_micro_debris.tscn \
+            tests/test_pixel_erosion.tscn \
             tests/test_blood_terrain_room.tscn \
             tests/test_roguelike_run_session.tscn \
             tests/test_roguelike_floor_flow.tscn \

@@ -39,6 +39,9 @@ var restoration_anchor: Node2D
 var snap_radius := 11.0
 var physics_active := false
 var restoration_locked := false
+var erosion: PixelErosionMask
+var erosion_shapes: Array[CollisionShape2D] = []
+var erosion_pending := false
 
 func setup(kind: String, tint := Color("777777")) -> void:
 	prop_kind = kind
@@ -87,6 +90,37 @@ func receive_projectile_impact(projectile_velocity: Vector2, hit_position: Vecto
 	receive_projectile_impact_context(projectile_velocity, hit_position, "pistol", 1)
 
 func receive_projectile_impact_context(projectile_velocity: Vector2, hit_position: Vector2, weapon_id: String, damage: int) -> void:
+	if state in [PropState.DESTROYED, PropState.RESTORED]: return
+	if erosion == null:
+		erosion = PixelErosionMask.new()
+		erosion.configure(Rect2i(Vector2i(-_get_size() * 0.5), Vector2i(_get_size())))
+		set_meta("erosion_mask", erosion)
+	last_impact_direction = projectile_velocity.normalized()
+	impact_point = to_local(hit_position)
+	var radius := clampf(1.7 + sqrt(float(maxi(1, damage))) * 0.25 / maxf(0.5, float(material_profile.resistance)), 2.2, 4.4)
+	var removed := erosion.chip(impact_point, last_impact_direction.rotated(-global_rotation), radius)
+	if removed == 0: return
+	state = PropState.DAMAGED
+	_spawn_burst(clampf(float(removed) / 12.0, 0.8, 1.6))
+	MicroDebrisField.for_scene(self).play_erosion_tick(hit_position)
+	if is_movable(): _launch_movable(last_impact_direction, 0.65, "projectile")
+	if not erosion_pending:
+		erosion_pending = true
+		call_deferred("_rebuild_eroded_collision")
+	queue_redraw()
+
+func _rebuild_eroded_collision() -> void:
+	erosion_pending = false
+	if erosion == null or state in [PropState.DESTROYED, PropState.RESTORED]: return
+	_collision.disabled = true
+	erosion.rebuild_collision(self, erosion_shapes)
+	if erosion.remaining() == 0:
+		velocity = Vector2.ZERO
+		physics_active = false
+		set_physics_process(false)
+		_destroy(1.0, "projectile")
+
+func _legacy_projectile_impact(projectile_velocity: Vector2, hit_position: Vector2, weapon_id: String, damage: int) -> void:
 	# HP damage uses a 100-point character-health scale, not physical joules.
 	# Multiplying by 30-100 damage made every pistol pellet act like an explosive.
 	# Normalize the wound value and retain weapon speed/material differences.
@@ -142,6 +176,7 @@ func _apply_impact(energy: float, direction: Vector2, world_hit_point: Vector2, 
 
 func _destroy(energy := 1.0, attack_kind := "generic") -> void:
 	state = PropState.DESTROYED
+	for shape in erosion_shapes: shape.set_deferred("disabled", true)
 	if is_instance_valid(_collision): _collision.set_deferred("disabled", true)
 	if cleanup_ready: add_to_group("resettable_furniture")
 	Events.prop_destroyed.emit(global_position, prop_kind)
@@ -321,6 +356,11 @@ func _snap_home() -> void:
 	set_physics_process(false)
 
 func _restore_collision_shape() -> void:
+	if erosion != null:
+		erosion = null
+		remove_meta("erosion_mask")
+		for old_shape in erosion_shapes: old_shape.queue_free()
+		erosion_shapes.clear()
 	if not is_instance_valid(_collision): return
 	var shape := RectangleShape2D.new()
 	shape.size = _get_size() - Vector2(2, 2)
@@ -335,7 +375,7 @@ func interact() -> bool:
 	hp = 2
 	structural_stage = 0
 	rotation = 0.0
-	if is_instance_valid(_collision): _collision.set_deferred("disabled", false)
+	_restore_collision_shape()
 	solidity_changed.emit(true)
 	remove_from_group("resettable_furniture")
 	if is_instance_valid(active_hazard): active_hazard.set_source_active(false)
@@ -344,6 +384,8 @@ func interact() -> bool:
 	return true
 
 func _spawn_burst(intensity: float) -> void:
+	var micro_material := "paper" if prop_kind in ["desk", "office_desk", "paper_stack"] else str(material_profile.get("material", "wood"))
+	MicroDebrisField.for_scene(self).emit_impact(global_position + impact_point.rotated(global_rotation), last_impact_direction, micro_material, intensity)
 	var burst := MATERIAL_BURST.new() as MaterialBurst
 	var parent := get_tree().current_scene if get_tree().current_scene != null else get_parent()
 	if not RuntimeBudget.try_add("transient_fx", burst, parent): return

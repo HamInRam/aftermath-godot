@@ -2,6 +2,19 @@
 
 ## Feedback and recycling
 
+Removal refinement: dirty mass changes whose final opaque RGBA is unchanged
+skip texture uploads. Addition-only batches skip the history upload. Consecutive
+removal batches finish their 80ms visual transition before replacing history;
+pending rendering waits, but authoritative absorption is immediate. New paint
+inside an actively dissolving chunk can therefore wait for that short batch too.
+The existing four-chunk/frame queue can add further latency under large bursts.
+The fragment shader uses a continuous world-space erosion field sampled on the
+native pixel grid: coherent patches disappear instead of independent random
+speckles, without linear texture filtering, translucent crimson or chunk-local
+pattern resets. This is stylized erosion, not a fluid simulation or a GPU-owned
+resource grid. Test `test_blood_transition` verifies upload counts and repeated
+absorption timing. No several-hundred-FPS claim is made.
+
 - Ground chunks retain one previous RGBA texture for an 80ms shader-driven, opaque 1px dissolve on removal. No linear filtering, fractional-alpha blood or chunk-wide resource flags. New blood appears immediately. Simulation removal remains immediate; the short visual history is not absorbable. This costs an additional small texture upload per changed chunk; it does not replace authoritative CPU pixel accounting or fix the large-stencil CPU spike.
 - A room-owned pool prewarms 200 projectiles; the existing 128-active RuntimeBudget cap remains. Idle nodes are hidden, excluded from the bullet group, have no collision layer/mask, and do not process. Release is deferred until the collision callback finishes. Reuse clears exceptions, source, weapon snapshot, shot resolution, lifetime, penetration-related transient state and enemy time scaling. Node pooling does not eliminate all allocations: weapon snapshots and damage contexts still allocate.
 - Siphon motes use 96 preallocated/recycled dictionaries in one drawing node, not 500 particle nodes. Update no longer creates a survivor array each frame.
@@ -30,3 +43,17 @@ Performance caveat: a standalone unoccluded radius-160 shotgun stencil measured 
 - Explicit empowered-blood budgets include these footprints. Normal hit generation continues the existing enemy-blood economy; long-run sustain balancing still needs playtesting.
 
 Tests: test_blood_terrain covers negative world coordinates, speed states, roll restriction, non-absorbable pollution, permanent overpaint, footprint direction, mass caps, and solid-wall clipping. Renderer fixture adds blood_terrain.png. Neither is a substitute for a full human run.
+# Live-hit combo economy
+
+The current player already uses blood ammunition, not magazines or reload locks.
+Normal enemy blood is not subject to the legacy empowered-round 72% ledger.
+Live hostile impacts now receive +10% ground-droplet mass per active combo kill,
+including the current lethal hit, capped at 2x. The existing combo timeout resets
+the reward. This changes recoverable density, not radius, pixel color, particle
+count or absorption rate. Pixel saturation limits actual added mass.
+Dead actors, pollution carriers, zero-damage events and legacy finite-budget
+shots are excluded. A DamageContext can emit its impact blood only once.
+Direct wall impacts create no blood; enemy blood splashed onto a wall remains
+the existing wound effect, without the new bonus. Death bursts and airborne
+deposits retain their existing values. This is bounded income, not exponential
+resource generation or a guaranteed net-positive result for every shot.

@@ -29,6 +29,8 @@ func emit_hit(hit_position: Vector2, projectile_direction: Vector2, damage: int,
 	emit_context(DamageContext.create(hit_position, projectile_direction, damage, weapon_id, travel_distance, lethal, "torso"))
 
 func emit_context(context: DamageContext) -> void:
+	if context.blood_emitted: return
+	context.blood_emitted = true
 	var hit_position := context.hit_position
 	var projectile_direction := context.direction
 	var damage := context.damage
@@ -80,18 +82,18 @@ func emit_context(context: DamageContext) -> void:
 		ground_spent += ground_canvas.stamp_weapon_footprint(hit_position, direction, weapon_class, impact_budget, stain_radius)
 	var mist_deposits := 0 if context.blood_enhanced else int(violence.get("drops", 8))
 	_spawn_mist(hit_position - direction * 0.8, -direction, intensity * 0.22 * entry_scale, cone * 0.35, 0 if context.blood_enhanced else maxi(2, mist_deposits / 3))
-	ground_spent += _spawn_ground_splatter(hit_position - direction, -direction, intensity * 0.22 * entry_scale, "line", cone * 0.22, str(violence.get("wound", "puncture")), impact_budget - ground_spent if impact_budget >= 0 else -1)
+	ground_spent += _spawn_ground_splatter(hit_position - direction, -direction, intensity * 0.22 * entry_scale, "line", cone * 0.22, str(violence.get("wound", "puncture")), impact_budget - ground_spent if impact_budget >= 0 else -1, -1.0, context.blood_yield_multiplier)
 	if not ballistic_wound or context.projectile_exited:
 		_spawn_mist(hit_position, direction, intensity * mist_scale, cone, mist_deposits)
-		ground_spent += _spawn_ground_splatter(hit_position, direction, intensity * exit_scale, pattern, cone, str(violence.get("wound", "puncture")), impact_budget - ground_spent if impact_budget >= 0 else -1, stain_radius)
+		ground_spent += _spawn_ground_splatter(hit_position, direction, intensity * exit_scale, pattern, cone, str(violence.get("wound", "puncture")), impact_budget - ground_spent if impact_budget >= 0 else -1, stain_radius, context.blood_yield_multiplier)
 		var wall_reach_scale := clampf(0.65 + context.penetration_ratio * 0.18, 0.65, 1.15) if ballistic_wound else 1.0
 		ground_spent += _spawn_wall_splatter(hit_position, direction, intensity * exit_scale, float(profile.wall_reach) * wall_reach_scale, pattern, cone, impact_budget - ground_spent if impact_budget >= 0 else -1)
 	elif ballistic_wound:
 		# A retained round leaves a compact entry wound and later seepage, but no
 		# impossible forward exit cone or blood painted on the wall behind it.
-		ground_spent += _spawn_ground_splatter(hit_position, -direction, intensity * 0.16, "radial", cone * 0.25, "retained", impact_budget - ground_spent if impact_budget >= 0 else -1)
+		ground_spent += _spawn_ground_splatter(hit_position, -direction, intensity * 0.16, "radial", cone * 0.25, "retained", impact_budget - ground_spent if impact_budget >= 0 else -1, -1.0, context.blood_yield_multiplier)
 	if lethal:
-		ground_spent += _spawn_ground_splatter(hit_position + direction * 2.0, direction.rotated(randf_range(-0.18, 0.18)), intensity * 0.72 * float(violence.get("pool_bias", 1.0)), pattern, cone * 1.12, str(violence.get("wound", "puncture")), impact_budget - ground_spent if impact_budget >= 0 else -1)
+		ground_spent += _spawn_ground_splatter(hit_position + direction * 2.0, direction.rotated(randf_range(-0.18, 0.18)), intensity * 0.72 * float(violence.get("pool_bias", 1.0)), pattern, cone * 1.12, str(violence.get("wound", "puncture")), impact_budget - ground_spent if impact_budget >= 0 else -1, -1.0, context.blood_yield_multiplier)
 		if Settings.gore_enabled:
 			_spawn_gore_chunks(hit_position, direction, intensity * context.gore_force_multiplier, weapon_id, int(violence.get("gore", 3)))
 			# The corpse creates exactly the anatomy removed by its resolved pose.
@@ -120,13 +122,13 @@ func spawn_wound_drop(world_position: Vector2, direction: Vector2, severity: flo
 	var strength := clampf(0.14 + severity * 0.58, 0.16, 1.08)
 	spawn_micro_drop(world_position + Vector2(randf_range(-1.2, 1.2), randf_range(-1.2, 1.2)), strength, direction)
 
-func _spawn_ground_splatter(hit_position: Vector2, direction: Vector2, intensity: float, pattern: String, cone: float, wound_kind := "", raw_budget := -1, stain_radius := -1.0) -> int:
+func _spawn_ground_splatter(hit_position: Vector2, direction: Vector2, intensity: float, pattern: String, cone: float, wound_kind := "", raw_budget := -1, stain_radius := -1.0, yield_multiplier := 1.0) -> int:
 	var stain_position := hit_position + direction * randf_range(1.5, 3.0)
 	var world := get_tree().get_first_node_in_group("pathfinding_world")
 	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
 		stain_position = world.get_nearest_walkable_position(stain_position)
 		if stain_position == Vector2.INF: return 0
-	if is_instance_valid(ground_canvas): return ground_canvas.stamp_splatter(stain_position, direction, intensity, pattern, cone, wound_kind, raw_budget, stain_radius)
+	if is_instance_valid(ground_canvas): return ground_canvas.stamp_splatter(stain_position, direction, intensity, pattern, cone, wound_kind, raw_budget, stain_radius, yield_multiplier)
 	return 0
 
 func _spawn_wall_splatter(hit_position: Vector2, direction: Vector2, intensity: float, reach: float, pattern: String, cone: float, raw_budget := -1) -> int:
