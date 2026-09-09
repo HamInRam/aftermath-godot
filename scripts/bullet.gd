@@ -41,6 +41,43 @@ var blood_budget_raw := 0
 var blood_stain_radius := -1.0
 var weapon_source: GunData
 var blood_gore_multiplier := 1.0
+var pool_release: Callable
+var retiring := false
+
+func park() -> void:
+	set_physics_process(false)
+	hide()
+	collision_layer = 0
+	collision_mask = 0
+	remove_from_group("bullet")
+	for body in get_collision_exceptions():
+		if is_instance_valid(body): remove_collision_exception_with(body)
+	source_actor = null
+	weapon_source = null
+	velocity = Vector2.ZERO
+
+func reset_for_reuse() -> void:
+	retiring = false
+	lifetime = 1.2
+	travel_distance = 0.0
+	shot_id = -1
+	resolution_emitted = false
+	passed_overkill_target = false
+	combat_time_scale = 1.0
+	blood_enhanced = false
+	blood_budget_raw = 0
+	blood_gore_multiplier = 1.0
+	collision_layer = 16
+	add_to_group("bullet")
+	show()
+	set_physics_process(true)
+
+func retire() -> void:
+	if retiring: return
+	retiring = true
+	set_physics_process(false)
+	if pool_release.is_valid(): pool_release.call_deferred(self)
+	else: queue_free()
 
 func setup(dir: Vector2, is_enemy_bullet: bool, hit_damage := 43, source_weapon := "pistol", origin := Vector2.ZERO, projectile_speed := 650.0, shooter: CollisionObject2D = null, source_penetration := 0.8, source_property_damage := 0.8, falloff_start := 65.0, falloff_end := 170.0, minimum_ratio := 0.62) -> void:
 	direction = dir.normalized()
@@ -162,12 +199,12 @@ func _physics_process(delta: float) -> void:
 					speed = velocity.length()
 					return
 		if not resolution_emitted: _resolve_shot("overkill" if passed_overkill_target else "miss", false)
-		queue_free()
+		retire()
 		return
 	lifetime -= delta
 	if lifetime <= 0.0:
 		_resolve_shot("overkill" if passed_overkill_target else "miss", false)
-		queue_free()
+		retire()
 
 func set_combat_time_scale(value: float) -> void:
 	combat_time_scale = clampf(value, 0.2, 1.0) if enemy_owned else 1.0

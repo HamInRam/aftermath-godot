@@ -10,7 +10,10 @@ const PRESENTATION := preload("res://utility/weapon_presentation_profile.gd")
 
 @export var gun_data: Resource
 @export var enemy_owned := false
-var blood_fire_payment: Callable
+var blood_fire_payment: Callable:
+	set(value):
+		blood_fire_payment = value
+		if value.is_valid() and is_node_ready(): cancel_reload()
 var automatic := false
 
 var fire_interval := 0.1
@@ -312,6 +315,7 @@ func _draw() -> void:
 		draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
+	if blood_fire_payment.is_valid() and is_reloading: cancel_reload()
 	if gun_data == null or is_reloading or direction.length_squared() < 0.001: return false
 	if cooldown > 0.0: return false
 	if ammo <= 0 and not blood_fire_payment.is_valid():
@@ -329,8 +333,8 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 		return false
 	# Pay exactly once per successful trigger, never once per shotgun pellet.
 	if blood_fire_payment.is_valid() and not blood_fire_payment.call(gun_data):
-		cooldown = 0.2
 		play_dry_fire()
+		cooldown = 0.2
 		return false
 	# Preserve overshoot from the previous frame so a 750 RPM weapon does not
 	# quantize down to 600 RPM at 60 Hz. Idle time cannot bank catch-up bullets.
@@ -524,6 +528,9 @@ func cancel_reload(publish := true) -> void:
 		Events.publish_ammo(ammo, max_ammo, false)
 
 func _on_reload_timer_timeout() -> void:
+	if blood_fire_payment.is_valid():
+		cancel_reload()
+		return
 	# A weapon switch/throw may cancel a timer on the same frame it expires.
 	# Such stale completions must never load the newly equipped weapon.
 	if not is_reloading or gun_data == null: return

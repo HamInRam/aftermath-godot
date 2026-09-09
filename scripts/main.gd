@@ -135,7 +135,10 @@ const COMBAT_FOCUS_DURATION := 2.2
 @onready var enemies_container: Node2D = $Enemies
 @onready var trauma_camera = $TraumaCamera
 
+var projectile_pool: ProjectilePool
+
 func _ready() -> void:
+	_ensure_projectile_pool()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	randomize()
 	CombatDirector.reset_kill_zones()
@@ -293,7 +296,9 @@ func _apply_visual_theme() -> void:
 			if is_instance_valid(light): light.color = palette[1 + index % 2]
 
 func _process(delta: float) -> void:
-	if get_tree().paused: return
+	if get_tree().paused:
+		if is_instance_valid(blood_resource): blood_resource.set_stance_active(false)
+		return
 	# Focus and the real-time clock must be advanced from the live frame loop.
 	# This call was previously orphaned, leaving focus charges inert and every
 	# mission timer permanently at 0.0 despite otherwise successful gameplay.
@@ -301,13 +306,19 @@ func _process(delta: float) -> void:
 	if not deployment_started: return
 	# A result screen must not keep draining the floor or cooling down abilities.
 	# Effects/physics have their own processors and may finish settling normally.
-	if run_over: return
+	if run_over:
+		var finished_audio := get_node_or_null("CombatAudioDirector")
+		if is_instance_valid(finished_audio): finished_audio.set_blood_level(1.0, false)
+		return
 	elapsed += frame_real_delta
 	combat_phase_elapsed += frame_real_delta
 	if is_instance_valid(player):
 		if roguelike_mode and is_instance_valid(blood_resource):
 			blood_resource.global_position = player.global_position
+			if not player.controls_enabled or player.is_dead: blood_resource.set_stance_active(false)
 			blood_resource.update_system(delta, player, blood_system)
+			var audio_director := get_node_or_null("CombatAudioDirector")
+			if is_instance_valid(audio_director): audio_director.set_blood_level(blood_resource.reserve / maxf(1.0, blood_resource.capacity), player.controls_enabled and not player.is_dead)
 			player.set_blood_stance_movement_multiplier(blood_resource.get_movement_multiplier())
 			player.set_blood_siphon_visual(blood_resource.get_siphon_visual_amount())
 			if is_instance_valid(hud.reticle): hud.reticle.set_siphon_strength(blood_resource.get_siphon_visual_amount())
@@ -984,12 +995,14 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	if is_instance_valid(shooter):
 		var shooter_gun = shooter.get("gun")
 		if is_instance_valid(shooter_gun) and shooter_gun.gun_data != null and shooter_gun.weapon_id == weapon_id: data = shooter_gun.gun_data
-	var bullet = BULLET_SCENE.instantiate()
+	_ensure_projectile_pool()
+	var bullet = projectile_pool.acquire()
+	if bullet == null: return
 	bullet.global_position = origin
-	bullet.damage_impact.connect(_on_damage_impact)
+	if not bullet.damage_impact.is_connected(_on_damage_impact): bullet.damage_impact.connect(_on_damage_impact)
 	if not enemy_owned and is_instance_valid(player) and is_instance_valid(player.gun):
 		bullet.shot_id = player.gun.current_shot_id
-		bullet.shot_resolved.connect(_on_player_shot_resolved)
+		if not bullet.shot_resolved.is_connected(_on_player_shot_resolved): bullet.shot_resolved.connect(_on_player_shot_resolved)
 	var resolved_damage := damage
 	var resolved_penetration := data.penetration_power
 	var blood_round := false
@@ -1016,7 +1029,13 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 		if is_instance_valid(active_flash): active_flash.set_blood_enhanced(blood_round)
 	if blood_round and bullet.has_method("set_blood_enhanced"): bullet.set_blood_enhanced(true, blood_budget_per_projectile, 1.38)
 	if enemy_owned and bullet.has_method("set_combat_time_scale"): bullet.set_combat_time_scale(hostile_combat_time_scale)
-	if not RuntimeBudget.try_add("bullet", bullet, self): return
+
+func _ensure_projectile_pool() -> void:
+	if is_instance_valid(projectile_pool): return
+	projectile_pool = ProjectilePool.new()
+	projectile_pool.name = "ProjectilePool"
+	add_child(projectile_pool)
+	projectile_pool.warm()
 
 func _on_player_shot_resolved(shot_id: int, outcome: String, lethal: bool, _weapon_id: String) -> void:
 	if not player_shot_records.has(shot_id): return
@@ -1171,7 +1190,7 @@ func _update_combat_objective_hud() -> void:
 
 func _on_blood_stance_changed(active: bool) -> void:
 	if not roguelike_mode or not is_instance_valid(blood_resource): return
-	blood_resource.set_stance_active(active)
+	blood_resource.set_stance_active(active, deployment_started and not run_over and is_instance_valid(player) and player.controls_enabled and not player.is_dead)
 	var presenter := get_node_or_null("/root/NoirPresenter")
 	if is_instance_valid(presenter) and presenter.has_method("set_blood_stance_amount"): presenter.set_blood_stance_amount(1.0 if active else 0.0)
 	if is_instance_valid(combat_feedback): combat_feedback.show_flash(Color(0.55, 0.0, 0.08, 0.08 if active else 0.04), 0.08)

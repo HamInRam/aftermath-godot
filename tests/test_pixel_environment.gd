@@ -50,7 +50,8 @@ func _ready() -> void:
 	var alpha_values := {}
 	for y in light_image.get_height():
 		for x in light_image.get_width(): alpha_values[snappedf(light_image.get_pixel(x, y).a, 0.01)] = true
-	_expect(alpha_values.size() <= 6, "pixel lighting must use discrete alpha bands rather than a smooth gradient")
+	_expect(alpha_values.size() > 64, "native-pixel lighting needs enough intensity levels to avoid contour rings")
+	_expect(light_image.get_pixel(0, 0).a == 0 and light_image.get_pixel(64, 64).a > 0.99, "light retains transparent exterior and bright center")
 
 	var door := DOOR_SCENE.instantiate()
 	add_child(door)

@@ -47,6 +47,10 @@ class PixelBloodChunk extends Node2D:
 	var image: Image
 	var texture: ImageTexture
 	var sprite: Sprite2D
+	var previous_texture: ImageTexture
+	var transition_material: ShaderMaterial
+	var transition_age := 0.08
+	var disposal_pending := false
 
 	func configure(owner_canvas: PixelBloodCanvas, coordinate: Vector2i) -> void:
 		canvas = owner_canvas
@@ -65,13 +69,26 @@ class PixelBloodChunk extends Node2D:
 		image = Image.create(PixelBloodCanvas.CHUNK_SIZE, PixelBloodCanvas.CHUNK_SIZE, false, Image.FORMAT_RGBA8)
 		image.fill(Color.TRANSPARENT)
 		texture = ImageTexture.create_from_image(image)
+		previous_texture = ImageTexture.create_from_image(image)
+		transition_material = ShaderMaterial.new()
+		transition_material.shader = preload("res://shaders/blood_pixel_transition.gdshader")
+		transition_material.set_shader_parameter("previous_mask", previous_texture)
+		transition_material.set_shader_parameter("chunk_origin", Vector2(coordinate * PixelBloodCanvas.CHUNK_SIZE))
 		sprite = Sprite2D.new()
 		sprite.centered = false
 		sprite.position = -Vector2.ONE * (PixelBloodCanvas.CHUNK_SIZE * 0.5)
-		sprite.use_parent_material = true
+		sprite.material = transition_material
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite.texture = texture
 		add_child(sprite)
+		set_process(false)
+
+	func _process(delta: float) -> void:
+		transition_age = minf(0.08, transition_age + delta)
+		transition_material.set_shader_parameter("removal_progress", transition_age / 0.08)
+		if transition_age < 0.08: return
+		set_process(false)
+		if disposal_pending and not has_visible_or_residual_blood() and not pollution.has(1): queue_free()
 
 	func _mark_active(index: int) -> void:
 		if active_flags[index] != 0: return
@@ -190,6 +207,7 @@ class PixelBloodChunk extends Node2D:
 		upload_queued = false
 		if not dirty: return
 		dirty = false
+		previous_texture.update(image)
 		# Preserve the exact same RGBA image, but repaint only cells changed since
 		# the last upload instead of rebuilding the complete 32x32 chunk.
 		var pending := dirty_pixels
@@ -198,6 +216,9 @@ class PixelBloodChunk extends Node2D:
 			dirty_flags[index] = 0
 			image.set_pixel(index % PixelBloodCanvas.CHUNK_SIZE, index / PixelBloodCanvas.CHUNK_SIZE, _pixel_color(index))
 		texture.update(image)
+		transition_age = 0.0
+		transition_material.set_shader_parameter("removal_progress", 0.0)
+		set_process(true)
 
 	func _pixel_color(index: int) -> Color:
 		if pollution[index] > 0:
@@ -316,7 +337,9 @@ class PixelBloodChunk extends Node2D:
 	func dispose_if_empty() -> void:
 		if has_visible_or_residual_blood(): return
 		if pollution.has(1): return
-		queue_free()
+		# Let the final removal texture upload and its short pixel dissolve finish.
+		disposal_pending = true
+		if not dirty and transition_age >= 0.08: queue_free()
 
 var chunks: Dictionary = {}
 var upload_queue: Array[PixelBloodChunk] = []

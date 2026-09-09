@@ -224,7 +224,8 @@ func _physics_process(delta: float) -> void:
 		if Input.is_action_just_pressed("reload"): blood_skill_requested.emit("r")
 	if not blood_action_mode and Input.is_action_just_pressed("blood_heal"): blood_heal_requested.emit()
 	if not blood_action_mode and Input.is_action_just_pressed("reload") and not blood_stance_active: reload_input_buffer = INPUT_BUFFER_DURATION
-	if reload_input_buffer > 0.0 and equipped_mode == "gun" and not gun.is_reloading and gun.ammo < gun.max_ammo:
+	if blood_action_mode: reload_input_buffer = 0.0
+	if not blood_action_mode and reload_input_buffer > 0.0 and equipped_mode == "gun" and not gun.is_reloading and gun.ammo < gun.max_ammo:
 		gun.reload()
 		if gun.is_reloading: reload_input_buffer = 0.0
 	if Input.is_action_just_pressed("throw_weapon") and (not blood_stance_active or blood_action_mode): throw_input_buffer = INPUT_BUFFER_DURATION

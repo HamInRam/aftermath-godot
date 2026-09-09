@@ -45,6 +45,9 @@ var heal_cost := 22.0
 var heal_amount := 34
 var stance_active := false
 var absorption_clock := 0.0
+var siphon_release_remaining := 0.0
+var recycled_motes: Array[Dictionary] = []
+const SIPHON_RELEASE_GRACE := 0.1
 var absorption_lockout := 0.0
 var skill_cooldowns := {"q": 0.0, "e": 0.0, "r": 0.0}
 var skill_costs := {"q": 18.0, "e": 28.0, "r": 24.0}
@@ -71,6 +74,8 @@ func pay_for_shot(data: GunData) -> bool:
 	return true
 
 func _ready() -> void:
+	for index in range(MAX_SIPHON_MOTES):
+		recycled_motes.append({"origin": Vector2.ZERO, "position": Vector2.ZERO, "age": 0.0, "life": 0.0, "duration": 0.0, "curve": 0.0})
 	z_index = 12
 	z_as_relative = false
 	resource_changed.emit(reserve, capacity, stance_active)
@@ -83,11 +88,14 @@ func update_system(delta: float, player: Node2D, blood_system: Node) -> void:
 	siphon_visual_amount = move_toward(siphon_visual_amount, 0.0, delta * 7.5)
 	if is_instance_valid(player): siphon_target_position = player.global_position
 	_update_particles(delta, player)
-	if not stance_active or absorption_lockout > 0.0 or not is_instance_valid(player) or not is_instance_valid(blood_system):
+	if (not stance_active and siphon_release_remaining <= 0.0) or absorption_lockout > 0.0 or not is_instance_valid(player) or not is_instance_valid(blood_system):
 		absorption_clock = 0.0
+		siphon_release_remaining = 0.0
 		_emit_if_changed()
 		return
-	absorption_clock += delta
+	var absorb_delta := delta if stance_active else minf(delta, siphon_release_remaining)
+	siphon_release_remaining = maxf(0.0, siphon_release_remaining - delta)
+	absorption_clock += absorb_delta
 	while absorption_clock >= ABSORB_INTERVAL:
 		absorption_clock -= ABSORB_INTERVAL
 		if reserve >= capacity - 0.001:
@@ -121,8 +129,14 @@ func _spawn_siphon_motes(sources: PackedVector2Array) -> void:
 		var delay := float(index % 4) * 0.006
 		var curve := (4.0 + float(mote_serial % 6)) * (-1.0 if mote_serial % 2 == 0 else 1.0)
 		var duration := siphon_duration(source.distance_to(siphon_target_position)) if blood_ammo_mode else SIPHON_PARTICLE_LIFETIME
-		particles.append({"origin": source, "position": source, "age": -delay,
-			"life": duration + delay, "duration": duration, "curve": curve})
+		var mote: Dictionary = recycled_motes.pop_back() if not recycled_motes.is_empty() else {}
+		mote.origin = source
+		mote.position = source
+		mote.age = -delay
+		mote.life = duration + delay
+		mote.duration = duration
+		mote.curve = curve
+		particles.append(mote)
 		mote_serial += 1
 	if count > 0: queue_redraw()
 
@@ -136,10 +150,14 @@ static func siphon_path(origin: Vector2, target: Vector2, progress: float, curve
 static func siphon_duration(distance: float) -> float:
 	return lerpf(0.075, 0.48, pow(clampf(distance / SIPHON_REACH, 0.0, 1.0), 1.35))
 
-func set_stance_active(active: bool) -> void:
+func set_stance_active(active: bool, allow_release_grace := false) -> void:
+	if not active and not allow_release_grace:
+		siphon_release_remaining = 0.0
+		absorption_clock = 0.0
 	if stance_active == active: return
+	siphon_release_remaining = SIPHON_RELEASE_GRACE if not active and allow_release_grace and blood_ammo_mode else 0.0
 	stance_active = active
-	absorption_clock = 0.0
+	if siphon_release_remaining <= 0.0: absorption_clock = 0.0
 	resource_changed.emit(reserve, capacity, stance_active)
 	queue_redraw()
 
@@ -242,18 +260,19 @@ func _update_particles(delta: float, player: Node2D) -> void:
 		particles.clear()
 		queue_redraw()
 		return
-	var survivors: Array[Dictionary] = []
-	for particle in particles:
+	for index in range(particles.size() - 1, -1, -1):
+		var particle := particles[index]
 		particle.age = float(particle.age) + delta
 		particle.life = float(particle.life) - delta
-		if float(particle.life) <= 0.0: continue
+		if float(particle.life) <= 0.0:
+			if recycled_motes.size() < MAX_SIPHON_MOTES: recycled_motes.append(particle)
+			particles.remove_at(index)
+			continue
 		if float(particle.age) >= 0.0 and is_instance_valid(player):
 			var origin: Vector2 = particle.origin
 			var target := player.global_position
 			var progress := clampf(float(particle.age) / float(particle.get("duration", SIPHON_PARTICLE_LIFETIME)), 0.0, 1.0)
 			particle.position = siphon_path(origin, target, progress, float(particle.curve))
-		survivors.append(particle)
-	particles = survivors
 	queue_redraw()
 
 func _emit_if_changed() -> void:

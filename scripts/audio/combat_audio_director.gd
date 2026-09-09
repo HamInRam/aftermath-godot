@@ -20,8 +20,49 @@ var target_intensity := 0.12
 var event_pressure := 0.0
 var threat_sample_timer := 0.0
 var gunfire_duck := 0.0
+@export var blood_audio_enabled := true
+var blood_pressure := 0.0
+var blood_pressure_target := 0.0
+var blood_filters: Array[AudioEffectLowPassFilter] = []
+var blood_buses: Array[StringName] = []
+var heartbeat: AudioStreamPlayer
+var heartbeat_clock := 0.0
+
+func set_blood_level(ratio: float, active := true) -> void:
+	blood_pressure_target = clampf((0.3 - ratio) / 0.3, 0.0, 1.0) if active and blood_audio_enabled else 0.0
+
+func _create_blood_bus(destination: String) -> StringName:
+	var bus_name := StringName("BloodMix_%s_%s" % [get_instance_id(), destination])
+	AudioServer.add_bus()
+	var index := AudioServer.bus_count - 1
+	AudioServer.set_bus_name(index, bus_name)
+	AudioServer.set_bus_send(index, destination)
+	var filter := AudioEffectLowPassFilter.new()
+	filter.cutoff_hz = 20000.0
+	AudioServer.add_bus_effect(index, filter)
+	blood_filters.append(filter)
+	blood_buses.append(bus_name)
+	return bus_name
+
+func _prepare_heartbeat() -> void:
+	heartbeat = AudioStreamPlayer.new()
+	heartbeat.bus = "SFX"
+	add_child(heartbeat)
+	var pcm := PackedByteArray()
+	pcm.resize(6615 * 2)
+	for sample in range(6615):
+		var t := float(sample) / 22050.0
+		var value := sin(TAU * 62.0 * t) * exp(-t * 32.0)
+		if t >= 0.13: value += 0.6 * sin(TAU * 54.0 * (t - 0.13)) * exp(-(t - 0.13) * 38.0)
+		pcm.encode_s16(sample * 2, roundi(clampf(value, -1.0, 1.0) * 20000.0))
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = 22050
+	stream.data = pcm
+	heartbeat.stream = stream
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	if DisplayServer.get_name() == "headless": autoplay = false
 	combat_player = AudioStreamPlayer.new()
 	ambience_player = AudioStreamPlayer.new()
@@ -35,6 +76,10 @@ func _ready() -> void:
 	add_child(combat_player)
 	add_child(ambience_player)
 	add_child(danger_player)
+	combat_player.bus = _create_blood_bus("Music")
+	danger_player.bus = combat_player.bus
+	ambience_player.bus = _create_blood_bus("Ambience")
+	_prepare_heartbeat()
 	Events.combat_ended.connect(_on_combat_ended)
 	Events.weapon_fired.connect(_on_weapon_fired)
 	Events.combat_noise.connect(_on_combat_noise)
@@ -49,6 +94,13 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if mix_state != MixState.COMBAT: return
+	blood_pressure = move_toward(blood_pressure, blood_pressure_target, delta * 4.0)
+	for filter in blood_filters: filter.cutoff_hz = lerpf(20000.0, 1200.0, blood_pressure)
+	heartbeat_clock = maxf(0.0, heartbeat_clock - delta)
+	if blood_pressure > 0.05 and heartbeat_clock <= 0.0:
+		heartbeat_clock = lerpf(0.95, 0.48, blood_pressure)
+		heartbeat.volume_db = lerpf(-32.0, -14.0, blood_pressure)
+		if autoplay: heartbeat.play()
 	# Repeated shots refresh a bounded dip; they never stack into silence.
 	gunfire_duck = move_toward(gunfire_duck, 0.0, delta * 16.0)
 	event_pressure = maxf(0.0, event_pressure - delta * 0.16)
@@ -95,6 +147,8 @@ func _on_tactical_alert(_world_position: Vector2, _direction: Vector2, source_ki
 	event_pressure = maxf(event_pressure, 1.0 if source_kind in ["security_camera", "security_alarm"] else 0.78)
 
 func _on_combat_ended() -> void:
+	for filter in blood_filters: filter.cutoff_hz = 20000.0
+	if is_instance_valid(heartbeat): heartbeat.stop()
 	mix_state = MixState.CLEANUP_SILENCE
 	set_process(false)
 	if combat_player.playing:
@@ -111,6 +165,14 @@ func _on_combat_ended() -> void:
 		create_tween().tween_property(ambience_player, "volume_db", cleanup_ambience_volume_db, 1.2)
 
 func _exit_tree() -> void:
+	if is_instance_valid(heartbeat):
+		heartbeat.stop()
+		heartbeat.stream = null
+	for bus_name in blood_buses:
+		var index := AudioServer.get_bus_index(bus_name)
+		if index >= 0: AudioServer.remove_bus(index)
+	blood_buses.clear()
+	blood_filters.clear()
 	for audio_player in [combat_player, danger_player, ambience_player]:
 		if not is_instance_valid(audio_player): continue
 		audio_player.stop()

@@ -9,6 +9,13 @@ const WEAPON := "mossberg_590a1"
 const SHOT_ID := 5901
 var failures := 0
 
+class GroundProbe:
+	extends PixelBloodCanvas
+	var geometric_stamps := 0
+	func stamp_weapon_footprint(center: Vector2, direction: Vector2, weapon_class: String, raw_budget := -1, stain_radius := 32.0) -> int:
+		geometric_stamps += 1
+		return super.stamp_weapon_footprint(center, direction, weapon_class, raw_budget, stain_radius)
+
 class ShotOwner:
 	extends CharacterBody2D
 	var gun: Gun
@@ -81,6 +88,11 @@ func _run() -> void:
 	camera.name = "TraumaCamera"
 	harness.add_child(camera)
 	add_child(harness)
+	blood.ground_canvas.free()
+	var ground_probe := GroundProbe.new()
+	ground_probe.configure("ground", -2)
+	blood.add_child(ground_probe)
+	blood.ground_canvas = ground_probe
 	var reserve := BloodResourceController.new()
 	harness.add_child(reserve)
 	reserve.reserve = 50.0
@@ -120,7 +132,7 @@ func _run() -> void:
 	var paid := initial_reserve - reserve.reserve
 	var shot_budget := int(reserve.enhanced_shot_cache.raw_blood_budget)
 	var per_pellet := floori(float(shot_budget)/data.pellet_count)
-	var bullets := harness.get_children().filter(func(node: Node) -> bool: return node.get_script() == preload("res://scripts/bullet.gd"))
+	var bullets: Array = harness.projectile_pool.leased.values()
 	_expect(bullets.size() == 9, "production Main must dispatch all nine pellets")
 	_expect(is_equal_approx(paid,3.5), "all nine dispatch calls sharing a shot ID must charge exactly 3.5 blood")
 	for bullet in bullets:
@@ -129,6 +141,7 @@ func _run() -> void:
 		_expect(is_equal_approx(bullet.penetration_power,data.penetration_power+reserve.enhanced_penetration_bonus), "penetration bonus must apply once per pellet")
 	for frame in 18: await get_tree().physics_frame
 	_expect(harness.impacts.size() == 18, "nine real pellets must each traverse both low-health targets")
+	_expect(ground_probe.geometric_stamps == 0, "shotgun impacts never paint a filled geometric cone")
 	var first_hits := 0
 	var followup_hits := 0
 	var declared_spent := 0

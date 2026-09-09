@@ -67,6 +67,16 @@ func add_persistent(category: String, node: Node, parent: Node) -> bool:
 func get_count(category: String) -> int:
 	return (_active.get(category, {}) as Dictionary).size()
 
+func track_pooled(category: String, node: Node) -> bool:
+	if get_count(category) >= int(limits.get(category, 0)): return false
+	if not _active.has(category): _active[category] = {}
+	(_active[category] as Dictionary)[node.get_instance_id()] = true
+	_peaks[category] = maxi(int(_peaks.get(category, 0)), get_count(category))
+	return true
+
+func release_pooled(category: String, node: Node) -> void:
+	_release(category, node.get_instance_id())
+
 func get_peak(category: String) -> int:
 	return int(_peaks.get(category, 0))
 

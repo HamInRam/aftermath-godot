@@ -74,9 +74,9 @@ func emit_context(context: DamageContext) -> void:
 	var ground_budget := context.blood_budget_raw
 	var impact_budget := floori(float(ground_budget) * (0.75 if lethal else 1.0)) if ground_budget >= 0 else -1
 	var ground_spent := 0
-	# A thin, opaque coating makes a route without multiplying its resource mass.
-	# Shotgun fan only on a kill; sniper route only on an actual exiting wound.
-	if (weapon_class == "shotgun" and lethal) or (weapon_class == "sniper" and context.projectile_exited):
+	# Shotguns use the irregular impact/death droplets below, not a filled
+	# geometric sector. Only exiting sniper wounds paint a dedicated route.
+	if weapon_class == "sniper" and context.projectile_exited:
 		ground_spent += ground_canvas.stamp_weapon_footprint(hit_position, direction, weapon_class, impact_budget, stain_radius)
 	var mist_deposits := 0 if context.blood_enhanced else int(violence.get("drops", 8))
 	_spawn_mist(hit_position - direction * 0.8, -direction, intensity * 0.22 * entry_scale, cone * 0.35, 0 if context.blood_enhanced else maxi(2, mist_deposits / 3))

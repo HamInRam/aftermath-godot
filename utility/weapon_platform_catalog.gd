@@ -194,7 +194,7 @@ static func create_gun_data(weapon_id: String, attachment_ids := PackedStringArr
 	data.weapon_class = weapon_class
 	data.caliber = str(values.get("cal", "9x19mm"))
 	var blood_costs := {"handgun": 1.2, "pdw": 0.6, "smg": 0.6, "shotgun": 9.5, "carbine": 1.5, "dmr": 15.0, "sniper": 15.0, "lmg": 1.3}
-	var stain_radii := {"handgun": 32.0, "pdw": 32.0, "smg": 32.0, "shotgun": 160.0, "carbine": 48.0, "dmr": 96.0, "sniper": 96.0, "lmg": 64.0}
+	var stain_radii := {"handgun": 32.0, "pdw": 32.0, "smg": 32.0, "shotgun": 56.0, "carbine": 48.0, "dmr": 96.0, "sniper": 96.0, "lmg": 64.0}
 	# Explicit platform overrides are absolute, never silently caliber-scaled.
 	data.caliber_blood_cost = clampf(float(values.get("blood_cost", blood_costs.get(weapon_class, 1.2))), 0.1, 30.0)
 	data.blood_stain_radius = clampf(float(values.get("stain_radius", stain_radii.get(weapon_class, 32.0))), 4.0, 320.0)

@@ -16,7 +16,13 @@ func _ready() -> void:
 	_expect("crimson_signal" in screen_shader and "Registration echo is luminance-only" in screen_shader, "post-processing must reserve crimson semantically and never create RGB fringe colours")
 	_expect("azure_signal" not in screen_shader and "violet_signal" not in screen_shader and "amber_signal" not in screen_shader, "the active roguelike presentation must remove legacy blue, violet and gold exceptions")
 	_expect("fine_detail_protection" in screen_shader and "Value-assisted luminance" in screen_shader, "bright pixel fonts and icons must remain crisp above world-space CRT treatment")
-	_expect("native_pixel_protection" in screen_shader and "grayscale_steps : hint_range(16.0, 255.0) = 32.0" in screen_shader, "all hard 1x1 edges need edge-aware protection and controlled grayscale separation")
+	_expect("native_pixel_protection" in screen_shader and "grayscale_steps : hint_range(16.0, 255.0) = 255.0" in screen_shader, "native edges stay sharp without 32-level lighting contours")
+	var light_image := PixelLightTextureFactory.create_texture().get_image()
+	var previous := 1.0
+	for x in range(64, 128):
+		var alpha := light_image.get_pixel(x, 64).a
+		_expect(alpha <= previous and previous - alpha < 0.03, "light falloff is monotonic without hard ring boundaries")
+		previous = alpha
 	_expect("SCREEN_PIXEL_SIZE" in screen_shader and "vec2(320.0, 180.0)" not in screen_shader, "post-processing must sample the active render target instead of downsampling enlarged UI through a fixed grid")
 	var ambient_signatures := {}
 	for scene_path: String in MISSIONS:

@@ -12,7 +12,7 @@ uniform float focus_amount : hint_range(0.0, 1.0) = 0.0;
 uniform float blood_stance_amount : hint_range(0.0, 1.0) = 0.0;
 uniform float noir_contrast : hint_range(1.0, 2.0) = 1.16;
 uniform float grain_strength : hint_range(0.0, 0.08) = 0.0;
-uniform float grayscale_steps : hint_range(16.0, 255.0) = 32.0;
+uniform float grayscale_steps : hint_range(16.0, 255.0) = 255.0;
 
 vec2 curve(vec2 uv) {
 	vec2 centered = (uv - 0.5) * 2.0;

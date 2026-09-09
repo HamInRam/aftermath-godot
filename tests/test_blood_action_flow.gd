@@ -37,6 +37,23 @@ func _run() -> void:
 	for id in WeaponPlatformCatalog.get_weapon_ids():
 		var data := AttackCatalog.get_gun_data(id)
 		_expect(data.caliber_blood_cost > 0 and data.blood_stain_radius > 0, "every weapon has valid blood parameters")
+		player.gun.set_gun_data(data, true)
+		player.gun.ammo = 0
+		player.gun.reserve_ammo = 0
+		player.gun.cooldown = 0
+		blood.reserve = data.caliber_blood_cost
+		_expect(player.gun.try_fire(Vector2.RIGHT) and is_zero_approx(blood.reserve), "zero-ammo weapon pays once from shared reserve: " + id)
+		_expect(player.gun.ammo == 0 and player.gun.reserve_ammo == 0, "blood firing leaves compatibility ammo untouched: " + id)
+	# Switching modes while a legacy reload is active must unlock immediately.
+	player.gun.blood_fire_payment = Callable()
+	player.gun.reserve_ammo = 10
+	player.gun.reload()
+	_expect(player.gun.is_reloading, "legacy reload remains functional")
+	player.gun.blood_fire_payment = blood.pay_for_shot
+	_expect(not player.gun.is_reloading and player.gun.reload_timer.is_stopped(), "blood mode cancels legacy animation lock and timer")
+	player.gun._on_reload_timer_timeout()
+	_expect(player.gun.ammo == 0 and player.gun.reserve_ammo == 10, "stale timeout cannot load conventional ammo")
+	player.gun.reserve_ammo = before_reserve
 	player.gun.cooldown = 0.0
 	blood.reserve = 0.0
 	_expect(not player.gun.try_fire(Vector2.RIGHT), "empty blood prevents firing")
@@ -44,6 +61,10 @@ func _run() -> void:
 	_expect(AttackCatalog.get_gun_data("glock_17_gen5_mos").caliber_blood_cost == 1.2, "handgun blood baseline")
 	_expect(AttackCatalog.get_gun_data("hk_mp5a5").caliber_blood_cost == 0.6, "SMG blood baseline")
 	_expect(AttackCatalog.get_gun_data("mossberg_590a1").caliber_blood_cost == 9.5, "shotgun blood baseline")
+	for id in WeaponPlatformCatalog.get_weapon_ids():
+		var shotgun_data := AttackCatalog.get_gun_data(id)
+		if shotgun_data.weapon_class == "shotgun":
+			_expect(shotgun_data.blood_stain_radius == 56.0, "shotgun uses restrained 56px blood footprint: " + id)
 	_expect(AttackCatalog.get_gun_data("ai_axmc").caliber_blood_cost == 15.0, "sniper blood baseline")
 	var custom := player.gun.gun_data.duplicate() as GunData
 	custom.caliber_blood_cost = 3.3
