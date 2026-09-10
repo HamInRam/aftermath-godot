@@ -91,6 +91,13 @@ jobs:
             tests/test_swarm_alarm.tscn \
             tests/test_floor_exit.tscn \
             tests/test_room_deck_100.tscn \
+            tests/test_breach_routes.tscn \
+            tests/test_breach_awareness.tscn \
+            tests/test_living_knockback.tscn \
+            tests/test_critical_hit_stop.tscn \
+            tests/test_blood_overload.tscn \
+            tests/test_performance_hotpaths.tscn \
+            tests/test_shotgun_burst_performance.tscn \
             tests/test_blood_terrain_room.tscn \
             tests/test_roguelike_run_session.tscn \
             tests/test_roguelike_floor_flow.tscn \

@@ -1,5 +1,8 @@
 extends Node
 
+## Emitted only after physical clearance and navigation updates; cells are 8px navigation cells.
+signal tactical_shortcut_opened(world: Node, cells: Array[Vector2i], position: Vector2)
+
 signal ammo_updated(current: int, maximum: int, is_reloading: bool)
 signal ammo_reserve_updated(reserve: int)
 signal reload_started(duration: float)

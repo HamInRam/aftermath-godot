@@ -65,7 +65,14 @@ func _ready() -> void:
 	_expect(prop.material_profile.hazard == "water", "pixel props must retain their systemic destruction material and liquid consequence")
 	prop.receive_projectile_impact_context(Vector2.RIGHT * 650.0, prop.global_position, "shotgun", 2)
 	await get_tree().process_frame
-	_expect(prop.state == DestructibleProp.PropState.DESTROYED, "pixel migration must preserve destructible state transitions")
+	_expect(prop.state == DestructibleProp.PropState.DAMAGED and prop.erosion.remaining() > 0, "a local impact must leave the unbroken part of the prop intact")
+	_expect(not prop.erosion.solid(Vector2i.ZERO), "impact pixels must disappear from the furniture mask")
+	for y in range(-4,4,2):
+		for x in range(-4,4,2):
+			prop.receive_projectile_impact_context(Vector2.RIGHT * 650.0, prop.to_global(Vector2(x,y)), "shotgun", 30)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_expect(prop.state == DestructibleProp.PropState.DESTROYED, "fully eroded furniture must complete its destruction transition")
 
 	if failures == 0: print("pixel environment regression: PASS")
 	get_tree().quit(failures)

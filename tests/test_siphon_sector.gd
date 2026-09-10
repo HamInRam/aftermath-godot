@@ -59,11 +59,13 @@ func run() -> void:
 	resource.set_stance_active(false)
 	resource.update_system(1, player, blood)
 	check(resource.particles.is_empty() and resource.get_siphon_visual_amount() == 0, "motes and halo expire")
-	resource.reserve = resource.capacity
+	# 100% may now charge under sufficient pressure; active 150% must not drain.
+	resource.reserve = resource.capacity * 1.5
+	resource.overload_active = true
 	resource.set_stance_active(true)
 	var before := canvas.get_debug_pixel_count()
 	resource.update_system(0.04, player, blood)
-	check(before == canvas.get_debug_pixel_count(), "full reserve does not destroy ground")
+	check(before == canvas.get_debug_pixel_count(), "active overload does not destroy ground")
 	resource.update_system(10.0, player, blood)
 	resource.reserve = 0.0
 	resource.update_system(0.04, player, blood)

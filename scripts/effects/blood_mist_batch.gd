@@ -18,6 +18,7 @@ var emission_remaining: Dictionary = {}
 var emission_sequence := 0
 var particle_batch: MultiMeshInstance2D
 var draw_capacity := INITIAL_DRAW_CAPACITY
+var refresh_queued := false
 
 func _ready() -> void:
 	particle_batch = MultiMeshInstance2D.new()
@@ -87,7 +88,7 @@ func emit_mist(world_position: Vector2, spray_direction: Vector2, intensity: flo
 		particle.impact_distance = float(bucket_hits.get(int(particle.bucket), INF))
 		particles.append(particle)
 	set_process(true)
-	_refresh_batch()
+	_queue_refresh()
 
 func _process(delta: float) -> void:
 	var survivors: Array[Dictionary] = []
@@ -118,8 +119,19 @@ func _process(delta: float) -> void:
 			_settle_particle(particle, emission_id, remaining)
 	particles = survivors
 	_prune_emissions()
-	_refresh_batch()
+	_queue_refresh()
 	if particles.is_empty(): set_process(false)
+
+func _queue_refresh() -> void:
+	# A shotgun contributes many entry/exit sprays in one physics tick. Upload
+	# their final combined state once, never rebuild every preceding spray again.
+	if refresh_queued: return
+	refresh_queued = true
+	call_deferred("_flush_refresh")
+
+func _flush_refresh() -> void:
+	refresh_queued = false
+	_refresh_batch()
 
 func _settle_particle(particle: Dictionary, emission_id: int, remaining: int) -> void:
 	emission_remaining[emission_id] = remaining - 1

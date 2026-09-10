@@ -65,6 +65,7 @@ static func clear_cell(world: Node, cell: Vector2i) -> bool:
 	return true
 
 static func clear_doors(_world: Node, point: Vector2, doors: Array) -> bool:
+	if _world.has_method("breach_clearance") and not _world.breach_clearance(point): return false
 	for door: Dictionary in doors:
 		if point.distance_to(door.passage_center) < 32.0: return false
 	return true

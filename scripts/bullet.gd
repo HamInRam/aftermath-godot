@@ -37,6 +37,7 @@ var damage_falloff_start := 65.0
 var damage_falloff_end := 170.0
 var minimum_damage_ratio := 0.62
 var blood_enhanced := false
+var breach_round := false
 var blood_budget_raw := 0
 var blood_stain_radius := -1.0
 var weapon_source: GunData
@@ -65,6 +66,7 @@ func reset_for_reuse() -> void:
 	passed_overkill_target = false
 	combat_time_scale = 1.0
 	blood_enhanced = false
+	breach_round = false
 	blood_budget_raw = 0
 	blood_gore_multiplier = 1.0
 	collision_layer = 16
@@ -145,8 +147,11 @@ func _physics_process(delta: float) -> void:
 			global_position = collision.get_position() + direction * 9.0
 			return
 		var hit_solid_surface: bool = collider is TileMapLayer or (collider is CollisionObject2D and collider.get_collision_layer_value(3))
+		var erosion_damage := maxi(damage, ceili(property_damage)) * (2 if breach_round else 1)
+		if breach_round and hit_solid_surface:
+			MicroDebrisField.for_scene(self).breach_wave(collision.get_position(), direction)
 		if collider is TileMapLayer and tile_world != null and tile_world.has_method("chip_wall_at"):
-			tile_world.chip_wall_at(collision.get_position(), direction, damage)
+			tile_world.chip_wall_at(collision.get_position(), direction, erosion_damage)
 		if hit_solid_surface:
 			if not collider.has_method("receive_projectile_impact_context") and not collider.has_method("receive_projectile_impact"):
 				MicroDebrisField.for_scene(self).emit_impact(collision.get_position() - direction, direction, "concrete")
@@ -156,7 +161,7 @@ func _physics_process(delta: float) -> void:
 				sparks.global_position = collision.get_position()
 				sparks.setup(direction)
 		if collider is Node and collider.has_method("receive_projectile_impact_context"):
-			collider.receive_projectile_impact_context(velocity, collision.get_position(), weapon_id, maxi(damage, ceili(property_damage)))
+			collider.receive_projectile_impact_context(velocity, collision.get_position(), weapon_id, erosion_damage)
 		elif collider is Node and collider.has_method("receive_projectile_impact"):
 			collider.receive_projectile_impact(velocity, collision.get_position())
 		if collider is Node and collider.has_method("take_damage"):
@@ -191,6 +196,8 @@ func _physics_process(delta: float) -> void:
 				if blood_enhanced: blood_budget_raw = context.blood_budget_raw
 				if collider.has_method("apply_ballistic_hit"):
 					collider.apply_ballistic_hit(result, spawn_position)
+					if is_instance_valid(collider) and not collider.is_dead and collider.has_method("apply_living_ballistic_push"):
+						collider.apply_living_ballistic_push(context)
 				else:
 					collider.take_damage(resolved_damage, spawn_position)
 				_resolve_shot("enemy", context.lethal)

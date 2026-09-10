@@ -27,9 +27,20 @@ var blood_filters: Array[AudioEffectLowPassFilter] = []
 var blood_buses: Array[StringName] = []
 var heartbeat: AudioStreamPlayer
 var heartbeat_clock := 0.0
+var overload_mix := 0.0
+var overload_stinger: AudioStreamPlayer
+var overload_audio_active := false
+var overload_highpass: Array[AudioEffectHighPassFilter] = []
+var overload_reverb: Array[AudioEffectReverb] = []
 
-func set_blood_level(ratio: float, active := true) -> void:
+func set_blood_level(ratio: float, active := true, overloaded := false) -> void:
+	if overloaded and active and not overload_audio_active:
+		event_pressure = maxf(event_pressure, 0.85)
+		blood_pressure = 0.0
+		if autoplay and is_instance_valid(overload_stinger): overload_stinger.play()
+	overload_audio_active = overloaded and active
 	blood_pressure_target = clampf((0.3 - ratio) / 0.3, 0.0, 1.0) if active and blood_audio_enabled else 0.0
+	if active and ratio > 1.0 and not overloaded: blood_pressure_target = clampf((ratio-1.0)*1.2,0.0,0.6)
 
 func _create_blood_bus(destination: String) -> StringName:
 	var bus_name := StringName("BloodMix_%s_%s" % [get_instance_id(), destination])
@@ -40,6 +51,15 @@ func _create_blood_bus(destination: String) -> StringName:
 	var filter := AudioEffectLowPassFilter.new()
 	filter.cutoff_hz = 20000.0
 	AudioServer.add_bus_effect(index, filter)
+	var highpass := AudioEffectHighPassFilter.new()
+	highpass.cutoff_hz = 20.0
+	AudioServer.add_bus_effect(index, highpass)
+	overload_highpass.append(highpass)
+	var reverb := AudioEffectReverb.new()
+	reverb.wet = 0.0
+	reverb.dry = 1.0
+	AudioServer.add_bus_effect(index, reverb)
+	overload_reverb.append(reverb)
 	blood_filters.append(filter)
 	blood_buses.append(bus_name)
 	return bus_name
@@ -80,6 +100,11 @@ func _ready() -> void:
 	danger_player.bus = combat_player.bus
 	ambience_player.bus = _create_blood_bus("Ambience")
 	_prepare_heartbeat()
+	overload_stinger = AudioStreamPlayer.new()
+	overload_stinger.bus = "SFX"
+	overload_stinger.volume_db = -16.0
+	overload_stinger.stream = ProceduralAudioLibrary.get_sfx("focus_enter")
+	add_child(overload_stinger)
 	Events.combat_ended.connect(_on_combat_ended)
 	Events.weapon_fired.connect(_on_weapon_fired)
 	Events.combat_noise.connect(_on_combat_noise)
@@ -94,6 +119,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if mix_state != MixState.COMBAT: return
+	overload_mix = move_toward(overload_mix, 1.0 if overload_audio_active else 0.0, delta * 8.0)
+	for highpass in overload_highpass: highpass.cutoff_hz = lerpf(20.0,70.0,overload_mix)
+	for reverb in overload_reverb: reverb.wet = overload_mix * 0.12
 	blood_pressure = move_toward(blood_pressure, blood_pressure_target, delta * 4.0)
 	for filter in blood_filters: filter.cutoff_hz = lerpf(20000.0, 1200.0, blood_pressure)
 	heartbeat_clock = maxf(0.0, heartbeat_clock - delta)
@@ -110,7 +138,7 @@ func _process(delta: float) -> void:
 		_sample_active_threat()
 	var desired_intensity := maxf(0.1, maxf(event_pressure, target_intensity))
 	combat_intensity = move_toward(combat_intensity, desired_intensity, delta * (1.8 if desired_intensity > combat_intensity else 0.42))
-	combat_player.volume_db = lerpf(combat_volume_db - 18.0, combat_volume_db, combat_intensity) - gunfire_duck
+	combat_player.volume_db = minf(combat_volume_db, lerpf(combat_volume_db - 18.0, combat_volume_db, combat_intensity) + overload_mix * 2.0) - gunfire_duck
 	combat_player.pitch_scale = lerpf(0.94, 1.05, combat_intensity)
 	var danger_mix := clampf((combat_intensity - 0.42) / 0.58, 0.0, 1.0)
 	danger_player.volume_db = lerpf(-60.0, -5.0, danger_mix) - gunfire_duck
@@ -147,6 +175,10 @@ func _on_tactical_alert(_world_position: Vector2, _direction: Vector2, source_ki
 	event_pressure = maxf(event_pressure, 1.0 if source_kind in ["security_camera", "security_alarm"] else 0.78)
 
 func _on_combat_ended() -> void:
+	overload_audio_active = false
+	overload_mix = 0.0
+	for highpass in overload_highpass: highpass.cutoff_hz = 20.0
+	for reverb in overload_reverb: reverb.wet = 0.0
 	for filter in blood_filters: filter.cutoff_hz = 20000.0
 	if is_instance_valid(heartbeat): heartbeat.stop()
 	mix_state = MixState.CLEANUP_SILENCE
@@ -165,6 +197,9 @@ func _on_combat_ended() -> void:
 		create_tween().tween_property(ambience_player, "volume_db", cleanup_ambience_volume_db, 1.2)
 
 func _exit_tree() -> void:
+	if is_instance_valid(overload_stinger):
+		overload_stinger.stop()
+		overload_stinger.stream = null
 	if is_instance_valid(heartbeat):
 		heartbeat.stop()
 		heartbeat.stream = null

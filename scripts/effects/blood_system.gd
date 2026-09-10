@@ -181,16 +181,39 @@ func absorb_pixel_blood_cone(world_position: Vector2, direction: Vector2, reach:
 	if not is_instance_valid(ground_canvas): return {"amount": 0, "positions": PackedVector2Array()}
 	return ground_canvas.absorb_cone(world_position, direction, reach, half_angle, power, maximum_samples, maximum_total)
 
-func absorb_siphon_sector(origin: Vector2, direction: Vector2, reach: float, half_angle: float, proximity: float, raw_budget: int) -> Dictionary:
+var siphon_occlusion_frame := -1
+var siphon_occlusion_origin := Vector2.INF
+var siphon_occlusion_extent := -1.0
+var siphon_occlusion_cache := PackedFloat32Array()
+var siphon_ray_queries := 0
+
+func absorb_siphon_sector(origin: Vector2, direction: Vector2, reach: float, half_angle: float, proximity: float, raw_budget: int, required_pressure := 0) -> Dictionary:
+	var pressure_plan: Dictionary = {}
+	var pressure_chunks := 0
 	if raw_budget <= 0: return {"amount": 0, "positions": PackedVector2Array()}
 	var extent := maxf(maxf(0.0, reach), proximity)
 	var occlusion := PackedFloat32Array()
-	for index in range(96):
-		var ray_direction := Vector2.RIGHT.rotated(TAU * float(index) / 96.0)
-		var query := PhysicsRayQueryParameters2D.create(origin, origin + ray_direction * extent, 36)
-		query.collide_with_areas = false
-		var hit := get_world_2d().direct_space_state.intersect_ray(query)
-		occlusion.append(origin.distance_to(hit.position) + 0.6 if not hit.is_empty() else extent)
+	var frame := Engine.get_process_frames()
+	if frame == siphon_occlusion_frame and origin == siphon_occlusion_origin and extent == siphon_occlusion_extent:
+		occlusion = siphon_occlusion_cache
+	else:
+		for index in range(96):
+			var ray_direction := Vector2.RIGHT.rotated(TAU * float(index) / 96.0)
+			var query := PhysicsRayQueryParameters2D.create(origin, origin + ray_direction * extent, 36)
+			query.collide_with_areas = false
+			var hit := get_world_2d().direct_space_state.intersect_ray(query)
+			siphon_ray_queries += 1
+			occlusion.append(origin.distance_to(hit.position) + 0.6 if not hit.is_empty() else extent)
+		siphon_occlusion_frame = frame
+		siphon_occlusion_origin = origin
+		siphon_occlusion_extent = extent
+		siphon_occlusion_cache = occlusion
+	if required_pressure > 0:
+		if not is_instance_valid(ground_canvas): return {"amount":0,"positions":PackedVector2Array()}
+		var preview: Dictionary = ground_canvas.absorb_sector(origin,direction,reach,half_angle,proximity,occlusion,raw_budget - raw_budget/8,true)
+		if int(preview.get("pressure_chunks",0)) < required_pressure:
+			return {"amount":0,"positions":PackedVector2Array(),"pressure_chunks":int(preview.get("pressure_chunks",0))}
+		pressure_plan = preview
 	var total := 0
 	var positions := PackedVector2Array()
 	# Reserve a small share for wall stains; unused share returns to the floor.
@@ -199,10 +222,11 @@ func absorb_siphon_sector(origin: Vector2, direction: Vector2, reach: float, hal
 		total += int(result.amount)
 		positions.append_array(result.positions)
 	if is_instance_valid(ground_canvas):
-		var result: Dictionary = ground_canvas.absorb_sector(origin, direction, reach, half_angle, proximity, occlusion, raw_budget - total)
+		var result: Dictionary = ground_canvas.commit_siphon_plan(pressure_plan) if not pressure_plan.is_empty() else ground_canvas.absorb_sector(origin, direction, reach, half_angle, proximity, occlusion, raw_budget - total)
+		pressure_chunks = int(result.get("pressure_chunks", 0))
 		total += int(result.amount)
 		positions.append_array(result.positions)
-	return {"amount": total, "positions": positions}
+	return {"amount": total, "positions": positions, "pressure_chunks": pressure_chunks}
 
 func _spawn_gore_chunks(hit_position: Vector2, direction: Vector2, intensity: float, attack_id: String, profile_count := 3) -> void:
 	var count := clampi(roundi(profile_count * clampf(intensity / 1.5, 0.7, 1.5)), 2, 20)

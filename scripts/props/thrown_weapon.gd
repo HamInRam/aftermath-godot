@@ -48,7 +48,7 @@ func _physics_process(delta: float) -> void:
 	var collision := move_and_collide(velocity * delta)
 	if collision != null:
 		var collider := collision.get_collider()
-		if collider is Node and (collider.is_in_group("enemy") or collider.is_in_group("destructible_prop")):
+		if collider is Node and (collider.is_in_group("enemy") or collider.is_in_group("destructible_prop") or collider.is_in_group("breach_panel")):
 			_resolve_impact(collider)
 		else:
 			# Swept motion stops at thin walls; a short bounce communicates weight
@@ -68,7 +68,9 @@ func _physics_process(delta: float) -> void:
 func _resolve_impact(collider: Object) -> void:
 	if settled or impact_resolved: return
 	impact_resolved = true
-	if collider is Node and collider.is_in_group("enemy") and collider.has_method("take_door_hit"):
+	if collider is Node and collider.is_in_group("breach_panel"):
+		collider.receive_projectile_impact_context(velocity,global_position,"thrown",90)
+	elif collider is Node and collider.is_in_group("enemy") and collider.has_method("take_door_hit"):
 		collider.take_door_hit(velocity.normalized(), "knockdown")
 	elif collider is Node and collider.is_in_group("destructible_prop") and collider.has_method("take_damage"):
 		if collider.has_method("receive_thrown_impact"):

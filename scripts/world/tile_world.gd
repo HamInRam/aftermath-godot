@@ -40,8 +40,32 @@ var acoustic_sector_count := 0
 var material_detail_sprite: Sprite2D
 var wall_detail_sprite: Sprite2D
 var eroded_cells: Dictionary = {}
+signal navigation_graph_changed(position: Vector2)
+var breach_cells: Dictionary = {}
+var breach_panels: Array[BreachPanel] = []
+
+func open_breach(panel: BreachPanel) -> void:
+	if not panel in breach_panels or not panel.opened: return
+	for cell in panel.cells:
+		# No blind clearing through a second object occupying the same cell.
+		var blocked := wall_layer.get_cell_source_id(cell) >= 0 or cell in destructible_cells
+		path_grid.set_point_solid(cell,blocked)
+		if not blocked: path_grid.set_point_weight_scale(cell,1.0)
+	_queue_erosion_topology(panel.cells[0])
+	navigation_graph_changed.emit((panel.approach_a + panel.approach_b)*.5)
+	Events.tactical_shortcut_opened.emit(self, panel.cells.duplicate(), (panel.approach_a + panel.approach_b)*.5)
+
+func breach_clearance(point: Vector2) -> bool:
+	for panel in breach_panels:
+		if point.distance_to(panel.approach_a) < 26 or point.distance_to(panel.approach_b) < 26: return false
+	return true
 var erosion_topology_pending := false
 var eroded_wall_image: Image
+var static_occluders_by_cell := {}
+var dirty_occluder_cells := {}
+var rebuild_all_occluders := false
+var acoustic_refresh_pending := false
+var erosion_acoustic_refreshes := 0
 
 func chip_wall_at(point: Vector2, direction: Vector2, damage: int) -> void:
 	# Tile physics updates happen outside the collision callback.
@@ -67,13 +91,18 @@ func _chip_wall_deferred(point: Vector2, direction: Vector2, damage: int) -> voi
 	wall_cap_layer.erase_cell(cell)
 	wall_shadow_layer.erase_cell(cell)
 	body.receive_projectile_impact_context(direction, point, "pistol", damage)
-	_queue_erosion_topology()
+	_queue_erosion_topology(cell, false)
 
 func finish_eroded_cell(cell: Vector2i) -> void:
 	if path_grid.is_in_boundsv(cell): path_grid.set_point_solid(cell, false)
-	_queue_erosion_topology()
+	_queue_erosion_topology(cell)
 
-func _queue_erosion_topology() -> void:
+func _queue_erosion_topology(cell := Vector2i(-1,-1), acoustic := true) -> void:
+	if cell.x < 0: rebuild_all_occluders = true
+	else: dirty_occluder_cells[cell] = true
+	if acoustic and not acoustic_refresh_pending:
+		acoustic_refresh_pending = true
+		get_tree().create_timer(0.1).timeout.connect(_refresh_erosion_acoustics)
 	if erosion_topology_pending: return
 	erosion_topology_pending = true
 	call_deferred("_refresh_eroded_topology")
@@ -81,11 +110,37 @@ func _queue_erosion_topology() -> void:
 func _refresh_eroded_topology() -> void:
 	erosion_topology_pending = false
 	if eroded_wall_image != null: wall_detail_sprite.texture.update(eroded_wall_image)
-	if is_instance_valid(light_occluder_container):
-		remove_child(light_occluder_container)
-		light_occluder_container.queue_free()
-	_build_light_occluders()
+	if rebuild_all_occluders:
+		if is_instance_valid(light_occluder_container):
+			remove_child(light_occluder_container)
+			light_occluder_container.queue_free()
+		static_occluders_by_cell.clear()
+		_build_light_occluders()
+	else:
+		for cell: Vector2i in dirty_occluder_cells: _erase_static_occluder_cell(cell)
+	rebuild_all_occluders = false
+	dirty_occluder_cells.clear()
+
+func _refresh_erosion_acoustics() -> void:
+	acoustic_refresh_pending = false
+	erosion_acoustic_refreshes += 1
 	_build_acoustic_topology()
+
+func _erase_static_occluder_cell(cell: Vector2i) -> void:
+	var node := static_occluders_by_cell.get(cell) as LightOccluder2D
+	if not is_instance_valid(node): return
+	var rect: Rect2i = node.get_meta("cell_rect")
+	for y in range(rect.position.y,rect.end.y):
+		for x in range(rect.position.x,rect.end.x): static_occluders_by_cell.erase(Vector2i(x,y))
+	var pieces: Array[Rect2i] = [Rect2i(rect.position,Vector2i(rect.size.x,cell.y-rect.position.y)),Rect2i(Vector2i(rect.position.x,cell.y+1),Vector2i(rect.size.x,rect.end.y-cell.y-1)),Rect2i(Vector2i(rect.position.x,cell.y),Vector2i(cell.x-rect.position.x,1)),Rect2i(Vector2i(cell.x+1,cell.y),Vector2i(rect.end.x-cell.x-1,1))]
+	var reused := false
+	for piece in pieces:
+		if piece.size.x <= 0 or piece.size.y <= 0: continue
+		_add_light_occluder_rect(piece.position,piece.size,node if not reused else null)
+		reused = true
+	if not reused:
+		node.visible = false
+		node.queue_free()
 var light_occluder_container: Node2D
 var room_run_seed_override := -1
 var room_entry_nonce := randi()
@@ -124,6 +179,7 @@ func _ready() -> void:
 	_ensure_minimum_destructible_props()
 	_build_object_shadows()
 	_build_path_grid()
+	BreachLayout.install(self)
 	_build_acoustic_topology()
 
 func _expand_combat_geometry() -> void:
@@ -261,7 +317,7 @@ func _build_light_occluders() -> void:
 			for offset_x in width: consumed[cell + Vector2i(offset_x, offset_y)] = true
 		_add_light_occluder_rect(cell, Vector2i(width, height))
 
-func _add_light_occluder_rect(first_cell: Vector2i, cell_span: Vector2i) -> void:
+func _add_light_occluder_rect(first_cell: Vector2i, cell_span: Vector2i, reuse: LightOccluder2D = null) -> void:
 	var center := wall_layer.map_to_local(first_cell)
 	var top_left := center - Vector2(TILE_SIZE) * 0.5
 	var size := Vector2(cell_span * TILE_SIZE)
@@ -272,9 +328,12 @@ func _add_light_occluder_rect(first_cell: Vector2i, cell_span: Vector2i) -> void
 		top_left + size,
 		top_left + Vector2(0, size.y),
 	])
-	var occluder := LightOccluder2D.new()
+	var occluder := reuse if is_instance_valid(reuse) else LightOccluder2D.new()
 	occluder.occluder = polygon
-	light_occluder_container.add_child(occluder)
+	occluder.set_meta("cell_rect",Rect2i(first_cell,cell_span))
+	if occluder.get_parent() == null: light_occluder_container.add_child(occluder)
+	for y in range(first_cell.y,first_cell.y+cell_span.y):
+		for x in range(first_cell.x,first_cell.x+cell_span.x): static_occluders_by_cell[Vector2i(x,y)] = occluder
 
 func _get_layout_family(variant: String) -> String:
 	if variant in ["harbor_exchange", "cold_storage", "slaughterhouse"]: return "sandwich_shop"
@@ -1386,6 +1445,8 @@ func _build_path_grid() -> void:
 			var cell := Vector2i(x, y)
 			if floor_layer.get_cell_source_id(cell) < 0: path_grid.set_point_solid(cell, true)
 	for cell in wall_layer.get_used_cells(): path_grid.set_point_solid(cell, true)
+	for cell in breach_cells:
+		if not breach_cells[cell].opened: path_grid.set_point_solid(cell,true)
 	for cell: Vector2i in destructible_cells:
 		if path_grid.is_in_boundsv(cell): path_grid.set_point_solid(cell, true)
 	for cell in object_layer.get_used_cells():
@@ -1496,6 +1557,7 @@ func _door_has_open_approaches(opening_cell: Vector2i, door_rotation: float) -> 
 	return negative_open and positive_open
 
 func _is_bare_floor_cell(cell: Vector2i) -> bool:
+	if breach_cells.has(cell) and not breach_cells[cell].opened: return false
 	if eroded_cells.has(cell) and eroded_cells[cell].erosion.remaining() > 0: return false
 	if cell.x < 0 or cell.y < 0 or cell.x >= world_size.x or cell.y >= world_size.y: return false
 	return floor_layer.get_cell_source_id(cell) >= 0 and wall_layer.get_cell_source_id(cell) < 0
@@ -1646,6 +1708,7 @@ func _build_acoustic_topology() -> void:
 			_append_acoustic_portal(left, right, "window", floor_layer.map_to_local(cell))
 
 func _is_acoustic_floor_cell(cell: Vector2i) -> bool:
+	if breach_cells.has(cell) and not breach_cells[cell].opened: return false
 	if eroded_cells.has(cell) and eroded_cells[cell].erosion.remaining() > 0: return false
 	if cell.x < 0 or cell.y < 0 or cell.x >= world_size.x or cell.y >= world_size.y: return false
 	return floor_layer.get_cell_source_id(cell) >= 0 and wall_layer.get_cell_source_id(cell) < 0

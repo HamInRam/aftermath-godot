@@ -54,6 +54,24 @@ var reaction_time := 0.3
 var strafe_sign := 1.0
 var path_points := PackedVector2Array()
 var path_refresh := 0.0
+var shortcut_cells: Array[Vector2i] = []
+var shortcut_pending_time := 0.0
+var shortcut_flank_time := 0.0
+
+func consider_shortcut(cells: Array[Vector2i]) -> void:
+	shortcut_cells = cells.duplicate()
+	shortcut_pending_time = 2.0 if not cells.is_empty() else 0.0
+
+func _evaluate_shortcut_path() -> void:
+	if shortcut_cells.is_empty() or not is_instance_valid(tile_world): return
+	for point in path_points:
+		var cell: Vector2i = tile_world.floor_layer.local_to_map(tile_world.floor_layer.to_local(point))
+		if cell in shortcut_cells:
+			# Overlay the existing pursuit state; do not replace perception or attack rules.
+			if state == State.CHASE and (enemy_type == "melee" or archetype_id == "assault"):
+				shortcut_flank_time = 1.0
+			shortcut_cells.clear()
+			return
 var tile_world: Node
 var state := State.IDLE
 var alert_level := AlertLevel.NORMAL
@@ -62,6 +80,37 @@ var investigation_target := Vector2.ZERO
 var investigation_wait := 0.0
 var noise_reaction_delay := 0.0
 var stagger_time := 0.0
+var ballistic_push_remaining := 0.0
+var ballistic_push_active := false
+var ballistic_dust_frame := -100
+
+func apply_living_ballistic_push(context: DamageContext) -> void:
+	if is_dead or context.lethal or state == State.KNOCKED_DOWN: return
+	var data: GunData = context.weapon_source
+	if data == null and AttackCatalog.GUNS.has(context.weapon_id): data = AttackCatalog.get_gun_data(context.weapon_id)
+	var kind := data.weapon_class if data != null else "handgun"
+	var strong := kind in ["shotgun", "dmr", "sniper"]
+	var duration := 0.24 if strong else 0.09
+	var previous_time := stagger_time if state == State.STAGGERED else 0.0
+	apply_stagger(context.direction, maxf(previous_time, duration))
+	ballistic_push_active = true
+	# Half an 8px navigation cell, never half a 32px blood texture chunk.
+	ballistic_push_remaining = 4.0 if strong else 1.5
+	var attenuation := clampf(context.distance_multiplier, 0.4, 1.0)
+	velocity = context.direction.normalized() * (52.0 if strong else 24.0) * attenuation
+	attack_windup_time = 0.0
+	if strong and Engine.get_physics_frames() - ballistic_dust_frame >= 6:
+		ballistic_dust_frame = Engine.get_physics_frames()
+		MicroDebrisField.for_scene(self).emit_scuff(global_position, context.direction)
+
+func _move_ballistic_push(delta: float) -> void:
+	var motion := velocity * delta
+	if motion.length() > ballistic_push_remaining: motion = motion.limit_length(ballistic_push_remaining)
+	var before := global_position
+	var collision := move_and_collide(motion)
+	ballistic_push_remaining = maxf(0.0, ballistic_push_remaining - global_position.distance_to(before))
+	velocity *= exp(-12.0 * delta)
+	if collision != null or ballistic_push_remaining <= 0.001: velocity = Vector2.ZERO
 var patrol_index := 0
 var patrol_mode := PatrolMode.SENTRY
 var patrol_wait_time := 0.0
@@ -174,6 +223,10 @@ func _ready() -> void:
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
+	shortcut_pending_time = maxf(0.0, shortcut_pending_time - delta)
+	shortcut_flank_time = maxf(0.0, shortcut_flank_time - delta)
+	if shortcut_pending_time <= 0.0: shortcut_cells.clear()
+	if is_dead or not room_combat_active or state != State.CHASE: shortcut_flank_time = 0.0
 	# Focus is hostile-local. Scaling AI time here keeps player input, aim and the
 	# camera on the real clock while enemy decisions and rotations advance slowly.
 	delta *= combat_time_scale
@@ -248,11 +301,15 @@ func _physics_process(delta: float) -> void:
 		return
 	if state == State.STAGGERED:
 		stagger_time -= delta
-		var stagger_velocity := velocity
-		move_and_slide()
-		push_contact_bodies(stagger_velocity)
-		velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
+		if ballistic_push_active:
+			_move_ballistic_push(delta)
+		else:
+			var stagger_velocity := velocity
+			move_and_slide()
+			push_contact_bodies(stagger_velocity)
+			velocity = velocity.move_toward(Vector2.ZERO, 180.0 * delta)
 		if stagger_time <= 0.0:
+			ballistic_push_active = false
 			var recovery_target := pending_impact_investigation if pending_impact_investigation != Vector2.INF else global_position
 			pending_impact_investigation = Vector2.INF
 			_begin_investigation(recovery_target, 0.8)
@@ -400,6 +457,7 @@ func _physics_process(delta: float) -> void:
 	elif path_refresh <= 0.0 and is_instance_valid(tile_world):
 		path_refresh = (0.12 + randf_range(0.0, 0.04)) if actor_type == "dog" else (0.22 + randf_range(0.0, 0.06))
 		path_points = tile_world.get_navigation_path(global_position, target_position)
+		_evaluate_shortcut_path()
 	if not path_points.is_empty():
 		while not path_points.is_empty() and global_position.distance_to(path_points[0]) < 5.0:
 			path_points.remove_at(0)
@@ -431,7 +489,7 @@ func _physics_process(delta: float) -> void:
 		# Holding cover and fixed sentry positions are firearm behaviours. Applying
 		# them to a rusher/hound produced alerted melee enemies that simply stood in
 		# place forever instead of closing the remaining distance.
-		var holds_position := enemy_type == "gunner" and (is_fixed_sentry or tactical_role == "guard" or tactical_move_mode == "at_peek")
+		var holds_position := enemy_type == "gunner" and shortcut_flank_time <= 0.0 and (is_fixed_sentry or tactical_role == "guard" or tactical_move_mode == "at_peek")
 		var tactical_distance := distance if has_visual_contact else target_distance
 		velocity = EnemyCombatController.chase_velocity(enemy_type, direction, move_speed, chase_speed_multiplier, actor_type, tactical_distance, melee_range, holds_position, reposition_time, reposition_sign, strafe_sign)
 	elif state in [State.INVESTIGATE, State.SEARCH] or distance > preferred_distance:
@@ -442,6 +500,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity = direction.rotated(PI * 0.5) * move_speed * 0.32 * strafe_sign
 	if state in [State.CHASE, State.SEARCH, State.INVESTIGATE] and velocity.length_squared() > 1.0:
+		if state == State.CHASE and shortcut_flank_time > 0.0: velocity *= 1.1
 		var separation := EnemyNavigation.crowd_separation(self)
 		velocity = (velocity + separation * move_speed * 0.32).limit_length(velocity.length())
 	var intended_velocity := velocity
@@ -1214,6 +1273,7 @@ func _update_alert_memory(delta: float) -> void:
 
 func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	if is_dead: return
+	ballistic_push_active = false
 	_clear_tactical_move()
 	_release_corpse_claim()
 	state = State.STAGGERED

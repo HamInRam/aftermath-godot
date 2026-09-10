@@ -323,6 +323,12 @@ func set_blood_resource(current: float, maximum: float, active: bool, cooldowns 
 		blood_skill_label.modulate = color if active else Color("a8a8a8")
 		blood_skill_label.visible = active and not _roguelike_mode
 
+func set_blood_overload(current: float, maximum: float, overloaded: bool) -> void:
+	if not is_instance_valid(blood_count_label): return
+	if current > maximum:
+		blood_count_label.text = "%d%%" % roundi(current / maxf(1.0,maximum)*100.0)
+		blood_count_label.modulate = Color.WHITE if overloaded else NeonPalette.BLOOD_CRIMSON
+
 func set_player_health(current: int, maximum: int) -> void:
 	if not is_instance_valid(health_meter): return
 	var ratio := clampf(float(current) / maxf(1.0, float(maximum)), 0.0, 1.0)

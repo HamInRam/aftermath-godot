@@ -61,6 +61,26 @@ func emit_impact(point: Vector2, direction: Vector2, material_name: String, stre
 			replacement = (replacement + 1) % LIMIT
 	queue_redraw()
 
+func emit_scuff(point: Vector2, direction: Vector2) -> void:
+	set_physics_process(true)
+	for i in range(6):
+		var fragment := {"p": point + direction.orthogonal() * randf_range(-4,4), "v": -direction.normalized().rotated(randf_range(-0.6,0.6)) * randf_range(12,28), "color": Color("777777") if i % 2 else Color("333333"), "air": 0.16, "paper": false, "spark": false, "collected": true, "scuff_life": 0.2}
+		if fragments.size() < LIMIT: fragments.append(fragment)
+	queue_redraw()
+
+func breach_wave(point: Vector2, direction: Vector2) -> void:
+	set_physics_process(true)
+	var side := direction.normalized().orthogonal()
+	var affected := 0
+	for fragment in fragments:
+		if affected >= 48: break
+		var offset: Vector2 = fragment.p - point
+		if offset.length_squared() > 32.0 * 32.0: continue
+		var sign_side := 1.0 if offset.dot(side) >= 0 else -1.0
+		fragment.v = (side * sign_side * 100.0 - direction.normalized() * 25.0).limit_length(110.0)
+		fragment.air = 0.25
+		affected += 1
+
 func captures(point: Vector2) -> bool:
 	if not magnet_enabled or not is_instance_valid(magnet_actor): return false
 	var offset := point - magnet_actor.global_position
@@ -69,6 +89,14 @@ func captures(point: Vector2) -> bool:
 	return offset.length_squared() <= 48.0 * 48.0 or offset.normalized().dot(forward) >= cos(PI / 4.0)
 
 func _physics_process(delta: float) -> void:
+	var scuff_active := false
+	for i in range(fragments.size()-1,-1,-1):
+		if fragments[i].has("scuff_life"):
+			scuff_active = true
+			fragments[i].scuff_life -= delta
+			if fragments[i].scuff_life <= 0.0:
+				fragments.remove_at(i)
+				queue_redraw()
 	var rays := 0
 	var changed := false
 	for index in fragments.size():
@@ -110,7 +138,7 @@ func _physics_process(delta: float) -> void:
 				var query := PhysicsRayQueryParameters2D.create(body.global_position, magnet_actor.global_position, 4)
 				if get_world_2d().direct_space_state.intersect_ray(query).is_empty(): body.siphon_toward(magnet_actor.global_position)
 	if changed: queue_redraw()
-	elif not magnet_enabled: set_physics_process(false)
+	elif not magnet_enabled and not scuff_active: set_physics_process(false)
 
 func set_magnet(actor: Node2D, active: bool) -> void:
 	if magnet_enabled and not active:

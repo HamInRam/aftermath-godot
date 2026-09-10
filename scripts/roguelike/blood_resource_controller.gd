@@ -14,6 +14,30 @@ const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 var capacity := 100.0
 var reserve := 100.0
+var overload_active := false
+var last_shot_overload := false
+var last_shot_blood_cost := 0.0
+var pressure_chunks := 0
+var pressure_retry := 0.0
+var last_absorption_steps := 0
+
+func update_overload(delta: float) -> void:
+	var was_active := overload_active
+	if reserve > capacity:
+		reserve = maxf(capacity, reserve - 8.0 * maxf(0.0, delta))
+	if reserve <= capacity: overload_active = false
+	if reserve > capacity or overload_active or was_active: queue_redraw()
+
+func accept_siphon(raw_amount: int, drained_chunks: int, interval: float) -> float:
+	if overload_active: return 0.0
+	pressure_chunks = drained_chunks
+	var limit := capacity
+	if blood_ammo_mode and stance_active and drained_chunks >= 12: limit = capacity * 1.5
+	var gain := minf(absorption_rate_per_second * interval, float(raw_amount) * RAW_TO_RESOURCE * absorption_efficiency)
+	var accepted := minf(maxf(0.0,limit-reserve),maxf(0.0,gain))
+	reserve += accepted
+	if blood_ammo_mode and reserve >= capacity * 1.5 - 0.001: overload_active = true
+	return accepted
 var absorption_radius := 29.0
 var absorption_half_angle := deg_to_rad(45.0)
 var absorption_power := 255
@@ -66,10 +90,20 @@ const SIPHON_REACH := 224.0
 const SIPHON_PROXIMITY := 48.0
 
 func pay_for_shot(data: GunData) -> bool:
+	last_shot_overload = false
+	last_shot_blood_cost = 0.0
 	if data == null: return false
 	var cost := maxf(0.1, data.caliber_blood_cost)
+	if overload_active and reserve > capacity:
+		last_shot_overload = true
+		last_shot_blood_cost = minf(cost, reserve-capacity)
+		reserve = maxf(capacity,reserve-cost)
+		if reserve <= capacity: overload_active = false
+		_emit_if_changed()
+		return true
 	if reserve + 0.0001 < cost: return false
 	reserve = maxf(0.0, reserve - cost)
+	last_shot_blood_cost = cost
 	_emit_if_changed()
 	return true
 
@@ -81,6 +115,9 @@ func _ready() -> void:
 	resource_changed.emit(reserve, capacity, stance_active)
 
 func update_system(delta: float, player: Node2D, blood_system: Node) -> void:
+	last_absorption_steps = 0
+	pressure_retry = maxf(0.0,pressure_retry-delta)
+	update_overload(delta)
 	perks.update(delta)
 	for key in skill_cooldowns:
 		skill_cooldowns[key] = maxf(0.0, float(skill_cooldowns[key]) - delta)
@@ -94,28 +131,36 @@ func update_system(delta: float, player: Node2D, blood_system: Node) -> void:
 		_emit_if_changed()
 		return
 	var absorb_delta := delta if stance_active else minf(delta, siphon_release_remaining)
+	if reserve >= capacity and pressure_retry > 0.0:
+		absorption_clock = 0.0
+		_emit_if_changed()
+		return
 	siphon_release_remaining = maxf(0.0, siphon_release_remaining - delta)
-	absorption_clock += absorb_delta
+	# At most two simulation slices per rendered frame; do not bank a stall.
+	absorption_clock = minf(ABSORB_INTERVAL*2.0, absorption_clock + absorb_delta)
 	while absorption_clock >= ABSORB_INTERVAL:
+		last_absorption_steps += 1
 		absorption_clock -= ABSORB_INTERVAL
-		if reserve >= capacity - 0.001:
+		if overload_active or reserve >= (capacity * 1.5 if blood_ammo_mode else capacity) - 0.001:
 			absorption_clock = 0.0
 			break
-		var resource_budget := minf(absorption_rate_per_second * ABSORB_INTERVAL, capacity - reserve)
 		var raw_budget := maxi(1, ceili(ground_drain_raw_per_second * ABSORB_INTERVAL))
 		siphon_direction = _resolve_siphon_direction(player)
 		var result: Dictionary
 		if blood_ammo_mode:
-			result = blood_system.absorb_siphon_sector(player.global_position, siphon_direction, SIPHON_REACH, absorption_half_angle, SIPHON_PROXIMITY, raw_budget)
+			if reserve >= capacity:
+				result = blood_system.absorb_siphon_sector(player.global_position, siphon_direction, SIPHON_REACH, absorption_half_angle, SIPHON_PROXIMITY, raw_budget, 12)
+			else:
+				result = blood_system.absorb_siphon_sector(player.global_position, siphon_direction, SIPHON_REACH, absorption_half_angle, SIPHON_PROXIMITY, raw_budget)
 		else:
 			result = blood_system.absorb_pixel_blood(player.global_position, absorption_radius, absorption_power, 40, raw_budget)
 		var raw_amount := int(result.get("amount", 0))
 		if raw_amount <= 0:
+			if reserve >= capacity: pressure_retry = 0.12
 			absorption_clock = 0.0
 			break
 		perks.on_siphon()
-		var resource_gain := minf(resource_budget, float(raw_amount) * RAW_TO_RESOURCE * absorption_efficiency)
-		reserve = minf(capacity, reserve + resource_gain)
+		accept_siphon(raw_amount, int(result.get("pressure_chunks",0)), ABSORB_INTERVAL)
 		siphon_visual_amount = 1.0
 		var sources: PackedVector2Array = result.get("positions", PackedVector2Array())
 		_spawn_siphon_motes(sources)
@@ -281,6 +326,10 @@ func _emit_if_changed() -> void:
 	resource_changed.emit(reserve, capacity, stance_active)
 
 func _draw() -> void:
+	if overload_active:
+		for side in [-1,1]:
+			for step in range(5):
+				PIXELS.pixel(self, Vector2(side*7,step-2), BLOOD_RED)
 	for particle in particles:
 		if float(particle.age) < 0.0: continue
 		var progress := clampf(float(particle.age) / float(particle.get("duration", SIPHON_PARTICLE_LIFETIME)), 0.0, 1.0)

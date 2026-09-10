@@ -102,7 +102,7 @@ class PixelBloodChunk extends Node2D:
 
 	func _mark_dirty(index: int) -> void:
 		dirty = true
-		if is_instance_valid(canvas): canvas.request_chunk_upload(self)
+		if not upload_queued and is_instance_valid(canvas): canvas.request_chunk_upload(self)
 		if dirty_flags[index] != 0: return
 		dirty_flags[index] = 1
 		dirty_pixels.append(index)
@@ -112,10 +112,15 @@ class PixelBloodChunk extends Node2D:
 		var index := local_cell.y * PixelBloodCanvas.CHUNK_SIZE + local_cell.x
 		var before := int(blood[index])
 		var after := clampi(before + amount, 0, 255)
+		var next_water := maxi(int(water[index]), clampi(new_water, 0, 255))
+		var next_age := mini(int(age[index]), clampi(new_age, 0, 255)) if before > 0 else clampi(new_age, 0, 255)
+		# Overlapping pellets frequently hit already saturated pixels. Preserve
+		# mass and freshness, but don't dirty unchanged texture data again.
+		if after == before and next_water == water[index] and next_age == age[index] and (amount <= 0 or pollution[index] == 0): return 0
 		blood[index] = after
 		if amount > 0: pollution[index] = 0
-		water[index] = maxi(int(water[index]), clampi(new_water, 0, 255))
-		age[index] = mini(int(age[index]), clampi(new_age, 0, 255)) if before > 0 else clampi(new_age, 0, 255)
+		water[index] = next_water
+		age[index] = next_age
 		var added := after - before
 		blood_load += added
 		initial_load += float(maxi(0, added))
@@ -419,8 +424,10 @@ var siphon_chunk_cursor := 0
 
 ## Fair, bounded work across visible chunks. Neither a full pixel sort nor a
 ## physics query per pixel is needed; both floor and wall layers share the fan.
-func absorb_sector(origin: Vector2, forward: Vector2, reach: float, half_angle: float, proximity: float, occlusion: PackedFloat32Array, raw_budget: int) -> Dictionary:
+func absorb_sector(origin: Vector2, forward: Vector2, reach: float, half_angle: float, proximity: float, occlusion: PackedFloat32Array, raw_budget: int, preview_only := false) -> Dictionary:
 	var positions := PackedVector2Array()
+	var plan: Array[Dictionary] = []
+	var planned_cursors := {}
 	if raw_budget <= 0 or occlusion.is_empty(): return {"amount": 0, "positions": positions}
 	reach = maxf(0.0, reach)
 	proximity = maxf(0.0, proximity)
@@ -441,18 +448,20 @@ func absorb_sector(origin: Vector2, forward: Vector2, reach: float, half_angle: 
 	var checked := 0
 	if nearby.is_empty() or raw_budget <= 0: return {"amount": 0, "positions": positions}
 	var share := maxi(1, ceili(float(raw_budget) / nearby.size()))
+	var pressure_chunks := 0
 	var cosine := cos(clampf(half_angle, 0.0, PI))
 	for offset in nearby.size():
 		if total >= raw_budget or checked >= 16384: break
 		var chunk := nearby[(siphon_chunk_cursor + offset) % nearby.size()]
 		var local_spent := 0
+		var dense_source := chunk.blood_load >= 4096
 		var samples := mini(512, chunk.active_pixels.size())
 		var source_count := 0
 		var next_source_mass := 0
 		for sample in samples:
 			if local_spent >= share or total >= raw_budget or checked >= 16384: break
-			var index := chunk.active_pixels[chunk.siphon_cursor % chunk.active_pixels.size()]
-			chunk.siphon_cursor += 1
+			var index := chunk.active_pixels[(chunk.siphon_cursor + (sample if preview_only else 0)) % chunk.active_pixels.size()]
+			if not preview_only: chunk.siphon_cursor += 1
 			checked += 1
 			if chunk.blood[index] <= 0: continue
 			var local := Vector2i(index % CHUNK_SIZE, index / CHUNK_SIZE)
@@ -463,16 +472,39 @@ func absorb_sector(origin: Vector2, forward: Vector2, reach: float, half_angle: 
 			var ray := wrapf(delta.angle(), 0.0, TAU) / TAU * occlusion.size()
 			var low := floori(ray) % occlusion.size()
 			if distance > minf(occlusion[low], occlusion[(low + 1) % occlusion.size()]): continue
-			var removed := chunk.absorb_local_pixel(local, mini(255, mini(share - local_spent, raw_budget - total)))
+			var pixel_budget := mini(255, mini(share - local_spent, raw_budget - total))
+			var removed := mini(chunk.blood[index], pixel_budget) if preview_only else chunk.absorb_local_pixel(local, pixel_budget)
+			if preview_only and removed > 0: plan.append({"chunk":chunk,"local":local,"amount":removed,"point":point})
 			total += removed
 			local_spent += removed
 			if removed > 0 and source_count < 4 and local_spent >= next_source_mass:
 				positions.append(point)
 				source_count += 1
 				next_source_mass = local_spent + maxi(1, share / 4)
+		if dense_source and local_spent > 0: pressure_chunks += 1
+		if preview_only: planned_cursors[chunk] = chunk.siphon_cursor + samples
+		if not preview_only: chunk.dispose_if_empty()
+	if not preview_only: siphon_chunk_cursor = (siphon_chunk_cursor + 1) % nearby.size()
+	return {"amount": total, "positions": positions, "pressure_chunks": pressure_chunks, "plan":plan,"cursors":planned_cursors}
+
+func commit_siphon_plan(preview: Dictionary) -> Dictionary:
+	var total := 0
+	var sources := PackedVector2Array()
+	var touched := {}
+	for entry: Dictionary in preview.get("plan",[]):
+		var chunk := entry.chunk as PixelBloodChunk
+		if not is_instance_valid(chunk) or chunk.is_queued_for_deletion(): continue
+		var removed := chunk.absorb_local_pixel(entry.local,entry.amount)
+		if removed <= 0: continue
+		total += removed
+		touched[chunk] = true
+		if sources.size() < 96: sources.append(entry.point)
+	var cursors: Dictionary = preview.get("cursors",{})
+	for chunk: PixelBloodChunk in touched:
+		chunk.siphon_cursor = int(cursors.get(chunk,chunk.siphon_cursor))
 		chunk.dispose_if_empty()
-	siphon_chunk_cursor = (siphon_chunk_cursor + 1) % nearby.size()
-	return {"amount": total, "positions": positions}
+	siphon_chunk_cursor += 1
+	return {"amount":total,"positions":sources,"pressure_chunks":mini(touched.size(),int(preview.get("pressure_chunks",0)))}
 
 ## Constant-time reads of simulation pixels; never sample a GPU texture.
 func terrain_at(point: Vector2) -> int:
@@ -572,7 +604,7 @@ func stamp_splatter(world_position: Vector2, direction: Vector2, intensity: floa
 		var distance := pow(randf(), 0.58) * reach
 		if pattern == "line": distance *= 1.28
 		var endpoint := world_position + ray_direction * distance
-		if evidence_layer == "ground" and _blocked_by_solid(world_position, endpoint):
+		if evidence_layer == "ground" and is_inside_tree() and world_position.distance_squared_to(endpoint) > 1.0:
 			var query := PhysicsRayQueryParameters2D.create(world_position, endpoint, 4)
 			query.collide_with_areas = false
 			var hit := get_world_2d().direct_space_state.intersect_ray(query)

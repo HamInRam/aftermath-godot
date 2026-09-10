@@ -61,41 +61,63 @@ static func _surface_color(id: int, x: int, y: int, seed: int, p: Array[Color]) 
 		if along == 0: return p[2]
 		# Short grain filaments on selected boards, never random bright dots.
 		if posmod(board, 5) == 1 and posmod(y, 7) == 3 and along > 29 and along < 39: return p[1]
+		if posmod(board, 3) == 0 and posmod(y, 7) == 4 and along > 12 and along < 20: return p[2]
+		if along in [2, 50] and posmod(y, 7) == 2: return p[3]
 		return p[1] if posmod(board, 6) == 2 else p[0]
 	if id == 13:
 		var row := floori(float(y) / 9.0)
 		if posmod(y, 9) == 0 or posmod(x + (row & 1) * 13, 26) == 0: return p[3]
 		return p[1] if posmod(floori(float(x + (row & 1) * 13) / 26.0) + row * 3, 7) == 0 else p[0]
 	if id in [2, 10, 34]:
-		if posmod(x, 23) == 7 and posmod(y, 19) == 11: return p[1]
+		# Small woven diamonds, not an all-over random-noise carpet.
+		var weave := posmod(x + y, 12)
+		if weave == 0 and posmod(x - y, 12) <= 2: return p[4]
+		if weave == 1 and posmod(x - y, 12) <= 2: return p[1]
 		return p[0]
 	if id in [5, 35]:
-		var px := posmod(x, 48)
-		var py := posmod(y, 32)
+		var px := posmod(x, 24)
+		var py := posmod(y, 16)
 		if px == 0 or py == 0: return p[2]
-		if px in [3, 45] and py in [3, 29]: return p[3]
-		if id == 35 and py == 16 and px > 11 and px < 20: return p[1]
+		if px in [3, 21] and py in [3, 13]: return p[3]
+		if id == 35 and py == 8 and px > 11 and px < 20: return p[1]
+		if id == 5 and py == 7 and px in [9,10,11]: return p[2]
 		return p[0]
 	if id in [8, 14, 33, 36, 37]:
-		var span := 24 if id in [14, 33, 36] else 32
-		if posmod(x, span) == 0 or posmod(y, span) == 0: return p[2]
-		var slab := floori(float(x) / span) + floori(float(y) / span)
-		if id == 8 and (slab & 1) == 0: return p[2]
-		if id == 37 and posmod(x + y, 64) in [30, 31]: return p[2]
-		return p[1] if slab % 5 == 2 else p[0]
+		return _stone_color(x, y, seed + id * 73, p, 16 if id != 37 else 20)
 	if id in [11, 32]:
-		if posmod(x, 64) == 0 or posmod(y, 48) == 0: return p[2]
-		var slab := floori(float(x) / 64.0) + floori(float(y) / 48.0) * 3
-		if slab % 5 == 2 and posmod(x, 64) in range(18, 40) and posmod(y, 48) == 12 + floori(float(posmod(x, 64)) / 3.0): return p[3]
-		return p[0]
+		return _stone_color(x, y, seed + id * 73, p, 24)
 	if id == 6:
 		if posmod(x + floori(float(y) / 23.0) * 7, 31) == 9 and posmod(y, 23) in [8, 9, 10]: return p[2]
 		return p[0]
 	if id in [3, 15, 38, 39]: return p[0]
-	if posmod(x, 96) == 0 or posmod(y, 64) == 0: return p[2]
-	var local_x := posmod(x + seed, 127)
-	if local_x in range(55, 69) and posmod(y, 101) == 42 + floori(float(local_x - 55) / 4.0): return p[3]
-	return p[0]
+	return _stone_color(x, y, seed, p, 20)
+
+static func _stone_color(x: int, y: int, seed: int, p: Array[Color], span: int) -> Color:
+	var row := floori(float(y) / span)
+	var shifted_x := x + (row & 1) * (span / 2)
+	var column := floori(float(shifted_x) / span)
+	var px := posmod(shifted_x, span)
+	var py := posmod(y, span)
+	var tile_hash := posmod(column * 37 + row * 101 + seed, 997)
+	# Mortar stays one native pixel wide; bevels and scars belong to this slab,
+	# independently of the engine's eight-pixel navigation cells.
+	if px == 0 or py == 0: return p[4]
+	if py == 1: return p[1]
+	var base := p[1] if tile_hash % 7 == 0 else (p[2] if tile_hash % 11 == 0 else p[0])
+	var scar_x := 3 + tile_hash % maxi(1, span - 7)
+	var scar_y := 3 + (tile_hash / 7) % maxi(1, span - 7)
+	var dx := px - scar_x
+	var dy := py - scar_y
+	if tile_hash % 3 == 0 and dx >= 0 and dx < 5 and dy == floori(float(dx) / 2.0): return p[3]
+	if tile_hash % 3 == 0 and dx >= 1 and dx < 4 and dy == floori(float(dx) / 2.0) + 1: return p[1]
+	# A few clustered mineral pits. Most stone stays quiet; marks never repeat
+	# on every engine tile and do not change when the camera moves.
+	var patch_x := posmod(px + tile_hash, 9)
+	var patch_y := posmod(py + tile_hash / 11, 11)
+	if tile_hash % 4 != 1 and patch_x <= 1 and patch_y <= 1:
+		return p[3] if patch_x == patch_y else p[2]
+	if tile_hash % 5 == 0 and px == span - 2 and py in [2, 3]: return p[3]
+	return base
 
 static func create_wall_texture(world_cells: Vector2i, tile_size: Vector2i, walls: Dictionary) -> ImageTexture:
 	var image := Image.create(world_cells.x * tile_size.x, world_cells.y * tile_size.y, false, Image.FORMAT_RGBA8)
@@ -119,9 +141,9 @@ static func create_wall_texture(world_cells: Vector2i, tile_size: Vector2i, wall
 					elif edge == 1: color = p[4]
 				else:
 					# A limestone coping follows connected walls around a black core.
-					if edge <= 1: color = p[3]
-					elif edge == 2: color = p[4]
-					elif edge == 3: color = p[1]
+					if edge == 0: color = p[3]
+					elif edge == 1: color = p[4]
+					elif edge == 2: color = p[1]
 					if edge <= 1 and ((north or south) and posmod(point.x, 47) == 0 or (west or east) and posmod(point.y, 47) == 0): color = p[4]
 				image.set_pixelv(point, color)
 	return ImageTexture.create_from_image(image)

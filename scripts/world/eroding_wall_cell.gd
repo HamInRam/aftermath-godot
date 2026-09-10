@@ -39,16 +39,20 @@ func _rebuild() -> void:
 	erosion.rebuild_collision(self, shapes)
 	for pixel: Vector2i in erosion.removed: image.set_pixelv(pixel, Color.TRANSPARENT)
 	texture.update(image)
-	for light in light_shapes: light.queue_free()
-	light_shapes.clear()
-	for rect in erosion.rectangles():
-		var light := LightOccluder2D.new()
-		light.occluder = OccluderPolygon2D.new()
+	var rectangles := erosion.rectangles()
+	for index in range(rectangles.size()):
+		var rect: Rect2i = rectangles[index]
+		if index >= light_shapes.size():
+			var added := LightOccluder2D.new()
+			added.occluder = OccluderPolygon2D.new()
+			add_child(added)
+			light_shapes.append(added)
+		var light := light_shapes[index]
+		light.visible = true
 		var p := Vector2(rect.position)
 		var s := Vector2(rect.size)
 		light.occluder.polygon = PackedVector2Array([p,p+Vector2(s.x,0),p+s,p+Vector2(0,s.y)])
-		add_child(light)
-		light_shapes.append(light)
+	for index in range(rectangles.size(),light_shapes.size()): light_shapes[index].visible = false
 	queue_redraw()
 	if erosion.remaining() == 0: world.finish_eroded_cell(cell)
 

@@ -325,7 +325,7 @@ func _process(delta: float) -> void:
 			blood_resource.update_system(delta, player, blood_system)
 			MicroDebrisField.for_scene(self).set_magnet(player, blood_resource.stance_active and player.controls_enabled and not player.is_dead)
 			var audio_director := get_node_or_null("CombatAudioDirector")
-			if is_instance_valid(audio_director): audio_director.set_blood_level(blood_resource.reserve / maxf(1.0, blood_resource.capacity), player.controls_enabled and not player.is_dead)
+			if is_instance_valid(audio_director): audio_director.set_blood_level(blood_resource.reserve / maxf(1.0, blood_resource.capacity), player.controls_enabled and not player.is_dead, blood_resource.overload_active)
 			player.set_blood_stance_movement_multiplier(blood_resource.get_movement_multiplier())
 			player.set_blood_siphon_visual(blood_resource.get_siphon_visual_amount())
 			if is_instance_valid(hud.reticle): hud.reticle.set_siphon_strength(blood_resource.get_siphon_visual_amount())
@@ -750,6 +750,8 @@ func _start_run() -> void:
 		enemy_patrol_offsets = encounter_layout.get("patrols", enemy_patrol_offsets)
 		enemy_types = encounter_layout.get("types", enemy_types)
 	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
+	if not Events.tactical_shortcut_opened.is_connected(_on_tactical_shortcut_opened):
+		Events.tactical_shortcut_opened.connect(_on_tactical_shortcut_opened)
 	if roguelike_mode:
 		SwarmLayout.add_clutter(world, enemies_container, int(world._get_room_run_seed()))
 	if roguelike_mode and deployment_started and is_instance_valid(room_run): room_run.configure(world, enemies_container)
@@ -1017,6 +1019,10 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	var resolved_penetration := data.penetration_power
 	var blood_round := false
 	var blood_budget_per_projectile := 0
+	var overload_round: bool = not enemy_owned and is_instance_valid(blood_resource) and blood_resource.blood_ammo_mode and blood_resource.last_shot_overload
+	if overload_round:
+		blood_round = true
+		blood_budget_per_projectile = floori(blood_resource.last_shot_blood_cost * 0.72 / blood_resource.RAW_TO_RESOURCE / maxi(1,data.pellet_count))
 	if roguelike_mode and not enemy_owned and is_instance_valid(blood_resource) and not blood_resource.blood_ammo_mode:
 		var shot_id: int = int(player.gun.current_shot_id) if is_instance_valid(player) and is_instance_valid(player.gun) else -1
 		var enhancement: Dictionary = blood_resource.consume_enhanced_round(shot_id, is_instance_valid(player.gun) and player.gun.ammo == 0)
@@ -1029,6 +1035,7 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 			blood_budget_per_projectile = floori(float(enhancement.raw_blood_budget) / float(maxi(1, data.pellet_count)))
 	bullet.setup(direction, enemy_owned, resolved_damage, weapon_id, origin, data.bullet_speed, shooter, resolved_penetration, data.property_damage, data.damage_falloff_start, data.damage_falloff_end, data.minimum_damage_ratio)
 	bullet.blood_stain_radius = data.blood_stain_radius
+	bullet.breach_round = overload_round
 	# Detach from the equipped resource: swapping/modifying a gun must not
 	# retroactively change an in-flight projectile's terrain signature.
 	bullet.weapon_source = data.duplicate(true) as GunData
@@ -1220,6 +1227,7 @@ func _on_blood_heal_requested() -> void:
 
 func _on_blood_resource_changed(current: float, maximum: float, active: bool) -> void:
 	if is_instance_valid(hud) and is_instance_valid(blood_resource): hud.set_blood_resource(current, maximum, active, blood_resource.get_cooldown_ratios())
+	if is_instance_valid(hud) and is_instance_valid(blood_resource): hud.set_blood_overload(current,maximum,blood_resource.overload_active)
 
 func _on_blood_skill_triggered(skill_id: String) -> void:
 	if not is_instance_valid(player): return
@@ -1308,6 +1316,20 @@ func _on_rogue_run_cleared(room_count: int) -> void:
 	detail_label.text = "GRADE %s // %04d // %d ROOMS // ENTER REPORT" % [final_grade, final_score, room_count]
 	hud.show_banner("THE FLOOR REMEMBERS YOU", Color("d10b32"))
 	_show_run_end_prompt("DESCENT COMPLETE" if Progression.run_session.is_complete() else "FLOOR CLEARED // GRADE %s" % final_grade, true)
+
+func _on_tactical_shortcut_opened(source_world: Node, cells: Array[Vector2i], position: Vector2) -> void:
+	# Global events must not leak between preloaded/test/transition worlds.
+	if source_world != get_node_or_null("TileMap"): return
+	_on_navigation_graph_changed(position, cells)
+
+func _on_navigation_graph_changed(position: Vector2, cells: Array[Vector2i] = []) -> void:
+	var index := 0
+	for enemy in enemies_container.get_children():
+		if enemy.is_dead or not enemy.room_combat_active or enemy.global_position.distance_to(position) > 240: continue
+		if enemy.state not in [enemy.State.CHASE,enemy.State.INVESTIGATE,enemy.State.SEARCH]: continue
+		enemy.path_refresh = 0.03 + float(index % 5)*0.025
+		enemy.consider_shortcut(cells)
+		index += 1
 
 func _open_floor_exit() -> void:
 	var world := get_node("TileMap")
@@ -1490,10 +1512,11 @@ func _on_damage_impact(context: DamageContext) -> void:
 			# projectile context now so a through-shot cannot reuse the same mass on
 			# every downstream body after the death signal returns.
 			if context.blood_enhanced: context.blood_budget_raw = 0
-		_trigger_hit_stop(data.hit_stop)
+		if is_instance_valid(context.target) and context.target.is_in_group("enemy"):
+			combat_feedback.trigger_critical_hit_stop(true, context.hit_zone == "head", Settings.hit_stop_strength)
 	elif is_instance_valid(context.target) and context.target != player:
-		var wound_data := AttackCatalog.get_gun_data(weapon_id)
-		_trigger_hit_stop(wound_data.hit_stop * clampf(0.20 + context.damage_ratio * 0.32, 0.20, 0.42))
+		# Body-hit pellets use local stagger/flash, leaving the global beat for kills/headshots.
+		combat_feedback.trigger_critical_hit_stop(false, context.hit_zone == "head", Settings.hit_stop_strength)
 
 func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction: Vector2, melee_type: String, lethal: bool) -> void:
 	if not is_instance_valid(target) or target.is_dead: return

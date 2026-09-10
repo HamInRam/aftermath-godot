@@ -16,7 +16,9 @@ func _ready() -> void:
 	_expect(director.ambience_player.stream == ambience_stream, "room ambience should configure itself on ready")
 	_expect(is_equal_approx(director.combat_player.volume_db, -3.0), "combat volume should use the scene setting")
 	_expect(is_equal_approx(director.ambience_player.volume_db, -20.0), "ambience volume should use the scene setting")
-	_expect(director.combat_player.bus == "Music" and director.ambience_player.bus == "Ambience", "music and room tone should use independent audio buses")
+	var music_bus := AudioServer.get_bus_index(director.combat_player.bus)
+	var ambience_bus := AudioServer.get_bus_index(director.ambience_player.bus)
+	_expect(music_bus != ambience_bus and AudioServer.get_bus_send(music_bus) == "Music" and AudioServer.get_bus_send(ambience_bus) == "Ambience", "private blood mix buses must route independently to user music/ambience controls")
 	_expect(director.danger_player.stream is AudioStreamWAV, "missing danger music should receive an original procedural loop")
 	director._on_weapon_fired(Vector2.ZERO, Vector2.RIGHT, false, "pistol")
 	var previous_intensity := director.combat_intensity
@@ -27,6 +29,14 @@ func _ready() -> void:
 	_expect(director.gunfire_duck == 4.0, "automatic fire must not stack ducking into silence")
 	director._process(0.5)
 	_expect(director.gunfire_duck == 0.0, "music should recover after the firing window")
+	var master_db := AudioServer.get_bus_volume_db(0)
+	director.set_blood_level(1.5,true,true)
+	director._process(.2)
+	_expect(director.overload_mix == 1.0 and director.overload_reverb[0].wet <= .121, "overload must use bounded reverb")
+	_expect(AudioServer.get_bus_volume_db(0) == master_db and director.combat_player.volume_db <= director.combat_volume_db, "overload cannot raise master volume or exceed configured music ceiling")
+	director.set_blood_level(1.0,false,false)
+	director._process(.2)
+	_expect(director.overload_mix == 0.0 and director.overload_reverb[0].wet == 0.0, "overload mix must release")
 	var fingerprints := {}
 	for kind in ["handgun", "pdw", "smg", "carbine", "dmr", "sniper", "lmg"]:
 		var stream := ProceduralAudioLibrary.get_sfx("weapon_" + kind)

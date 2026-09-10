@@ -460,7 +460,9 @@ func _draw() -> void:
 		"table":
 			_prop_panel(Rect2(-half, size), base, &"wood", 3)
 			PIXELS.rect(self, Rect2(-5,-2,3,2), Color("d8d8d8"))
-			PIXELS.pixel(self, Vector2(3,1), Color("c6c6c6"))
+			PIXELS.pixel(self, Vector2(-4,-1), Color("777777"))
+			PIXELS.circle(self, Vector2(3,1), 1, Color("dedede"))
+			PIXELS.pixel(self, Vector2(3,1), Color("444444"))
 		"tv":
 			_prop_panel(Rect2(-half, size), Color("555555"), &"metal", 4)
 			PIXELS.rect(self, Rect2(-2,-2,4,3), Color("c5c5c5") if state != PropState.DAMAGED else Color("343434"))
@@ -481,6 +483,9 @@ func _draw() -> void:
 			_prop_panel(Rect2(-half, size), base, &"wood", 7)
 			PIXELS.rect(self, Rect2(-6,-3,12,2), Color("d6d6d6"))
 			PIXELS.line(self, Vector2(-5,1), Vector2(5,1), Color("515151"))
+			for x in [-4, 0, 4]:
+				PIXELS.rect(self, Rect2(x,-1,1,2), Color("bbbbbb"))
+				PIXELS.pixel(self, Vector2(x,-2), Color("eeeeee"))
 		"crate":
 			_prop_panel(Rect2(-half, size), base, &"wood", 8)
 			PIXELS.line(self, Vector2(-2,-2), Vector2(2,2), Color("c1c1c1"))
@@ -504,11 +509,13 @@ func _draw() -> void:
 			PIXELS.rect(self, Rect2(-1,0,2,1), Color("333333"))
 			PIXELS.rect(self, Rect2(-1,-3,2,2), Color("f5f5f5"))
 		"plant":
-			_prop_panel(Rect2(-3,1,6,3), base, &"ceramic", 13)
-			PIXELS.line(self, Vector2(0,1), Vector2(0,-4), Color("333333"))
-			PIXELS.rect(self, Rect2(-3,-3,3,2), Color("545454"))
-			PIXELS.rect(self, Rect2(1,-4,3,3), Color("515151"))
-			PIXELS.line(self, Vector2(1,-3), Vector2(3,-3), Color("9d9d9d"))
+			# A top-down pot and radial leaves, not a side-view stem in a box.
+			PIXELS.circle(self, Vector2.ZERO, 3, Color("c2c2c2"))
+			PIXELS.circle(self, Vector2.ZERO, 2, Color("333333"))
+			for leaf in 7:
+				var direction := Vector2.RIGHT.rotated(float(leaf) * TAU / 7.0)
+				PIXELS.line(self, Vector2.ZERO, (direction * 4.0).round(), Color("555555"), 2)
+				PIXELS.line(self, direction.round(), (direction * 3.0).round(), Color("aaaaaa"))
 		_:
 			_prop_panel(Rect2(-half, size), base, &"metal", 14)
 	if state == PropState.DAMAGED:
@@ -519,7 +526,7 @@ func _prop_body_color() -> Color:
 	# State changes expose the same material instead of tinting the whole prop.
 	return body
 
-func _prop_panel(area: Rect2, color: Color, pattern: StringName, _seed: int) -> void:
+func _prop_panel(area: Rect2, color: Color, pattern: StringName, _detail_seed: int) -> void:
 	PIXELS.rect(self, area, Color("151515"))
 	PIXELS.rect(self, Rect2(area.position + Vector2.ONE, area.size - Vector2(2,2)), color)
 	PIXELS.line(self, area.position + Vector2.ONE, Vector2(area.end.x - 2, area.position.y + 1), color.lightened(0.3))
@@ -528,6 +535,15 @@ func _prop_panel(area: Rect2, color: Color, pattern: StringName, _seed: int) -> 
 	PIXELS.line(self, Vector2(area.position.x + 1, area.end.y - 2), area.end - Vector2(2, 2), color.darkened(0.28))
 	if pattern == &"wood" and area.size.x > 9:
 		PIXELS.line(self, area.position + Vector2(2,4), area.position + Vector2(6,4), color.darkened(0.18))
+		PIXELS.line(self, area.position + Vector2(8,3), area.position + Vector2(11,3), color.lightened(0.15))
+	elif pattern == &"metal":
+		for offset in [Vector2(2,2), Vector2(area.size.x-3,2)]:
+			PIXELS.pixel(self, area.position + offset, color.lightened(0.35))
+		PIXELS.line(self, area.position + Vector2(2,4), area.position + Vector2(4,4), color.darkened(0.2))
+	elif pattern == &"fabric":
+		for x in range(int(area.position.x)+3, int(area.end.x)-2, 4):
+			PIXELS.pixel(self, Vector2(x, area.position.y+3), color.darkened(0.2))
+			PIXELS.pixel(self, Vector2(x+1, area.position.y+3), color.lightened(0.12))
 
 func _draw_debris(outline: Color) -> void:
 	var direction := last_impact_direction.normalized()

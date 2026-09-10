@@ -1,0 +1,9 @@
+# Blood pressure and overload
+
+Blood-ammunition runs retain a 100% core reserve and may charge to 150%. Every 40ms siphon sample counts distinct ground chunks that actually donate blood, with at least 4096 raw mass before extraction. At least 12 such chunks are required for gain above the core. Wall stains, inaccessible blood, poison and visual particles do not supply pressure. At/above 100%, a read-only preview reuses the occlusion rays before draining; insufficient pressure wastes no blood.
+
+At 150%, overload activates. Excess reserve decays at 8 units/second, including during charging so excess cannot be banked indefinitely. Siphoning cannot refill active overload. Each trigger pull spends only the excess, once even for pellet weapons. The last overflow shot may consume the remaining fraction; subsequent shots resume ordinary core spending. Build-relative capacity is preserved.
+
+Paid overload shots retain their overload flag across all pellets even if the payment ends overload. They use crimson muzzle/tracer presentation and doubled erosion damage input, not doubled enemy health damage or guaranteed doubled removed pixels. Existing material resistance/radius limits remain. Nearby cosmetic fragments receive bounded lateral velocity; no new navigation openings are granted without actual physical destruction. Returnable blood is capped at 72% of the actual overflow payment and divided among pellets.
+
+HUD shows charge percentage above 100%, with white numerals while active; two small crimson marks distinguish the player. Private music/ambience buses add a mild high-pass shift and 12% wet reverb with a bounded mix lift. A quiet reused focus-entry stinger marks activation. Master volume is untouched; this is not a 1.5× master-volume boost. Low-reserve heartbeat behavior remains; charging excess narrows the mix, activation releases it. Bus effects reset on combat end and are removed on scene exit.

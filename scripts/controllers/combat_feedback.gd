@@ -14,6 +14,7 @@ var last_lethal_audio_msec := -1000
 var audio_priority := -1
 var audio_priority_until_msec := 0
 var next_hit_stop_msec := 0
+var stop_history: Array[Vector2i] = []
 var flash_tween: Tween
 const MAX_HIT_STOP_SECONDS := 0.028
 const HIT_STOP_REFRACTORY_MSEC := 75
@@ -58,15 +59,27 @@ func trigger_hit_confirmation(kind: String, lethal := false) -> void:
 	hit_audio.pitch_scale = randf_range(0.96, 1.04)
 	hit_audio.play()
 
-func trigger_hit_stop(duration: float) -> void:
-	if duration <= 0.0: return
+func trigger_critical_hit_stop(lethal: bool, headshot: bool, strength: float = 1.0) -> void:
+	if not lethal and not headshot: return
+	var seconds := 0.045 if lethal and headshot else (0.025 if lethal else 0.02)
+	trigger_hit_stop(seconds * clampf(strength,0.0,1.0), true)
+
+func trigger_hit_stop(duration: float, critical := false) -> void:
+	# Detached test/preload controllers cannot own a global clock or recovery loop.
+	if duration <= 0.0 or not is_inside_tree(): return
 	var now := Time.get_ticks_msec()
 	# One compact impact beat per trigger encounter. Nine shotgun pellets or a
 	# stream of SMG hits must never extend the global stop into sustained sludge.
 	if hit_stop_active or now < next_hit_stop_msec: return
-	hit_stop_deadline_msec = now + roundi(minf(duration, MAX_HIT_STOP_SECONDS) * 1000.0)
-	next_hit_stop_msec = now + HIT_STOP_REFRACTORY_MSEC
-	Engine.time_scale = 0.08
+	while not stop_history.is_empty() and stop_history[0].x <= now-1000: stop_history.pop_front()
+	var spent := 0
+	for entry in stop_history: spent += entry.y
+	var milliseconds := mini(roundi(minf(duration, 0.05 if critical else MAX_HIT_STOP_SECONDS)*1000.0), maxi(0,100-spent))
+	if milliseconds < 8: return
+	stop_history.append(Vector2i(now,milliseconds))
+	hit_stop_deadline_msec = now + milliseconds
+	next_hit_stop_msec = now + (220 if critical else HIT_STOP_REFRACTORY_MSEC)
+	Engine.time_scale = 0.0 if critical else 0.08
 	hit_stop_active = true
 	hit_stop_generation += 1
 	var generation := hit_stop_generation
@@ -92,6 +105,7 @@ func show_flash(color: Color, duration: float) -> void:
 	flash_tween.tween_property(flash, "color", Color(adjusted.r, adjusted.g, adjusted.b, 0.0), duration)
 
 func reset() -> void:
+	stop_history.clear()
 	hit_stop_generation += 1
 	hit_stop_active = false
 	hit_stop_deadline_msec = 0
