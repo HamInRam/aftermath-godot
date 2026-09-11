@@ -1,3 +1,4 @@
+class_name CombatLevel
 extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
@@ -65,10 +66,18 @@ var combat_feedback: CombatFeedback
 var enemies_killed := 0
 var started_enemy_count := 0
 var remaining_enemies := 0
-var run_over := false
-var floor_cleared := false
-var exit_transition_pending := false
-var floor_exit: FloorExit
+var run_over: bool:
+	get: return floor_flow.run_over
+	set(value): floor_flow.run_over = value
+var floor_cleared: bool:
+	get: return floor_flow.floor_cleared
+	set(value): floor_flow.floor_cleared = value
+var exit_transition_pending: bool:
+	get: return floor_flow.exit_transition_pending
+	set(value): floor_flow.exit_transition_pending = value
+var floor_exit: FloorExit:
+	get: return floor_flow.floor_exit
+	set(value): floor_flow.floor_exit = value
 var elapsed := 0.0
 var combo := 0
 var best_combo := 0
@@ -103,17 +112,28 @@ var current_ammo := 0
 var current_capacity := 0
 var current_reserve := -1
 var combat_shots_fired := 0
-var player_shot_records: Dictionary = {}
+var player_shot_records: Dictionary[int, ShotRecord]:
+	get: return combat_events.shot_records
 var precision_reward_bonus := 0
 var combat_glass_broken := 0
 var combat_doors_slammed := 0
 var last_player_death_cause := "CONTACT"
 var pause_layer: CanvasLayer
-var run_end_layer: CanvasLayer
-var entry_loadout_overlay: CanvasLayer
-var entry_loadout_zone: Node2D
-var entry_loadout_active := false
-var deployment_started := true
+var run_end_layer: CanvasLayer:
+	get: return floor_flow.run_end_layer
+	set(value): floor_flow.run_end_layer = value
+var entry_loadout_overlay: CanvasLayer:
+	get: return floor_flow.entry_loadout_overlay
+	set(value): floor_flow.entry_loadout_overlay = value
+var entry_loadout_zone: Node2D:
+	get: return floor_flow.entry_loadout_zone
+	set(value): floor_flow.entry_loadout_zone = value
+var entry_loadout_active: bool:
+	get: return floor_flow.entry_loadout_active
+	set(value): floor_flow.entry_loadout_active = value
+var deployment_started: bool:
+	get: return floor_flow.deployment_started
+	set(value): floor_flow.deployment_started = value
 var active_modifier: Dictionary = {}
 var route_anchor := Vector2.ZERO
 var combat_route_distance := 0.0
@@ -139,6 +159,19 @@ const COMBAT_FOCUS_DURATION := 2.2
 @onready var trauma_camera = $TraumaCamera
 
 var projectile_pool: ProjectilePool
+
+var floor_flow: FloorFlowController
+var combat_events: CombatEventController
+
+func _init() -> void:
+	floor_flow = FloorFlowController.new()
+	floor_flow.name = "FloorFlowController"
+	floor_flow.level = self
+	add_child(floor_flow)
+	combat_events = CombatEventController.new()
+	combat_events.name = "CombatEventController"
+	combat_events.level = self
+	add_child(combat_events)
 
 func _ready() -> void:
 	_ensure_projectile_pool()
@@ -390,72 +423,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		SceneTransition.transition_to("res://scenes/ui/debrief_screen.tscn")
 
 func _retry_floor() -> void:
-	if not run_over or not final_grade.is_empty(): return
-	if Progression.run_session.active: Progression.run_session.totals.retries += 1
-	Progression.prepare_mission_restart(scene_file_path)
-	get_tree().reload_current_scene()
+	floor_flow._retry_floor()
 
-var new_run_requested := false
+var new_run_requested: bool:
+	get: return floor_flow.new_run_requested
+	set(value): floor_flow.new_run_requested = value
 
 func _new_random_run() -> void:
-	if not run_over or not final_grade.is_empty(): return
-	if new_run_requested: return
-	new_run_requested = true
-	var profile = Progression.begin_roguelike_run()
-	if profile == null:
-		new_run_requested = false
-		return
-	Progression.prepare_mission_restart(profile.scene_path)
-	SceneTransition.transition_to(profile.scene_path)
+	floor_flow._new_random_run()
 
 func _show_run_end_prompt(message: String, won: bool) -> void:
-	if has_node("SafeBuildOffer"):
-		get_node("SafeBuildOffer").pending = false
-		get_node("SafeBuildOffer").label.hide()
-	if is_instance_valid(run_end_layer): return
-	run_end_layer = CanvasLayer.new()
-	run_end_layer.layer = 90
-	add_child(run_end_layer)
-	var panel := PanelContainer.new()
-	run_end_layer.add_child(panel)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("0b0b0b")
-	style.border_color = Color("a8a8a8")
-	style.set_border_width_all(1)
-	style.set_content_margin_all(4)
-	panel.add_theme_stylebox_override("panel", style)
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	panel.offset_left = -110
-	panel.offset_right = 110
-	panel.offset_top = -43
-	panel.offset_bottom = -8
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 3)
-	panel.add_child(column)
-	var label := Label.new()
-	label.text = message
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	UI_DEFAULTS.apply_label(label, 7, Color("eeeeee"))
-	column.add_child(label)
-	var action := Button.new()
-	action.text = "ENTER // CONTINUE" if won else "R // RETRY FLOOR"
-	UI_DEFAULTS.apply_button(action)
-	column.add_child(action)
-	if won: action.pressed.connect(func(): SceneTransition.transition_to("res://scenes/ui/debrief_screen.tscn"))
-	else: action.pressed.connect(_retry_floor)
-	if not won:
-		var fresh := Button.new()
-		fresh.text = "NEW RANDOM RUN"
-		UI_DEFAULTS.apply_button(fresh)
-		column.add_child(fresh)
-		fresh.pressed.connect(_new_random_run)
-		panel.offset_top = -66
-	# Keyboard Enter is handled by main; avoid a focused retry also consuming it.
-	action.focus_mode = Control.FOCUS_NONE
-	interaction_label.text = ""
-	if is_instance_valid(hud.reticle): hud.reticle.hide()
-	if is_instance_valid(world_context_marker): world_context_marker.hide_target()
+	floor_flow._show_run_end_prompt(message, won)
 
 func _create_ui() -> void:
 	hud = HudController.new()
@@ -638,223 +616,34 @@ func _on_reload_finished(_current: int, _maximum: int) -> void:
 	if phase != "cleanup": detail_label.text = "NO WITNESSES."
 
 func _on_weapon_fired(origin: Vector2, direction: Vector2, enemy_owned: bool, weapon_id: String) -> void:
-	if not enemy_owned:
-		combat_shots_fired += 1
-		mission_tracker.record_player_shot(weapon_id)
-		_show_scene_consequence("BALLISTIC +1 // %s" % weapon_id.to_upper())
-		var shot_id: int = player.gun.current_shot_id if is_instance_valid(player) and is_instance_valid(player.gun) else -1
-		if shot_id >= 0:
-			var shot_data: GunData = player.gun.gun_data if is_instance_valid(player) and is_instance_valid(player.gun) and player.gun.weapon_id == weapon_id else AttackCatalog.get_gun_data(weapon_id)
-			player_shot_records[shot_id] = {
-				"expected": maxi(1, shot_data.pellet_count),
-				"resolved": 0,
-				"hit": false,
-				"lethal": false,
-				"reported": false,
-				"weapon_id": weapon_id,
-			}
-	var data: GunData = player.gun.gun_data if not enemy_owned and is_instance_valid(player) and is_instance_valid(player.gun) and player.gun.weapon_id == weapon_id else AttackCatalog.get_gun_data(weapon_id)
-	# Incoming fire is legible in world space; it must not shake the player's aim
-	# simply because an unseen enemy pulled a trigger.
-	if not enemy_owned: trauma_camera.add_trauma(data.camera_shake * 0.14)
-	var casing = SHELL_CASING_SCENE.instantiate()
-	if RuntimeBudget.try_add("shell", casing, self):
-		var perpendicular := direction.rotated(PI * 0.5)
-		casing.global_position = origin - direction * randf_range(4.5, 7.5) + perpendicular * randf_range(-1.8, 1.8)
-		casing.rotation = randf_range(-PI, PI)
-		casing.setup(direction, enemy_owned)
-	var flash = MUZZLE_FLASH_SCENE.instantiate()
-	flash.position = to_local(origin)
-	flash.setup(direction, data.muzzle_flash_size, data.muzzle_flash_duration)
-	if RuntimeBudget.try_add("transient_fx", flash, self) and not enemy_owned:
-		player_muzzle_flash = weakref(flash)
+	combat_events.handle_weapon_fired(WeaponFiredEvent.create(origin, direction, enemy_owned, weapon_id))
 
 func _on_precision_reward(weapon_id: String, streak: int) -> void:
-	if phase != "combat" or run_over: return
-	precision_reward_bonus += 120
-	hud.show_banner("CLEAN MAG // FAST RELOAD ARMED", Color("ff68c8"))
-	detail_label.text = "%s PRECISION x%d // EMPTY MAG RELOAD BOOST" % [weapon_id.to_upper(), streak]
+	combat_events._on_precision_reward(weapon_id, streak)
 
 func _start_run() -> void:
-	# Cleanup is retired from the active Roguelike, but legacy evidence-capable
-	# props still register for save compatibility. Clear their autoload history at
-	# every run boundary so repeated retries cannot accumulate stale WeakRefs.
-	CleanupRegistry.reset()
-	# Headless regressions enter combat immediately. A rendered campaign begins
-	# outside the building and arms the encounter only at its physical entry case.
-	var is_death_restart := Progression.consume_mission_restart(scene_file_path)
-	var entry_state := Progression.run_session.get_entry_state(Progression.get_roguelike_floor(), is_death_restart)
-	deployment_started = DisplayServer.get_name() == "headless" or is_death_restart or not entry_state.is_empty()
-	entry_loadout_active = false
-	combat_focus_active = false
-	combat_focus_charges = COMBAT_FOCUS_MAX_CHARGES
-	combat_focus_time_remaining = 0.0
-	combat_focus_recharge_progress = 0.0
-	combat_focus_energy = 1.0
-	combat_focus_visual_amount = 0.0
-	combat_focus_input_was_down = Input.is_action_pressed("combat_focus")
-	_set_hostile_combat_time_scale(1.0)
-	_update_focus_screen_effect()
-	player_shot_records.clear()
-	precision_reward_bonus = 0
-	last_player_death_cause = "CONTACT"
-	pending_player_death_context.clear()
-	player_death_corpse = null
-	_configure_run_modifier()
-	status_label.text = "AFTERMATH // " + level_title
-	detail_label.text = "NO WITNESSES."
-	if not doors_enabled and has_node("Doors"): $Doors.queue_free()
-	player = PLAYER_SCENE.instantiate()
-	var world := get_node_or_null("TileMap")
-	if is_instance_valid(world) and world.has_method("get_camera_world_rect"):
-		trauma_camera.configure_world_bounds(world.get_camera_world_rect())
-	_configure_level_doors(world)
-	_configure_security_layout(world)
-	var resolved_player_spawn := player_spawn
-	if is_instance_valid(world):
-		if player_spawn_context == "exterior" and world.has_method("get_default_player_spawn"):
-			resolved_player_spawn = world.get_default_player_spawn()
-		elif world.has_method("map_authored_position"):
-			resolved_player_spawn = world.map_authored_position(player_spawn)
-	if is_instance_valid(world) and world.has_method("get_nearest_walkable_position"):
-		var candidate: Vector2 = world.get_nearest_walkable_position(resolved_player_spawn, 8)
-		if candidate != Vector2.INF: resolved_player_spawn = candidate
-	player.global_position = resolved_player_spawn
-	player.projectile_requested.connect(_on_projectile_requested)
-	player.died.connect(_on_player_died)
-	player.execution_impact.connect(_on_execution_impact)
-	player.melee_impact.connect(_on_melee_impact)
-	player.weapon_throw_requested.connect(_on_weapon_throw_requested)
-	player.world_interaction_requested.connect(_on_world_interaction_requested)
-	if roguelike_mode:
-		player.blood_stance_changed.connect(_on_blood_stance_changed)
-		player.blood_skill_requested.connect(_on_blood_skill_requested)
-		player.blood_heal_requested.connect(_on_blood_heal_requested)
-	add_child(player)
-	if roguelike_mode:
-		player.blood_action_mode = true
-		player.blood_terrain_canvas = blood_system.ground_canvas
-		player.gun.rage_fire_active = blood_resource.is_raging
-	player.health_changed.connect(hud.set_player_health)
-	player.hit_received.connect(_on_player_directional_hit)
-	player.armor_changed.connect(hud.set_player_armor)
-	player.configure_field_kit(LoadoutCatalog.get_kit(Progression.get_current_kit_id()))
-	if Progression.run_session.restore(entry_state, player, blood_resource):
-		var focus: Dictionary = entry_state.get("focus", {})
-		combat_focus_charges = clampi(int(focus.get("charges", COMBAT_FOCUS_MAX_CHARGES)), 0, COMBAT_FOCUS_MAX_CHARGES)
-		combat_focus_recharge_progress = clampf(float(focus.get("recharge", 0.0)), 0.0, 1.0)
-	hud.set_player_health(player.hp, player.max_hp)
-	hud.set_player_armor(player.armor_durability, player.max_armor_durability)
-	_spawn_level_landmarks(world)
-	route_anchor = player.global_position
-	_spawn_tactical_lures()
-	if roguelike_mode and is_instance_valid(world) and world.has_method("get_handcrafted_encounter_layout"):
-		var encounter_layout: Dictionary = world.get_handcrafted_encounter_layout()
-		encounter_layout = SwarmLayout.build(world, encounter_layout)
-		enemy_spawns = encounter_layout.get("spawns", enemy_spawns)
-		enemy_patrol_offsets = encounter_layout.get("patrols", enemy_patrol_offsets)
-		enemy_types = encounter_layout.get("types", enemy_types)
-	for index in enemy_spawns.size(): _spawn_enemy(enemy_spawns[index], index)
-	if not Events.tactical_shortcut_opened.is_connected(_on_tactical_shortcut_opened):
-		Events.tactical_shortcut_opened.connect(_on_tactical_shortcut_opened)
-	if roguelike_mode:
-		SwarmLayout.add_clutter(world, enemies_container, int(world._get_room_run_seed()))
-	if roguelike_mode and deployment_started and is_instance_valid(room_run): room_run.configure(world, enemies_container)
-	for index in ammo_pickup_positions.size(): _spawn_ammo_pickup(index)
-	started_enemy_count = enemy_spawns.size()
-	remaining_enemies = started_enemy_count
-	security_devices = _get_security_devices()
-	security_devices_cached = true
-	for device in security_devices:
-		device.alarm_triggered.connect(_on_security_alarm)
-		device.disabled.connect(_on_security_disabled)
-	mission_tracker.configure(_get_mission_profile(), started_enemy_count, security_devices.size())
-	playtest_telemetry.begin_run(mission_tracker.profile.mission_id)
-	if record_progress: Progression.current_mission_id = mission_tracker.profile.mission_id
-	detail_label.text = mission_tracker.profile.briefing
-	_update_combat_objective_hud()
-	if not deployment_started: _begin_entry_staging(world)
-	elif not is_death_restart:
-		_remember_floor_start()
-	_sync_ammo_ui()
+	floor_flow._start_run()
 
 func _capture_run_resources() -> Dictionary:
-	return Progression.run_session.capture(player, blood_resource, {"charges": combat_focus_charges, "recharge": combat_focus_recharge_progress})
+	return floor_flow._capture_run_resources()
 
 func _remember_floor_start() -> void:
-	Progression.run_session.remember_floor_start(Progression.get_roguelike_floor(), _capture_run_resources())
+	floor_flow._remember_floor_start()
 
 func _begin_entry_staging(world: Node) -> void:
-	if not is_instance_valid(player): return
-	player.set_predeployment_mode(true)
-	_set_deployment_simulation_enabled(false)
-	entry_loadout_zone = ENTRY_LOADOUT_ZONE_SCENE.instantiate() as Node2D
-	var zone_position := player.global_position
-	if is_instance_valid(world) and world.has_method("get_door_specs"):
-		var door_specs: Array[Dictionary] = world.get_door_specs()
-		if not door_specs.is_empty():
-			var exterior_door: Dictionary = door_specs[-1]
-			var passage: Vector2 = exterior_door.passage_center
-			var building: Rect2 = world.get_building_world_rect() if world.has_method("get_building_world_rect") else Rect2()
-			var outward := building.get_center().direction_to(passage)
-			if outward.length_squared() < 0.1: outward = player.global_position.direction_to(passage) * -1.0
-			zone_position = passage + outward.normalized() * 18.0
-	entry_loadout_zone.global_position = zone_position
-	entry_loadout_zone.connect("player_arrived", Callable(self, "_show_entry_loadout_overlay"))
-	add_child(entry_loadout_zone)
-	entry_loadout_zone.call("setup", player)
-	status_label.text = "STAGING // " + level_title
-	detail_label.text = "REACH THE WHITE ENTRY CASE"
-	hud.set_objective("ENTRY CASE // CONFIGURE LOADOUT")
-	hud.show_banner("MOVE TO THE ENTRY CASE", Color("73f7e4"))
+	floor_flow._begin_entry_staging(world)
 
 func _set_deployment_simulation_enabled(enabled: bool) -> void:
-	var mode := Node.PROCESS_MODE_INHERIT if enabled else Node.PROCESS_MODE_DISABLED
-	for enemy in enemies_container.get_children(): enemy.process_mode = mode
-	for device in security_devices: device.process_mode = mode
+	floor_flow._set_deployment_simulation_enabled(enabled)
 
 func _show_entry_loadout_overlay() -> void:
-	if run_over or phase != "combat" or deployment_started or entry_loadout_active: return
-	entry_loadout_active = true
-	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
-	entry_loadout_overlay = ENTRY_LOADOUT_OVERLAY_SCENE.instantiate() as CanvasLayer
-	entry_loadout_overlay.call("configure", mission_tracker.profile.display_name if mission_tracker.profile != null else level_title)
-	entry_loadout_overlay.connect("deployment_confirmed", Callable(self, "_on_entry_loadout_confirmed"))
-	entry_loadout_overlay.connect("deployment_cancelled", Callable(self, "_on_entry_loadout_cancelled"))
-	add_child(entry_loadout_overlay)
-	get_tree().paused = true
+	floor_flow._show_entry_loadout_overlay()
 
 func _on_entry_loadout_confirmed(deployment_kit: Dictionary) -> void:
-	deployment_started = true
-	entry_loadout_active = false
-	entry_loadout_overlay = null
-	get_tree().paused = false
-	_set_deployment_simulation_enabled(true)
-	if roguelike_mode and is_instance_valid(room_run): room_run.configure(get_node_or_null("TileMap"), enemies_container)
-	if is_instance_valid(entry_loadout_zone): entry_loadout_zone.call("set_deployed")
-	if not is_instance_valid(player): return
-	# Apply the staged weapon/build selection as a fresh mission issue. This also
-	# guarantees both selected firearms start with full magazines and reserves.
-	player.configure_field_kit(deployment_kit)
-	player.set_predeployment_mode(false)
-	if player.has_method("set_controls_enabled"): player.set_controls_enabled(true)
-	route_anchor = player.global_position
-	_sync_ammo_ui()
-	status_label.text = "AFTERMATH // " + level_title
-	detail_label.text = mission_tracker.profile.briefing if mission_tracker.profile != null else "NO WITNESSES."
-	_update_combat_objective_hud()
-	_remember_floor_start()
-	hud.show_banner("LOADOUT LOCKED // OPERATION LIVE", Color("73f7e4"))
+	floor_flow._on_entry_loadout_confirmed(deployment_kit)
 
 func _on_entry_loadout_cancelled() -> void:
-	# Defensive fallback for older overlays: pre-deployment may never be escaped
-	# into a half-paused mission. Only confirming a loadout releases simulation.
-	entry_loadout_active = true
-	get_tree().paused = true
-	_set_deployment_simulation_enabled(false)
-	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
-	if is_instance_valid(entry_loadout_overlay):
-		entry_loadout_overlay.call("show_deployment_required_hint")
+	floor_flow._on_entry_loadout_cancelled()
 
 func _configure_level_doors(world: Node) -> void:
 	var doors_root := get_node_or_null("Doors")
@@ -1017,66 +806,10 @@ func _ensure_projectile_pool() -> void:
 	projectile_pool.warm()
 
 func _on_player_shot_resolved(shot_id: int, outcome: String, lethal: bool, _weapon_id: String) -> void:
-	if not player_shot_records.has(shot_id): return
-	var record: Dictionary = player_shot_records[shot_id]
-	if outcome == "enemy" and lethal and roguelike_mode and is_instance_valid(blood_resource):
-		blood_resource.perks.on_kill(player.gun, blood_resource.skill_cooldowns, str(record.weapon_id))
-	record.resolved = int(record.resolved) + 1
-	if outcome == "enemy":
-		record.hit = true
-		record.lethal = bool(record.lethal) or lethal
-		if not bool(record.reported):
-			record.reported = true
-			if is_instance_valid(player) and is_instance_valid(player.gun): player.gun.report_shot_result(true, lethal)
-	elif outcome == "overkill":
-		_show_scene_consequence("BIOLOGICAL +1 // OVERKILL")
-	if int(record.resolved) >= int(record.expected):
-		if not bool(record.reported) and is_instance_valid(player) and is_instance_valid(player.gun):
-			player.gun.report_shot_result(false, false)
-		player_shot_records.erase(shot_id)
-	else:
-		player_shot_records[shot_id] = record
+	combat_events.handle_shot_resolved(ShotResolvedEvent.create(shot_id, outcome, lethal, _weapon_id))
 
 func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) -> void:
-	enemies_killed += 1
-	remaining_enemies = maxi(0, remaining_enemies - 1)
-	mission_tracker.record_enemy_eliminated()
-	combo += 1
-	best_combo = maxi(best_combo, combo)
-	combo_timer = 2.2
-	_reward_combat_focus(pending_death_attack_id, pending_death_hit_zone, combo)
-	trauma_camera.trigger_kill_effect(0.72, "red", pending_death_direction)
-	var room_finish := _is_last_room_target(defeated_enemy)
-	if room_finish or (combo >= 10 and combo % 10 == 0):
-		combat_feedback.trigger_finisher(room_finish, Settings.hit_stop_strength)
-	var corpse = CORPSE_SCENE.instantiate()
-	corpse.position = to_local(pos)
-	var rig_kind := "hound" if is_instance_valid(defeated_enemy) and str(defeated_enemy.actor_type) == "dog" else "human"
-	var living_pose: Dictionary = defeated_enemy.get_lifecycle_pose() if is_instance_valid(defeated_enemy) and defeated_enemy.has_method("get_lifecycle_pose") else {}
-	corpse.setup(facing, pending_death_direction, pending_death_knockback, pending_death_blood_power, pending_death_style, pending_death_hit_zone, pending_death_attack_id, pending_death_travel_distance, rig_kind, "enemy", living_pose)
-	RuntimeBudget.add_persistent("corpse", corpse, self)
-	_show_scene_consequence("BODY +25 // BIOLOGICAL LOAD %s" % ("EXTREME" if pending_death_blood_power >= 1.7 else ("HIGH" if pending_death_blood_power >= 1.2 else "STANDARD")))
-	var pool_offset := pending_death_hit_position - pos if pending_death_hit_position != Vector2.ZERO else Vector2.ZERO
-	if is_instance_valid(defeated_enemy) and defeated_enemy.get_meta("polluter", false):
-		blood_system.ground_canvas.stamp_pollution(pos, 23.0)
-	elif pending_death_blood_enhanced:
-		blood_system.spawn_death_burst_budgeted(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id, pending_death_blood_budget_raw, pending_death_stain_radius)
-	else:
-		blood_system.spawn_death_burst(pos, pending_death_blood_power, pool_offset, pending_death_direction, pending_death_attack_id, pending_death_stain_radius)
-	Events.publish_casualty(pos, pending_death_direction)
-	if is_instance_valid(defeated_enemy) and defeated_enemy.enemy_type == "gunner":
-		var remaining_rounds: int = defeated_enemy.gun.ammo
-		# The weapon is physical evidence even when the enemy emptied its magazine.
-		_spawn_weapon_pickup(pos, defeated_enemy.gun.weapon_id, remaining_rounds, defeated_enemy.gun.gun_data.installed_attachments if defeated_enemy.gun.gun_data != null else PackedStringArray())
-	pending_death_style = "firearm"
-	pending_death_hit_zone = "torso"
-	pending_death_hit_position = Vector2.ZERO
-	pending_death_attack_id = "pistol"
-	pending_death_travel_distance = 0.0
-	pending_death_blood_enhanced = false
-	pending_death_blood_budget_raw = -1
-	pending_death_stain_radius = -1.0
-	_update_combat_objective_hud()
+	combat_events._on_enemy_died(pos, facing, defeated_enemy)
 
 func _get_mission_profile() -> MissionProfile:
 	if mission_profile != null: return mission_profile
@@ -1233,64 +966,13 @@ func _on_blood_skill_triggered(skill_id: String) -> void:
 			hud.show_banner("R // COAGULATE", Color("d10b32"))
 
 func _on_rogue_room_entered(room_id: String, index: int, enemy_count: int) -> void:
-	status_label.text = "ROOM %02d // %s" % [index, room_id.to_upper().replace("_", " ")]
-	detail_label.text = "%d HOSTILES // DOORS LIVE" % enemy_count
-	hud.show_banner("ROOM %02d // CONTACT" % index, Color("f4f4f4"))
-	hud.set_combat_counts(enemy_count, 0, 0)
+	floor_flow._on_rogue_room_entered(room_id, index, enemy_count)
 
 func _on_rogue_room_cleared(_room_id: String, index: int) -> void:
-	# Room clears must preserve combat flow. Permanent build choices belong in a
-	# future safe intermission, never in a modal that freezes the arena.
-	if is_instance_valid(room_run): room_run.complete_reward()
-	if run_over: return
-	hud.show_banner("ROOM %02d CLEARED // KEEP MOVING" % index, Color("f4f4f4"))
+	floor_flow._on_rogue_room_cleared(_room_id, index)
 
 func _on_rogue_run_cleared(room_count: int) -> void:
-	if run_over or floor_cleared: return
-	floor_cleared = true
-	combat_focus_active = false
-	combat_focus_time_remaining = 0.0
-	_set_hostile_combat_time_scale(1.0)
-	var target_time := mission_tracker.profile.target_duration_seconds if mission_tracker.profile != null else 480.0
-	var pace_ratio := elapsed / maxf(1.0, target_time)
-	if mission_tracker.alarm_triggers == 0 and pace_ratio <= 1.0:
-		final_grade = "S"
-	elif mission_tracker.alarm_triggers <= 1 and pace_ratio <= 1.25:
-		final_grade = "A"
-	elif pace_ratio <= 1.6:
-		final_grade = "B"
-	else:
-		final_grade = "C"
-	var time_bonus := roundi(clampf(1.0 - pace_ratio, 0.0, 1.0) * 600.0)
-	final_score = enemies_killed * 125 + room_count * 300 + time_bonus + precision_reward_bonus
-	if mission_tracker.alarm_triggers == 0: final_score += 250
-	var report := {
-		"mode": "roguelike",
-		"rooms_cleared": room_count,
-		"best_combo": best_combo,
-		"blood_build": blood_resource.build_id,
-		"combat_perks": blood_resource.perks.learned.duplicate(),
-		"kills": enemies_killed,
-		"shots": combat_shots_fired,
-		"alarms": mission_tracker.alarm_triggers,
-		"property_damage": mission_tracker.property_damage,
-		"combat_route": roundi(combat_route_distance),
-		"combat_seconds": elapsed,
-		"dominant_weapon": mission_tracker.get_dominant_weapon(),
-		"traces": ["%d ROOMS CLEARED" % room_count],
-	}
-	if record_progress and mission_tracker.profile != null:
-		Progression.record_roguelike_floor(mission_tracker.profile.mission_id, final_score, final_grade, elapsed, report, _capture_run_resources())
-	if not Progression.run_session.is_complete():
-		_open_floor_exit()
-		return
-	run_over = true
-	blood_resource.set_stance_active(false)
-	if is_instance_valid(player): player.set_controls_enabled(false)
-	status_label.text = "DESCENT COMPLETE" if Progression.run_session.is_complete() else "FLOOR CLEARED"
-	detail_label.text = "GRADE %s // %04d // %d ROOMS // ENTER REPORT" % [final_grade, final_score, room_count]
-	hud.show_banner("THE FLOOR REMEMBERS YOU", Color("d10b32"))
-	_show_run_end_prompt("DESCENT COMPLETE" if Progression.run_session.is_complete() else "FLOOR CLEARED // GRADE %s" % final_grade, true)
+	floor_flow._on_rogue_run_cleared(room_count)
 
 func _on_tactical_shortcut_opened(source_world: Node, cells: Array[Vector2i], position: Vector2) -> void:
 	# Global events must not leak between preloaded/test/transition worlds.
@@ -1307,40 +989,10 @@ func _on_navigation_graph_changed(position: Vector2, cells: Array[Vector2i] = []
 		index += 1
 
 func _open_floor_exit() -> void:
-	var world := get_node("TileMap")
-	floor_exit = FloorExit.new()
-	floor_exit.player = player
-	floor_exit.position = world.get_default_player_spawn()
-	add_child(floor_exit)
-	floor_exit.entered.connect(_enter_floor_exit)
-	status_label.text = "AREA CLEAR // EXIT OPEN"
-	detail_label.text = "%d KILLS // COMBO %d // %.1fs" % [enemies_killed, best_combo, elapsed]
-	hud.show_banner("AREA CLEAR // RETURN TO ENTRY EXIT", Color.WHITE)
-	var next := Progression.peek_next_roguelike_floor()
-	if next != null: ResourceLoader.load_threaded_request(next.scene_path)
+	floor_flow._open_floor_exit()
 
 func _enter_floor_exit() -> void:
-	if not floor_cleared or run_over or exit_transition_pending or player.is_dead or SceneTransition.busy: return
-	exit_transition_pending = true
-	# Capture at departure, not at the final kill: scavenging and siphoning count.
-	Progression.run_session.transfer_state = _capture_run_resources()
-	var previous_data: Dictionary = Progression.data.duplicate(true)
-	var previous_mission: String = Progression.current_mission_id
-	var profile := Progression.begin_next_roguelike_floor()
-	if profile == null:
-		exit_transition_pending = false
-		floor_exit.spent = false
-		return
-	player.set_controls_enabled(false)
-	blood_resource.set_stance_active(false)
-	var changed: bool = await SceneTransition.transition_to(profile.scene_path)
-	if not changed:
-		Progression.data = previous_data
-		Progression.current_mission_id = previous_mission
-		exit_transition_pending = false
-		floor_exit.spent = false
-		player.set_controls_enabled(true)
-		hud.show_banner("EXIT LOAD FAILED // TRY AGAIN", Color.WHITE)
+	await floor_flow._enter_floor_exit()
 
 func _spawn_weapon_pickup(world_position: Vector2, weapon_id: String, rounds: int, attachment_ids := PackedStringArray()) -> void:
 	# Merge coincident drops to keep evidence readable without ever deleting it.
@@ -1413,138 +1065,25 @@ func _configure_run_modifier() -> void:
 				if child is PointLight2D: child.energy *= 1.35
 
 func _on_weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int, attachment_ids: PackedStringArray) -> void:
-	if phase != "combat" or run_over: return
-	var thrown_weapon := THROWN_WEAPON_SCENE.instantiate()
-	# This is player inventory in flight, not disposable visual budget.
-	if not RuntimeBudget.add_persistent("thrown_weapon", thrown_weapon, self): return
-	if roguelike_mode and is_instance_valid(blood_resource): blood_resource.perks.on_throw()
-	thrown_weapon.global_position = origin
-	thrown_weapon.setup(direction, weapon_id, rounds, attachment_ids)
+	combat_events._on_weapon_throw_requested(origin, direction, weapon_id, rounds, attachment_ids)
 
 func _on_blood_impact(hit_position: Vector2, direction: Vector2, damage: int, weapon_id: String, travel_distance: float, lethal: bool, hit_zone: String) -> void:
-	_on_damage_impact(DamageContext.create(hit_position, direction, damage, weapon_id, travel_distance, lethal, hit_zone))
+	combat_events._on_blood_impact(hit_position, direction, damage, weapon_id, travel_distance, lethal, hit_zone)
 
 func _on_damage_impact(context: DamageContext) -> void:
-	# Only living hostile flesh feeds the roguelike blood economy. Player hits,
-	# player death and corpse overkill retain impact feedback without creating a
-	# self-recycling blood source under the player.
-	context.configure_blood_yield(is_instance_valid(blood_resource) and blood_resource.blood_ammo_mode, combo if combo_timer > 0.0 else 0)
-	if context.blood_enhanced and is_instance_valid(blood_resource) and blood_resource.blood_rage_mode:
-		context.blood_yield_multiplier = 2.0
-	if is_instance_valid(context.target) and context.target.is_in_group("enemy") and context.target is Actor and not context.target.is_dead and context.target.hp > 0 and context.damage > 0:
-		if context.target.get_meta("polluter", false):
-			# Lethal patch is stamped once in _on_enemy_died. Limit repeated
-			# nonlethal pellet hits to one surface upload burst per 150 ms.
-			var now := Time.get_ticks_msec()
-			if not context.lethal and now >= int(context.target.get_meta("next_pollution_ms", 0)):
-				context.target.set_meta("next_pollution_ms", now + 150)
-				blood_system.ground_canvas.stamp_pollution(context.hit_position, 12.0)
-		else:
-			blood_system.emit_context(context)
-	var hit_position := context.hit_position
-	var direction := context.direction
-	var weapon_id := context.weapon_id
-	var lethal := context.lethal
-	if is_instance_valid(context.target) and context.target != player:
-		var feedback_kind := "armour" if context.armor_absorbed >= float(context.damage) * 0.42 else ("head" if context.hit_zone == "head" else "flesh")
-		hud.show_hit_confirmation(feedback_kind, lethal)
-		combat_feedback.trigger_hit_confirmation(feedback_kind, lethal)
-	if is_instance_valid(context.target) and context.target.has_method("apply_lifecycle_impact"):
-		var target_rig := "hound" if context.target.is_in_group("enemy") and str(context.target.get("actor_type")) == "dog" else "human"
-		var physical := RAGDOLL_IMPACT.resolve(weapon_id, context.travel_distance, context.hit_zone, target_rig)
-		var force_scale := 0.66 if context.blood_enhanced else 0.58
-		context.target.apply_lifecycle_impact(direction, float(physical.limb_force) * force_scale, context.hit_zone)
-	if lethal:
-		var data := AttackCatalog.get_gun_data(weapon_id)
-		if context.target == player:
-			last_player_death_cause = weapon_id.to_upper()
-			pending_player_death_context = {
-				"direction": direction,
-				"knockback": data.knockback,
-				"blood_power": data.blood_power,
-				"style": data.death_style,
-				"hit_zone": context.hit_zone,
-				"hit_position": hit_position,
-				"attack_id": weapon_id,
-				"travel_distance": context.travel_distance,
-			}
-		else:
-			pending_death_direction = direction
-			pending_death_knockback = data.knockback * (1.12 if context.blood_enhanced else 1.0)
-			pending_death_blood_power = data.blood_power * (1.48 if context.blood_enhanced else 1.0)
-			if context.blood_enhanced:
-				var weapon_class := str(data.weapon_class)
-				pending_death_style = "firearm_gib" if context.hit_zone == "head" or weapon_class in ["shotgun", "sniper", "lmg"] else "firearm_torn"
-			else:
-				pending_death_style = data.death_style
-			pending_death_hit_zone = context.hit_zone
-			pending_death_hit_position = hit_position
-			pending_death_attack_id = weapon_id
-			pending_death_travel_distance = context.travel_distance
-			pending_death_blood_enhanced = context.blood_enhanced
-			pending_death_blood_budget_raw = context.blood_budget_raw
-			pending_death_stain_radius = context.blood_stain_radius
-			# A lethal impact transfers ownership of the remaining finite blood
-			# ledger to the terminal burst spawned by _on_enemy_died. Clear the
-			# projectile context now so a through-shot cannot reuse the same mass on
-			# every downstream body after the death signal returns.
-			if context.blood_enhanced: context.blood_budget_raw = 0
-		if is_instance_valid(context.target) and context.target.is_in_group("enemy"):
-			combat_feedback.trigger_critical_hit_stop(true, context.hit_zone == "head", Settings.hit_stop_strength)
-	elif is_instance_valid(context.target) and context.target != player:
-		# Body-hit pellets use local stagger/flash, leaving the global beat for kills/headshots.
-		combat_feedback.trigger_critical_hit_stop(false, context.hit_zone == "head", Settings.hit_stop_strength)
+	combat_events._on_damage_impact(context)
 
 func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction: Vector2, melee_type: String, lethal: bool) -> void:
-	if not is_instance_valid(target) or target.is_dead: return
-	if not lethal:
-		target.take_door_hit(direction, "knockdown")
-		trauma_camera.add_trauma(0.16)
-		return
-	var profile := AttackCatalog.get_impact_profile(melee_type)
-	if target.has_method("apply_lifecycle_impact"): target.apply_lifecycle_impact(direction, float(profile.knockback) * 0.72, "torso")
-	pending_death_direction = direction
-	pending_death_knockback = float(profile.knockback)
-	pending_death_blood_power = float(profile.blood_power)
-	pending_death_style = str(profile.style)
-	pending_death_attack_id = melee_type
-	pending_death_hit_position = hit_position
-	pending_death_travel_distance = target.global_position.distance_to(player.global_position) if is_instance_valid(player) else 0.0
-	blood_system.emit_hit(hit_position, direction, 1, melee_type, 0.0, true)
-	trauma_camera.add_trauma(float(profile.trauma))
-	_on_impact_flash_requested(Color(1.0, 0.06, 0.35, 0.2 if melee_type == "bat" else 0.13))
-	_trigger_hit_stop(float(profile.hit_stop))
-	target.take_damage(maxi(1, target.hp), hit_position - direction * 2.0)
+	combat_events._on_melee_impact(target, hit_position, direction, melee_type, lethal)
 
 func _is_last_room_target(target: Node) -> bool:
-	if not is_instance_valid(target) or not is_instance_valid(room_run): return remaining_enemies == 0
-	var room_id := str(target.get_meta("rogue_room_id", ""))
-	if room_id.is_empty() or not room_run.room_members.has(room_id): return remaining_enemies == 0
-	for member in room_run.room_members[room_id]:
-		if is_instance_valid(member) and member != target and not member.is_dead: return false
-	return true
+	return combat_events._is_last_room_target(target)
 
 func _on_player_directional_hit(amount: int, source_position: Vector2) -> void:
-	if amount <= 0 or not is_instance_valid(player): return
-	trauma_camera.add_directional_impulse(player.global_position - source_position, 2.8)
-	trauma_camera.add_trauma(0.20)
+	combat_events._on_player_directional_hit(amount, source_position)
 
 func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: bool, execution_type: String) -> void:
-	var attack_id := execution_type if lethal else "fist"
-	blood_system.emit_hit(hit_position, direction, 1, attack_id, 0.0, lethal)
-	trauma_camera.add_trauma(0.42 if lethal else 0.2)
-	trauma_camera.add_directional_impulse(-direction, 4.0 if lethal else 1.0)
-	if lethal:
-		var profile := AttackCatalog.get_impact_profile(execution_type)
-		pending_death_direction = direction
-		pending_death_knockback = float(profile.knockback)
-		pending_death_blood_power = float(profile.blood_power)
-		pending_death_style = str(profile.style)
-		pending_death_attack_id = attack_id
-		pending_death_hit_position = hit_position
-		pending_death_travel_distance = 0.0
-		_on_impact_flash_requested(Color(0.9, 0.02, 0.12, 0.28))
-		_trigger_hit_stop(float(profile.hit_stop))
+	combat_events._on_execution_impact(hit_position, direction, lethal, execution_type)
 
 func _trigger_hit_stop(duration: float) -> void:
 	duration *= Settings.hit_stop_strength
@@ -1619,75 +1158,10 @@ func _reward_combat_focus(attack_id: String, hit_zone: String, current_combo: in
 	if is_instance_valid(hud): hud.set_combat_focus(combat_focus_energy, combat_focus_active, combat_focus_charges, COMBAT_FOCUS_MAX_CHARGES, combat_focus_recharge_progress)
 
 func _on_player_died(source_position := Vector2.ZERO) -> void:
-	if run_over: return
-	final_grade = ""
-	blood_resource.set_stance_active(false)
-	if is_instance_valid(playtest_telemetry):
-		var world := get_node_or_null("TileMap")
-		var room_id: String = str(world.get_tactical_room_id(player.global_position)) if is_instance_valid(world) and world.has_method("get_tactical_room_id") else "unknown"
-		playtest_telemetry.record_death(player.global_position, room_id)
-	run_over = true
-	if is_instance_valid(player) and player.has_method("set_controls_enabled"): player.set_controls_enabled(false)
-	_spawn_player_death_ragdoll(source_position)
-	trauma_camera.add_trauma(1.0)
-	_trigger_death_flash()
-	status_label.text = "YOU ARE DEAD"
-	var attack_direction := "UNKNOWN"
-	if source_position != Vector2.ZERO and is_instance_valid(player):
-		var delta := source_position - player.global_position
-		if absf(delta.x) > absf(delta.y): attack_direction = "EAST" if delta.x > 0.0 else "WEST"
-		else: attack_direction = "SOUTH" if delta.y > 0.0 else "NORTH"
-	detail_label.text = "%s FROM %s // R TO RESTART" % [last_player_death_cause, attack_direction]
-	_show_run_end_prompt("YOU DIED // ATTACK FROM %s" % attack_direction, false)
+	combat_events._on_player_died(source_position)
 
 func _spawn_player_death_ragdoll(source_position: Vector2) -> void:
-	if not is_instance_valid(player) or is_instance_valid(player_death_corpse): return
-	var death: Dictionary = pending_player_death_context.duplicate()
-	if death.is_empty():
-		var attack_id := "fist"
-		var closest_distance := INF
-		for enemy_node in get_tree().get_nodes_in_group("enemy"):
-			if not enemy_node is Node2D or not is_instance_valid(enemy_node): continue
-			var distance := (enemy_node as Node2D).global_position.distance_to(source_position)
-			if distance < closest_distance:
-				closest_distance = distance
-				attack_id = "hound_bite" if str(enemy_node.get("actor_type")) == "dog" else "fist"
-		var profile := AttackCatalog.get_impact_profile(attack_id)
-		var direction := source_position.direction_to(player.global_position)
-		if direction.length_squared() < 0.001: direction = Vector2.RIGHT.rotated(player.rotation)
-		death = {
-			"direction": direction,
-			"knockback": profile.knockback,
-			"blood_power": profile.blood_power,
-			"style": profile.style,
-			"hit_zone": "torso",
-			"hit_position": player.global_position,
-			"attack_id": attack_id,
-			"travel_distance": closest_distance if closest_distance < INF else 0.0,
-		}
-		last_player_death_cause = attack_id.to_upper().replace("_", " ")
-	var corpse := CORPSE_SCENE.instantiate()
-	corpse.position = to_local(player.global_position)
-	var living_pose: Dictionary = player.get_lifecycle_pose() if player.has_method("get_lifecycle_pose") else {}
-	corpse.setup(
-		player.rotation,
-		death.get("direction", Vector2.RIGHT),
-		float(death.get("knockback", 18.0)),
-		float(death.get("blood_power", 1.0)),
-		str(death.get("style", "melee")),
-		str(death.get("hit_zone", "torso")),
-		str(death.get("attack_id", "fist")),
-		float(death.get("travel_distance", 0.0)),
-		"human",
-		"player",
-		living_pose
-	)
-	RuntimeBudget.add_persistent("player_ragdoll", corpse, self)
-	player_death_corpse = corpse
-	player.collision_layer = 0
-	player.collision_mask = 0
-	player.visible = false
-	pending_player_death_context.clear()
+	combat_events._spawn_player_death_ragdoll(source_position)
 
 func _trigger_death_flash() -> void:
 	_show_flash(Color(0.85, 0.03, 0.08, 0.48), 0.22)

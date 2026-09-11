@@ -2,7 +2,7 @@
 
 An original Godot 4 room-combat shooter built around monochrome pixels, persistent crimson blood and modular firearms.
 
-## Current build: 1.3.1
+## Current build: 1.3.2
 
 - Six floors draw distinct venues from twelve authored building shells. Each floor has four or five combat rooms and 18–24 enemies.
 - A 100-composition deck supplies enemy, patrol and cover arrangements, with eight rotations/reflections. A fresh scene entry (including retry) re-deals formations; explicit preview seeds reproduce layouts.
@@ -31,7 +31,7 @@ Open `project.godot` with **Godot 4.7.1**. The default scene is the title menu; 
 | F1–F3 | Choose a visible optional reward |
 | Esc | Pause / back |
 
-See [current runtime rules](docs/ROGUELIKE_RUNTIME.md), [Blood Rage and synergies](docs/BLOOD_RAGE.md), and [room compositions](docs/ROOM_DECK_100.md). Historical version notes live in [CHANGELOG.md](CHANGELOG.md); they are not the current gameplay contract.
+See [code architecture](docs/ARCHITECTURE.md), [current runtime rules](docs/ROGUELIKE_RUNTIME.md), [Blood Rage and synergies](docs/BLOOD_RAGE.md), and [room compositions](docs/ROOM_DECK_100.md). Historical version notes live in [CHANGELOG.md](CHANGELOG.md); they are not the current gameplay contract.
 
 ## Verify
 

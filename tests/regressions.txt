@@ -83,3 +83,5 @@ tests/test_mission_result_flow.tscn
 tests/test_room_run_visibility.tscn
 tests/test_atomic_saves.tscn
 tests/test_rage_perk_integration.tscn
+
+tests/test_architecture_contracts.tscn

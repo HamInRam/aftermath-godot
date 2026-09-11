@@ -26,7 +26,7 @@ After every third cleared room, one optional F1–F3 choice can be taken per flo
 
 Standard buildings occupy 768×448 native world-pixel space with 8px cells and 24px doors. The 320×180 UI uses independent cards: ammunition and health at lower left, blood at lower right. The help page scrolls while Back remains fixed. Palette and postprocessing remain centralized.
 
-Main owns scene lifetime and signals. ProjectileSpawner handles projectile construction and modifiers, EnemyVisualController handles actor presentation, and WorldAcoustics handles portal propagation. Legacy authoring and save interfaces remain available without enabling retired cleaning/restoration gameplay.
+CombatLevel (Main) owns scene lifetime and signal adapters. FloorFlowController owns deployment, checkpoints, exits and completion; CombatEventController owns trigger records and hit/death dispatch. RunSnapshot, LoadoutSnapshot, PerkSnapshot, FloorReport and typed shot events define the new internal data boundaries. See [ARCHITECTURE.md](ARCHITECTURE.md). ProjectileSpawner handles projectile construction and modifiers, EnemyVisualController handles actor presentation, and WorldAcoustics handles portal propagation. Legacy authoring and save interfaces remain available without enabling retired cleaning/restoration gameplay.
 
 AtomicJsonStore stages complete JSON before replacing the primary and preserves a previous-valid backup. Corrupt primary files fall back to that backup, malformed values are sanitized, and failed writes emit store failure signals plus a warning. Resetting a test/save removes associated backup and staging files too.
 

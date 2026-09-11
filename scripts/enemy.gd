@@ -73,7 +73,26 @@ func _evaluate_shortcut_path() -> void:
 			shortcut_cells.clear()
 			return
 var tile_world: Node
-var state := State.IDLE
+signal state_changed(previous: State, current: State, cause: StringName)
+var _state: State = State.IDLE
+var last_transition_cause: StringName = &"spawn"
+# Compatibility writes (tests/tools) still pass through the transition gateway.
+var state: State:
+	get: return _state
+	set(value): transition_to(value, &"external")
+
+func transition_to(next_state: State, cause: StringName = &"external") -> bool:
+	if is_dead or next_state < State.IDLE or next_state > State.KNOCKED_DOWN: return false
+	if next_state == _state: return true
+	var previous: State = _state
+	_state = next_state
+	last_transition_cause = cause
+	state_pose_pulse = 0.22
+	previous_visual_state = next_state
+	queue_redraw()
+	state_changed.emit(previous, next_state, cause)
+	return true
+
 var alert_level := AlertLevel.NORMAL
 var alert_memory_time := 0.0
 var investigation_target := Vector2.ZERO
@@ -257,7 +276,7 @@ func _physics_process(delta: float) -> void:
 	# struck guards retain their investigation after the hit reaction completes.
 	if not room_combat_active and state not in [State.STAGGERED, State.KNOCKED_DOWN]:
 		if state != State.IDLE:
-			state = State.IDLE
+			transition_to(State.IDLE, &"dormant_room")
 			path_points.clear()
 			path_refresh = 0.0
 		player_in_sight = false
@@ -318,7 +337,7 @@ func _physics_process(delta: float) -> void:
 		_release_corpse_claim()
 		if tactical_role == "none": tactical_role = "push"
 		if state not in [State.CHASE, State.ATTACK]:
-			state = State.CHASE
+			transition_to(State.CHASE, &"visual_acquisition")
 			_reset_movement_progress()
 		alertness = 1.0
 		_raise_alert(AlertLevel.ALERT, alert_memory_duration)
@@ -327,7 +346,7 @@ func _physics_process(delta: float) -> void:
 		chase_lost_time = 0.0
 	elif state in [State.CHASE, State.ATTACK]:
 		if state == State.ATTACK:
-			state = State.CHASE
+			transition_to(State.CHASE, &"lost_visual_contact")
 			attack_windup_time = 0.0
 		if tactical_move_mode.is_empty(): chase_lost_time += delta
 		if chase_lost_time >= chase_memory_duration:
@@ -663,7 +682,7 @@ func set_room_combat_active(active: bool) -> void:
 	player_in_sight = false
 	cached_visual_contact = false
 	visual_exposure = 0.0
-	if state not in [State.STAGGERED, State.KNOCKED_DOWN]: state = State.IDLE
+	if state not in [State.STAGGERED, State.KNOCKED_DOWN]: transition_to(State.IDLE, &"set_room_combat_active")
 	path_points.clear()
 	path_refresh = 0.0
 	_reset_movement_progress()
@@ -695,7 +714,7 @@ func _begin_attack() -> void:
 	if not CombatDirector.request_fire_token(self):
 		tactical_decision_cooldown = maxf(tactical_decision_cooldown, randf_range(0.08, 0.16))
 		return
-	state = State.ATTACK
+	transition_to(State.ATTACK, &"begin_attack")
 	attack_windup_time = EnemyCombatController.attack_windup(enemy_type) * attack_windup_multiplier
 	attack_windup_duration = attack_windup_time
 	if enemy_type == "gunner": committed_aim_position = EnemyCombatController.committed_target(player, aim_prediction_seconds)
@@ -709,7 +728,7 @@ func _update_attack(delta: float, to_player: Vector2, distance: float, has_visua
 	var melee_contact := enemy_type == "melee" and _can_reach_player_with_melee(distance)
 	if not has_visual_contact and not melee_contact:
 		CombatDirector.release_fire_token(self)
-		state = State.CHASE
+		transition_to(State.CHASE, &"update_attack")
 		attack_windup_time = 0.0
 		return
 	var committed_direction := global_position.direction_to(committed_aim_position) if enemy_type == "gunner" else to_player.normalized()
@@ -731,7 +750,7 @@ func _update_attack(delta: float, to_player: Vector2, distance: float, has_visua
 	elif melee_contact:
 		_execute_melee_attack()
 	CombatDirector.release_fire_token(self)
-	state = State.CHASE
+	transition_to(State.CHASE, &"update_attack")
 	attack_windup_time = 0.0
 
 func _effective_melee_range() -> float:
@@ -858,7 +877,7 @@ func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
 func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_claim := false) -> void:
 	_clear_tactical_move()
 	if not keep_corpse_claim: _release_corpse_claim()
-	state = State.INVESTIGATE
+	transition_to(State.INVESTIGATE, &"begin_investigation")
 	investigation_target = target
 	investigation_wait = 0.0
 	noise_reaction_delay = 0.0
@@ -878,10 +897,10 @@ func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_cla
 func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
 	_clear_tactical_move()
 	if is_fixed_sentry:
-		state = State.IDLE
+		transition_to(State.IDLE, &"begin_search")
 		alertness = 0.0
 		return
-	state = State.SEARCH
+	transition_to(State.SEARCH, &"begin_search")
 	search_points.clear()
 	search_index = 0
 	search_wait = 0.0
@@ -905,7 +924,7 @@ func _begin_search(origin: Vector2, likely_direction: Vector2) -> void:
 func _begin_sector_search(origin: Vector2, likely_direction: Vector2, sector_sign: float) -> void:
 	_clear_tactical_move()
 	if is_fixed_sentry: return
-	state = State.SEARCH
+	transition_to(State.SEARCH, &"begin_sector_search")
 	search_points = EnemyNavigation.build_sector_search(tile_world, origin, likely_direction, search_radius, sector_sign)
 	search_index = 0
 	search_wait = 0.0
@@ -947,7 +966,7 @@ func _begin_return_to_patrol() -> void:
 	_clear_tactical_move()
 	_release_corpse_claim()
 	tactical_role = "none"
-	state = State.RETURN
+	transition_to(State.RETURN, &"begin_return_to_patrol")
 	return_target = home_position
 	if not patrol_waypoints.is_empty():
 		var nearest_index := 0
@@ -965,7 +984,7 @@ func _begin_return_to_patrol() -> void:
 
 func _update_return_to_patrol(delta: float) -> void:
 	if global_position.distance_to(return_target) < 6.0:
-		state = State.IDLE
+		transition_to(State.IDLE, &"update_return_to_patrol")
 		patrol_mode = PatrolMode.WAITING if patrol_waypoints.size() >= 2 else PatrolMode.SENTRY
 		patrol_wait_time = randf_range(patrol_wait_min, maxf(patrol_wait_min, patrol_wait_max))
 		sentry_base_rotation = rotation
@@ -1045,7 +1064,7 @@ func _update_movement_progress(delta: float, expected_to_move: bool) -> void:
 			_release_corpse_claim()
 			_begin_return_to_patrol()
 		State.RETURN:
-			state = State.IDLE
+			transition_to(State.IDLE, &"update_movement_progress")
 			tactical_role = "none"
 		State.CHASE:
 			strafe_sign *= -1.0
@@ -1086,7 +1105,7 @@ func receive_combat_noise_result(world_position: Vector2, radius: float, _source
 		guard_facing = global_position.direction_to(world_position).angle()
 		alertness = maxf(alertness, 0.52 if role == "guard" else 0.38)
 		if state not in [State.CHASE, State.ATTACK]:
-			state = State.IDLE
+			transition_to(State.IDLE, &"receive_combat_noise_result")
 			path_points.clear()
 		queue_redraw()
 		return true
@@ -1143,7 +1162,7 @@ func receive_tactical_assignment(world_position: Vector2, likely_direction: Vect
 		"guard":
 			guard_alert_time = minf(alert_memory_duration, 6.0)
 			guard_facing = global_position.direction_to(world_position).angle()
-			state = State.IDLE
+			transition_to(State.IDLE, &"receive_tactical_assignment")
 			path_points.clear()
 		"observe":
 			guard_alert_time = 3.0
@@ -1190,7 +1209,7 @@ func apply_stagger(push_direction: Vector2, duration: float) -> void:
 	ballistic_push_active = false
 	_clear_tactical_move()
 	_release_corpse_claim()
-	state = State.STAGGERED
+	transition_to(State.STAGGERED, &"apply_stagger")
 	_reset_movement_progress()
 	stagger_time = duration
 	velocity = push_direction.normalized() * 62.0
@@ -1212,7 +1231,7 @@ func take_door_hit(hit_direction: Vector2, hit_type: String) -> void:
 	if knockdown_resistance >= 1.0:
 		apply_stagger(hit_direction, 0.24)
 		return
-	state = State.KNOCKED_DOWN
+	transition_to(State.KNOCKED_DOWN, &"take_door_hit")
 	_reset_movement_progress()
 	knockdown_time = KNOCKDOWN_DURATION
 	velocity = hit_direction.normalized() * 150.0

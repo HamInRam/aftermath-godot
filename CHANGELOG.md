@@ -1,3 +1,11 @@
+# Architecture boundaries — 1.3.2
+
+- Move deployment, checkpoints, retry, floor completion and exit transitions into a scene-owned FloorFlowController.
+- Move shot accounting, hit/death handling and combat feedback dispatch into CombatEventController. CombatLevel retains compatibility callbacks and shared scene services.
+- Route all Enemy state writes through a typed transition gateway with transition causes, notifications, idempotent same-state requests and a dead-actor guard.
+- Store detached RunSnapshot, LoadoutSnapshot and PerkSnapshot values; use typed shot events, ShotRecord and FloorReport internally while preserving dictionary save adapters.
+- Add regression coverage for nested checkpoint isolation, JSON round trips, malformed snapshot values, mixed pellet completion, failed scene-transition rollback and controller lifetime.
+
 # Runtime integration repair — 1.3.1
 
 - Restore dormant patrol, evidence-driven investigation/search and bounded noise/radio coordination inside active rooms.
