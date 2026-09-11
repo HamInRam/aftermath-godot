@@ -223,10 +223,6 @@ func _ready() -> void:
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
-	# Dormant rooms own no patrol, perception, wound or navigation ticks.
-	if not room_combat_active and state not in [State.STAGGERED, State.KNOCKED_DOWN]:
-		velocity = Vector2.ZERO
-		return
 	shortcut_pending_time = maxf(0.0, shortcut_pending_time - delta)
 	shortcut_flank_time = maxf(0.0, shortcut_flank_time - delta)
 	if shortcut_pending_time <= 0.0: shortcut_cells.clear()
@@ -245,33 +241,7 @@ func _physics_process(delta: float) -> void:
 	guard_alert_time = maxf(0.0, guard_alert_time - delta)
 	alert_transition_pulse = maxf(0.0, alert_transition_pulse - delta)
 	state_pose_pulse = maxf(0.0, state_pose_pulse - delta)
-	if is_instance_valid(legs_visual) and legs_visual.visible:
-		var local_motion := velocity.rotated(-rotation)
-		if local_motion.length_squared() > 0.5: legs_visual.rotation = local_motion.angle()
-		legs_visual.update_pose(delta, local_motion, move_speed, "attack" if state == State.ATTACK else "idle", clampf(state_pose_pulse / 0.22, 0.0, 1.0))
-	if is_instance_valid(lifecycle_rig):
-		visual_update_accumulator += delta
-		var near_camera := not is_instance_valid(player) or global_position.distance_squared_to(player.global_position) <= 260.0 * 260.0
-		var reactive_visual := state in [State.ATTACK, State.STAGGERED, State.KNOCKED_DOWN] or state_pose_pulse > 0.0 or active_bleed_time > 0.0
-		var visual_step := 1.0 / 30.0 if near_camera or reactive_visual else 1.0 / 8.0
-		if visual_update_accumulator >= visual_step:
-			var visual_delta := minf(visual_update_accumulator, 0.15)
-			visual_update_accumulator = 0.0
-			var rig_action := "attack" if state == State.ATTACK or melee_swing_time > 0.0 else "idle"
-			var rig_amount := clampf(state_pose_pulse / 0.22, 0.0, 1.0) if rig_action == "attack" else 0.0
-			lifecycle_rig.set_weapon_stance("hound" if actor_type == "dog" else ("gun" if enemy_type == "gunner" else "melee"))
-			if actor_type != "dog" and enemy_type == "gunner" and gun.gun_data != null:
-				lifecycle_rig.set_weapon_stance(gun.gun_data.weapon_class)
-				if gun.is_reloading:
-					rig_action = "reload"
-					rig_amount = 1.0 - gun.reload_timer.time_left / maxf(gun.active_reload_duration, 0.01)
-			lifecycle_rig.set_weapon_presentation(gun.visual_offset, gun.visual_angle, gun.magazine_offset)
-			lifecycle_rig.update_lifecycle(visual_delta, velocity.rotated(-rotation), move_speed, Vector2.ZERO, 0.0, rig_action, rig_amount)
-			gun.z_index = 0 if lifecycle_rig.weapon_should_render_behind() else 2
-	if state != previous_visual_state:
-		state_pose_pulse = 0.22
-		previous_visual_state = state
-		queue_redraw()
+	_update_living_visuals(delta)
 	_update_alert_memory(delta)
 	if tactical_role in ["guard", "orient", "observe"] and guard_alert_time <= 0.0: tactical_role = "none"
 	# The root only draws static compatibility/debug marks. State changes and
@@ -293,7 +263,7 @@ func _physics_process(delta: float) -> void:
 		player_in_sight = false
 		cached_visual_contact = false
 		visual_exposure = 0.0
-		velocity = Vector2.ZERO
+		_update_patrol(delta)
 		return
 	var to_player := player.global_position - global_position
 	var distance := to_player.length()
@@ -360,7 +330,7 @@ func _physics_process(delta: float) -> void:
 			state = State.CHASE
 			attack_windup_time = 0.0
 		if tactical_move_mode.is_empty(): chase_lost_time += delta
-		if chase_lost_time >= chase_memory_duration and not room_combat_active:
+		if chase_lost_time >= chase_memory_duration:
 			_clear_tactical_move()
 			_begin_search(investigation_target, last_seen_direction)
 	if _update_weapon_scavenge(delta): return
@@ -373,9 +343,6 @@ func _physics_process(delta: float) -> void:
 		rotation = lerp_angle(rotation, global_position.direction_to(investigation_target).angle(), 1.0 - exp(-12.0 * delta))
 		move_and_slide()
 		return
-	if room_combat_active and state in [State.IDLE, State.INVESTIGATE, State.SEARCH, State.RETURN]:
-		state = State.CHASE
-		investigation_target = player.global_position
 	if state == State.IDLE:
 		_update_patrol(delta)
 		return
@@ -527,6 +494,9 @@ func _physics_process(delta: float) -> void:
 		elif enemy_type == "melee" and distance <= melee_range and melee_cooldown <= 0.0:
 			_begin_attack()
 
+func _update_living_visuals(delta: float) -> void:
+	EnemyVisualController._update_living_visuals(self, delta)
+
 func _update_patrol(delta: float) -> void:
 	if tactical_role in ["guard", "orient", "observe"] and guard_alert_time > 0.0:
 		velocity = velocity.move_toward(Vector2.ZERO, move_speed * 8.0 * delta)
@@ -557,9 +527,9 @@ func _update_patrol(delta: float) -> void:
 		patrol_wait_time = randf_range(patrol_wait_min, maxf(patrol_wait_min, patrol_wait_max))
 		velocity = Vector2.ZERO
 		return
-	if (path_points.is_empty() or path_refresh <= 0.0) and is_instance_valid(tile_world):
+	if path_points.is_empty() or path_refresh <= 0.0:
 		path_refresh = 0.5
-		path_points = tile_world.get_navigation_path(global_position, patrol_target) if tile_world.has_method("get_navigation_path") else PackedVector2Array([patrol_target])
+		path_points = tile_world.get_navigation_path(global_position, patrol_target) if is_instance_valid(tile_world) and tile_world.has_method("get_navigation_path") else PackedVector2Array([patrol_target])
 		if path_points.is_empty():
 			patrol_mode = PatrolMode.SENTRY
 			sentry_base_rotation = rotation
@@ -681,8 +651,8 @@ func set_room_combat_active(active: bool) -> void:
 	if is_instance_valid(gun): gun.set_process(active)
 	set_meta("rogue_room_active", active)
 	if active:
-		if state not in [State.STAGGERED, State.KNOCKED_DOWN, State.ATTACK]: state = State.CHASE
-		if is_instance_valid(player): investigation_target = player.global_position
+		# Activation grants perception, not knowledge of the player position.
+		vision_scan_cooldown = 0.0
 		return
 	CombatDirector.release_fire_token(self)
 	_release_corpse_claim()
@@ -1397,81 +1367,4 @@ func apply_lifecycle_impact(direction: Vector2, power: float, hit_zone := "torso
 	if is_instance_valid(lifecycle_rig): lifecycle_rig.apply_hit(direction, power, hit_zone)
 
 func _draw() -> void:
-	if not is_dead and get_meta("polluter", false):
-		# Grayscale twin canisters identify the contamination carrier.
-		for side in [-1, 1]:
-			draw_rect(Rect2(-7, side * 5 - 2, 6, 4), Color("eeeeee"))
-			draw_rect(Rect2(-6, side * 5 - 1, 4, 2), Color("222222"))
-	# Tiny authored role badges survive blood and debris without becoming large
-	# floating HUD markers: cyan gunner, pink rusher, orange assault, violet heavy.
-	if not is_dead:
-		match archetype_id:
-			"melee":
-				draw_line(Vector2(-3, -7), Vector2(0, -9), Color("ff4f91"), 1.0)
-				draw_line(Vector2(0, -9), Vector2(3, -7), Color("ff4f91"), 1.0)
-			"assault":
-				draw_rect(Rect2(-4, -9, 3, 2), Color("ff9a45"))
-				draw_rect(Rect2(1, -9, 3, 2), Color("ff9a45"))
-			"heavy":
-				draw_rect(Rect2(-3, -10, 6, 3), Color("a59cff"), false, 1.0)
-			"gunner":
-				draw_line(Vector2(-2, -8), Vector2(2, -8), Color("62e8ff"), 1.0)
-	if not is_dead and (Settings.high_contrast_enemies or state in [State.CHASE, State.ATTACK]):
-		var threat_color := Color(1.0, 0.16, 0.28, 0.92) if state in [State.CHASE, State.ATTACK] else Color(1.0, 0.78, 0.18, 0.72)
-		draw_line(Vector2(-8, -7), Vector2(-4, -7), threat_color, 1.0)
-		draw_line(Vector2(-8, -7), Vector2(-8, -3), threat_color, 1.0)
-		draw_line(Vector2(-8, 7), Vector2(-4, 7), threat_color, 1.0)
-		draw_line(Vector2(8, -7), Vector2(5, -7), threat_color, 1.0)
-	if melee_swing_time > 0.0:
-		PIXEL_PAINTER.arc(self, Vector2.ZERO, roundi(melee_range), -0.65, 0.65, Color("ffd0a8"), 10)
-	if state == State.ATTACK and attack_windup_time > 0.0:
-		var charge := 1.0 - clampf(attack_windup_time / maxf(0.001, attack_windup_duration), 0.0, 1.0)
-		PIXEL_PAINTER.arc(self, Vector2.ZERO, 9, -0.48, lerpf(-0.48, 0.48, charge), Color("ffe56b"), 8)
-		PIXEL_PAINTER.pixel(self, Vector2(7, 0), Color("fff3b0"))
-		# A short two-pixel tell communicates the committed firing lane without
-		# turning combat into a full laser-sight overlay.
-		draw_line(Vector2(9, -1), Vector2(13 + charge * 3.0, -1), Color(1.0, 0.38, 0.2, 0.35 + charge * 0.45), 1.0)
-		draw_line(Vector2(9, 1), Vector2(12 + charge * 2.0, 1), Color(1.0, 0.75, 0.28, 0.28 + charge * 0.38), 1.0)
-	if debug_draw_vision:
-		var half_fov := deg_to_rad(vision_fov_degrees * 0.5)
-		var vision_color := Color(0.2, 1.0, 0.45, 0.16) if player_in_sight else Color(1.0, 0.2, 0.32, 0.09)
-		var points := PackedVector2Array([Vector2.ZERO])
-		for index in range(17):
-			var angle := lerpf(-half_fov, half_fov, float(index) / 16.0)
-			points.append(Vector2.RIGHT.rotated(angle) * detection_range)
-		PIXEL_PAINTER.arc(self, Vector2.ZERO, roundi(detection_range), -half_fov, half_fov, Color(vision_color, 0.5), 24)
-		PIXEL_PAINTER.line(self, Vector2.ZERO, Vector2.RIGHT.rotated(-half_fov) * detection_range, Color(vision_color, 0.5))
-		PIXEL_PAINTER.line(self, Vector2.ZERO, Vector2.RIGHT.rotated(half_fov) * detection_range, Color(vision_color, 0.5))
-		for angle_step in range(-3, 4):
-			var ray_angle := half_fov * float(angle_step) / 3.0
-			for distance in range(16, roundi(detection_range), 16):
-				PIXEL_PAINTER.pixel(self, (Vector2.RIGHT.rotated(ray_angle) * distance).round(), vision_color)
-	draw_set_transform(Vector2.ZERO, -rotation, Vector2.ONE)
-	if alert_transition_pulse > 0.0:
-		var pulse_alpha := clampf(alert_transition_pulse / 0.32, 0.0, 1.0)
-		var pulse_color := Color("ff385f", pulse_alpha) if alert_level == AlertLevel.ALERT else Color("ffd166", pulse_alpha)
-		PIXEL_PAINTER.circle(self, Vector2(0, -9), roundi(4.0 + (1.0 - pulse_alpha) * 3.0), pulse_color, true)
-	if state == State.INVESTIGATE:
-		if is_instance_valid(claimed_corpse):
-			# A compact body silhouette distinguishes corpse discovery from an
-			# ordinary sound investigation without adding floating text.
-			PIXEL_PAINTER.pixel(self, Vector2(0, -11), Color("82d8ff"))
-			PIXEL_PAINTER.line(self, Vector2(-3, -9), Vector2(3, -9), Color("82d8ff"))
-			draw_line(Vector2(-2, -8), Vector2(-3, -6), Color("82d8ff"), 1.0)
-			draw_line(Vector2(2, -8), Vector2(3, -6), Color("82d8ff"), 1.0)
-		else:
-			PIXEL_PAINTER.arc(self, Vector2(0, -10), 2, -PI * 0.85, PI * 0.35, Color("ffd166"), 7)
-			PIXEL_PAINTER.pixel(self, Vector2(0, -7), Color("ffd166"))
-	elif state == State.SEARCH:
-		PIXEL_PAINTER.arc(self, Vector2(0, -9), 3, -PI * 0.2, PI * 1.3, Color("66e0ff"), 9)
-		draw_line(Vector2(2, -7), Vector2(4, -5), Color("66e0ff"), 1.0)
-	elif state == State.RETURN:
-		draw_line(Vector2(-3, -9), Vector2(3, -9), Color("9cc8ff"), 1.0)
-		draw_line(Vector2(-3, -9), Vector2(-1, -11), Color("9cc8ff"), 1.0)
-	elif state in [State.CHASE, State.ATTACK]:
-		PIXEL_PAINTER.line(self, Vector2(0, -12), Vector2(0, -8), Color("ff385f"))
-		PIXEL_PAINTER.pixel(self, Vector2(0, -7), Color("ff385f"))
-	elif tactical_role == "guard" and guard_alert_time > 0.0:
-		draw_line(Vector2(-3, -9), Vector2(3, -9), Color("9cf7c8"), 1.0)
-		draw_line(Vector2(-3, -9), Vector2(0, -6), Color("9cf7c8"), 1.0)
-		draw_line(Vector2(3, -9), Vector2(0, -6), Color("9cf7c8"), 1.0)
+	EnemyVisualController._draw(self)

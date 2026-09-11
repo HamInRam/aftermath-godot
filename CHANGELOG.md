@@ -1,3 +1,14 @@
+# Runtime integration repair — 1.3.1
+
+- Restore dormant patrol, evidence-driven investigation/search and bounded noise/radio coordination inside active rooms.
+- Wire all six combat synergies into Blood Rage with accurate labels, expiring timers, shared pellet transactions and persistent checkpoints.
+- Add atomic JSON replacement, last-valid backups, corrupt-save recovery, nested validation and visible write-failure diagnostics.
+- Split projectile creation, enemy presentation and world acoustics from the scene scripts.
+- Repair freed liquid upload handling and saturated projectile transaction bookkeeping.
+- Share one regression manifest/runner between local and CI execution, preserve failure logs and update obsolete HUD/prop/roster expectations to current gameplay.
+
+The notes below are historical.
+
 # Changelog
 
 ## [Unreleased] - Shotgun Contact and Blood Feedback Repair

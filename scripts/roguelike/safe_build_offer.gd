@@ -34,21 +34,22 @@ func offer(index: int) -> void:
 	pending = not choices.is_empty()
 	label.text = "OPTIONAL COMBAT SYNERGY"
 	for slot in choices.size():
-		label.text += "\nF%d %s" % [slot + 1, blood.perks.DEFINITIONS[choices[slot]]]
-		if blood.perks.learned.is_empty(): label.text += [" / TANK70", " / COST5", " / LOW DMG"][slot]
+		label.text += "\nF%d %s" % [slot + 1, (blood.perks.RAGE_DEFINITIONS if blood.blood_rage_mode else blood.perks.DEFINITIONS)[choices[slot]]]
+		if blood.perks.learned.is_empty() and not blood.blood_rage_mode: label.text += [" / TANK70", " / COST5", " / LOW DMG"][slot]
 
 func _process(delta: float) -> void:
-	var safe: bool = pending and is_instance_valid(rooms) and rooms.engaged_rooms.is_empty() and not rooms.run_finished
+	var safe: bool = pending and not get_tree().paused and is_instance_valid(rooms) and rooms.engaged_rooms.is_empty() and not rooms.run_finished
 	quiet_time = quiet_time + delta if safe else 0.0
 	label.visible = safe and quiet_time >= 1.0
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not label.visible or not pending or consumed or not is_instance_valid(blood): return
+	if get_tree().paused or not is_instance_valid(rooms) or not rooms.engaged_rooms.is_empty() or rooms.run_finished: return
 	if event is not InputEventKey or not event.pressed or event.echo: return
 	var keys := [KEY_F1, KEY_F2, KEY_F3]
 	var index := keys.find(event.physical_keycode)
 	if index < 0 or index >= choices.size(): return
-	if blood.perks.learned.is_empty(): blood.set_build(["harvester", "heavy", "mobile"][index])
+	if blood.perks.learned.is_empty() and not blood.blood_rage_mode: blood.set_build(["harvester", "heavy", "mobile"][index])
 	if not blood.perks.acquire(choices[index]): return
 	perk_selected.emit(choices[index])
 	consumed = true

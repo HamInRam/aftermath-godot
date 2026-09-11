@@ -25,7 +25,7 @@ longer binds the legacy blood-payment callable to the player's gun.
   most about 25s with ideal continuous recovery (minor fixed-tick differences).
 * At zero, rage ends and ordinary gunplay resumes using the stored ammunition.
   Floor checkpoints retain both meter charge and the separate rage state.
-* The top-left ammo card returns; the bottom-right blood card stays separate.
+* The lower-left ammo card returns; the bottom-right blood card stays separate.
   The ammo card says INF / RAGE during rage, and returns to real ammo afterward.
 
 Regression scene: `tests/test_blood_rage.tscn` exercises production wiring,
@@ -33,3 +33,18 @@ every currently enabled weapon, reload interruption, finite auto-recovery,
 red projectiles, floor-state restoration and normal fire after rage.
 Legacy blood-ammo tests remain isolated compatibility coverage, not the active
 player controls contract.
+
+## Current optional synergies
+
+The safe room offer grants a perk without silently selecting a retired blood style.
+
+| Perk | Rage-mode effect |
+| --- | --- |
+| Harvest Step | Real siphoning grants +10% movement for one second, including during Rage. |
+| Reload Breach | A completed reload arms +0.75 penetration on the next Rage trigger; all pellets share it. |
+| Hot Swap | Throwing arms +25% damage on the next Rage trigger within four seconds. |
+| Last Word | Shots in the final one second of remaining charge gain +35% damage. |
+| Blood Clock | Drain falls from 14/s to 12/s; recovery stays capped at 10/s (at most about 50 seconds with ideal recovery). |
+| Field Cycle | A shotgun kill transfers one existing reserve round into the magazine, with a 0.6s kill lock. |
+
+Damage perks never multiply the ground-blood budget. Perk timers update in Rage mode; floor/checkpoint snapshots retain their state. `test_rage_perk_integration.tscn` covers the real offer/reload/fire path, pellet sharing, timed expiry, checkpoint restoration and pool-saturation bookkeeping.

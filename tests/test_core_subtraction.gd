@@ -26,7 +26,7 @@ func _run() -> void:
 	assert(enemy.position == before and enemy.path_refresh == 0.75)
 	assert(not enemy.gun.is_processing())
 	enemy.set_room_combat_active(true)
-	assert(enemy.state == enemy.State.CHASE and enemy.gun.is_processing())
+	assert(enemy.state == enemy.State.IDLE and enemy.gun.is_processing(), "activation permits perception without revealing the player")
 	enemy.queue_free()
 	var prop := DestructibleProp.new()
 	assert(not prop.has_method("begin_drag") and not prop.has_method("enter_cleanup_restore_state"))

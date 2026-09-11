@@ -41,11 +41,10 @@ func _ready() -> void:
 	_expect(prop.state == DestructibleProp.PropState.DESTROYED, "second impact should collapse the prop into low-pixel debris")
 	_expect(tile_world.path_grid.is_point_solid(original_cell) == false, "destroyed furniture should open its navigation cell")
 	_expect(level.mission_tracker.property_damage >= 1, "destroyed props should count as forensic property damage")
-	_expect(prop.get_interaction_prompt().contains("RESTORE"), "destroyed props should become cleanup interactions")
-	_expect(prop.interact(), "cleanup should restore destroyed furniture")
+	_expect(not prop.has_method("interact") and not prop.has_method("enter_cleanup_restore_state"), "destroyed furniture must not expose retired restoration actions")
+	prop.take_damage(10, prop.global_position - Vector2.RIGHT)
 	await get_tree().process_frame
-	_expect(prop.state == DestructibleProp.PropState.RESTORED, "restoration should return the prop to a stable state")
-	_expect(tile_world.path_grid.is_point_solid(original_cell), "restored furniture should close its navigation cell")
+	_expect(prop.state == DestructibleProp.PropState.DESTROYED and not tile_world.path_grid.is_point_solid(original_cell), "repeated impacts must not restore solidity")
 	level.queue_free()
 	await get_tree().process_frame
 	if failures == 0: print("destructible environment regression: PASS")

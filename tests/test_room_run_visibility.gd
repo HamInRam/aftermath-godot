@@ -105,6 +105,17 @@ func _test_real_local_hit_reaction() -> void:
 		controller.complete_reward())
 	controller.run_cleared.connect(func(count: int) -> void: floor_events.append(count))
 	controller.configure(live_world, enemies)
+	# Test real motion, not just visibility/process flags on a stub.
+	var dormant = guards[3]
+	dormant.configure_patrol(PackedVector2Array([dormant.position, dormant.position + Vector2(25, 0)]))
+	dormant.patrol_index = 1
+	dormant.patrol_mode = dormant.PatrolMode.MOVING
+	var before: Vector2 = dormant.position
+	for tick in 12:
+		await get_tree().physics_frame
+		dormant._physics_process(1.0 / 60.0)
+	_expect(dormant.position.distance_to(before) > 1.0, "a real dormant guard must walk its authored patrol")
+	_expect(not dormant.player_in_sight and not dormant.gun.is_processing(), "ambient patrol must not enable perception or gun simulation")
 	controller.update_room(player)
 	_expect(guards[0].room_combat_active and not guards[1].room_combat_active and not guards[3].room_combat_active, "entering west must leave distant rooms on patrol")
 	guards[1].take_damage(1, player.global_position)

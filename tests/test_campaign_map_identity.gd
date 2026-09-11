@@ -69,7 +69,7 @@ func _ready() -> void:
 		_expect(world.get_tactical_room_id(level.player.global_position) == "exterior_approach", "%s exterior spawn needs an explicit tactical room identity" % mission_id)
 		var visible_world: Vector2 = Vector2(320.0, 180.0) / Vector2(level.trauma_camera.zoom)
 		_expect(visible_world.x < building_rect.size.x and visible_world.y < building_rect.size.y, "%s camera should reveal a local room cluster, not the complete building" % mission_id)
-		_expect(level.started_enemy_count >= architectural_rooms.size() * 2 and level.started_enemy_count <= architectural_rooms.size() * 4, "%s must alternate short and full encounters within a 2-4 enemy room budget" % mission_id)
+		_expect(level.started_enemy_count >= 18 and level.started_enemy_count <= 24, "%s must respect the current 18-24 enemy floor budget" % mission_id)
 		world.room_run_seed_override = 1701
 		var encounter_preview_a: Dictionary = world.get_handcrafted_encounter_layout()
 		world.room_run_seed_override = 2917
@@ -81,7 +81,7 @@ func _ready() -> void:
 		var unique_modules := {}
 		for module_id: String in assigned_modules: unique_modules[module_id] = true
 		_expect(unique_modules.size() == assigned_modules.size(), "%s should not repeat a combat-room module within one floor" % mission_id)
-		var current_preview: Dictionary = world.get_handcrafted_encounter_layout()
+		var current_preview: Dictionary = SwarmLayout.build(world, world.get_handcrafted_encounter_layout())
 		_expect((current_preview.spawns as PackedVector2Array).size() == level.started_enemy_count, "%s current seed must preserve its actual encounter budget" % mission_id)
 		_expect(level.fixed_sentry_indices.is_empty(), "%s should use mobile patrols instead of permanent fixed sentries" % mission_id)
 		var authored_archetypes: Dictionary = {}
@@ -113,7 +113,7 @@ func _ready() -> void:
 		_expect(longest_fire_lane >= 10, "%s needs at least one readable ten-cell firearm lane" % mission_id)
 		var furniture_count := world.find_children("*", "DestructibleProp", true, false).size()
 		_expect(furniture_count >= 10, "%s needs enough authored destructible props to make firefights physically expressive" % mission_id)
-		_expect(furniture_count <= 16, "%s should preserve generous combat circulation instead of over-furnishing rooms (%d props)" % [mission_id, furniture_count])
+		_expect(furniture_count <= 16 + architectural_rooms.size() * 2, "%s must bound base furniture plus two perimeter props per room (%d props)" % [mission_id, furniture_count])
 		var signature := ""
 		for cell: Vector2i in wall_cells: signature += "%d,%d;" % [cell.x, cell.y]
 		_expect(not signatures.has(signature), "%s must not reuse another mission's wall topology" % mission_id)

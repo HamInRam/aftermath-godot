@@ -1,85 +1,39 @@
-# The Descent / shotgun repair verification — 2026-09-07
+# Runtime integration repair verification — 2026-09-10
 
-## Final consolidated run
+Godot 4.7.1.stable.official.a13da4feb on macOS / Apple M1, using an isolated self-contained engine and test data.
 
-Godot 4.7.1, macOS: **54/54 regression scenes passed**, plus successful import
-validation (**55/55 runner jobs**). `git diff --check` passed.
+## Consolidated run
 
-Report: `/var/folders/gx/j44c8k411wb4x99rnkgg3bgh0000gn/T/aftermath-regression-561exd2c/summary.json`.
+**84/84 active regression scenes passed, plus checked resource import: 85/85 runner jobs.**
+The exact scene list is `tests/regressions.txt`; local and CI use the same runner.
 
-Includes room-local AI, six-floor resource transfer and actual death/retry,
-weapon inventory/reload/throw, cadence and aim, door/projectile collisions,
-ragdoll wall safety, finite blood recovery, source-pixel artwork, settings,
-interface sizing and retired-cleanup boundaries.
+```sh
+python3 tools/run_regressions.py --godot /path/to/Godot --timeout 120 --output build/regressions
+```
 
-## Shotgun repair coverage
+Coverage includes evidence-driven AI, dormant patrol movement, actual Rage reward/reload/projectile integration, finite recovery, weapon and collision systems, six-floor transfer and retry, intermediate-floor exits and scoring, corrupt-save recovery, failed-write preservation and liquid/pool lifecycle regressions. Current HUD, roster and permanent-destruction expectations were updated to match the active gameplay contract.
 
-- Production Gun/Bullet/Enemy trials at 20/45/70/110px, three target facings,
-  canonical/legacy weapon IDs, 11/14/17px contact, eight world-space contact
-  directions, torso armour and a wall inside the barrel. The close-contact
-  before case emitted nine pellets with zero hits; after repair all nine hit.
-  No baseline damage increase was needed: the Mossberg remains 9×18.
-- 64 actor/trajectory centre-line combinations, off-centre head/limb contacts,
-  preserved world-space entry blood position and weapon-specific joint impulse.
-- Nine enhanced pellets through two targets each, using production Main budget
-  division and lethal transfer. Cost 3.5, raw budget 4581, nine 509-unit shares,
-  actual recovered resource 2.51955 (71.987%); second-target budgets all zero.
-  Expired enhanced mist creates no extra absorbable pixels. Peak 1935 unit-quad
-  particles remains within the existing room-wide batch limit.
-- Drained chunk queued for upload, deferred deletion, and immediate same-frame
-  repaint at the same coordinate: no freed-object cast and no lost fresh blood.
-- The first new corpse test observed only 200 frames (~3.33s), shorter than the
-  existing enemy articulation deadline (~3.43s). Corrected the test to assert
-  a maximum four-second deadline and observe 4.1s; physics was not shortened
-  merely to satisfy the test. The final consolidated run then passed.
+`git diff --check` passed. Scanning fixed, non-wildcard `res://` literals in scripts and resource files found no missing targets; this does not cover dynamically constructed paths.
 
-## Expanded coverage
+## Real renderer
 
-- 12 venue shells, 576 seeded world layouts and 48 base formations: navigation,
-  door apertures, source grayscale and broken-window paint invalidation.
-- 48 live actor directions and 30 corpse missing-module combinations: shared
-  artwork, role continuity, integer pixels, grayscale anatomy and continuous aim.
-- 64 weapon platforms across 8 class silhouettes: independent reload/recoil
-  presentation, conserved ammunition, pickup visibility, cadence and muzzle color.
-- Native menu layout, disjoint resource corners, long gun names, execution
-  keycaps, precision messages and reticle redraw quantization.
-- Ragdoll fixture corrected an endpoint-only measurement: one failing sample
-  moved 4.175px during the observation window but finished 1.126px from its start.
-  The same hand/pelvis reference, 18-frame window and 2px threshold now measure
-  peak excursion; no physics, seed or spawn was changed. Ten independent random
-  repeats then passed, followed by the final consolidated run.
+`tests/render_run_review.tscn` completed with `RENDER_REVIEW_OK`, without renderer or script errors, using OpenGL Compatibility on Apple M1 at 1920×1080. Combat, reward selection, help, aftermath and floor-clear captures were visually inspected. This verifies controlled engine rendering, not an entire human playthrough.
 
-## Actual renderer
+## Remaining limits
 
-`tests/render_run_review.tscn` completed without script/renderer errors at
-1920×1080. Viewed title, help, combat, controlled impact/death aftermath and
-floor completion captures under `/tmp/aftermath-render-review`.
-Final log: `/tmp/aftermath-noir-render.log`.
+The consolidated run still reported shutdown ObjectDB/resource diagnostics in these short fixtures:
 
-The captures confirm replacement artwork, gray anatomy against crimson blood,
-readable text and removal of the unrelated rectangular corpse shadow. This is
-controlled engine-rendered QA, not a claim of a prolonged human playthrough.
+- `test_weapon_throw`
+- `test_feedback_hierarchy`
+- `test_blood_action_flow`
+- `test_blood_rage`
+- `test_floor_exit`
+- `test_blood_terrain_room`
+- `test_cleanup_scoring`
+- `test_vertical_slice`
+- `test_mission_result_flow`
+- `test_rage_perk_integration`
 
-`tests/render_shotgun_review.tscn` additionally fired the real equipped Mossberg
-through the complete production kill path at 1920×1080. Inspected its before,
-impact and aftermath images under `/tmp/aftermath-shotgun-review`; the normal
-alerted target died and left the articulated corpse. Log:
-`/tmp/aftermath-shotgun-render.log`.
+These are recorded separately from functional pass/fail; this is not a clean memory-leak audit. Individual verbose reruns of weapon_throw and blood_rage did not reproduce the warnings, so their cause remains unresolved.
 
-`tests/test_shotgun_blood_feedback.tscn` also passed with the real renderer,
-including every submitted mist transform's unit scale/integer pixel edges.
-The headless dummy server cannot report those GPU transforms, so CI checks
-quad geometry/palette/economy while the renderer run checks transforms too.
-Log: `/tmp/aftermath-shotgun-feedback-gpu.log`.
-
-## Remaining limitations
-
-- The final run still records shutdown resource/ObjectDB diagnostics in
-  `test_weapon_throw`, `test_entry_loadout_flow` and `test_vertical_slice`. These are not represented as
-  a clean memory-leak audit. Other short-fixture teardown warnings have also
-  occurred in earlier runs.
-- Headless stress checks are not a sustained GPU frame-rate guarantee.
-- Long-run balancing, target-device profiling, controller-only playthroughs,
-  localization and distribution/export verification remain before release.
-- OTXO's complete boss, narrative and bartender-upgrade catalog is not included.
-  No zero-bug or commercial-completeness claim is made.
+No sustained target-device GPU/memory profile, full human six-floor playthrough or Windows/Linux export verification was performed. Retired tests outside the active manifest were not all reactivated. Large scripts were incrementally split, not comprehensively rewritten.

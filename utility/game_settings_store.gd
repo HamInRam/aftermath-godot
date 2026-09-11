@@ -1,6 +1,9 @@
 class_name GameSettingsStore
 extends Node
 
+signal save_failed(path: String)
+const JSON_STORE := preload("res://utility/atomic_json_store.gd")
+
 signal settings_changed
 
 const SCHEMA_VERSION := 3
@@ -58,20 +61,17 @@ func get_defaults() -> Dictionary:
 	}
 
 func load_settings() -> bool:
-	if not FileAccess.file_exists(save_path): return false
-	var file := FileAccess.open(save_path, FileAccess.READ)
-	if file == null: return false
-	var parsed = JSON.parse_string(file.get_as_text())
-	if not parsed is Dictionary or int(parsed.get("schema_version", -1)) not in [1, 2, SCHEMA_VERSION]: return false
+	var parsed := JSON_STORE.read_dictionary(save_path, [1, 2, SCHEMA_VERSION])
+	if parsed.is_empty(): return false
 	_apply_dictionary(parsed)
 	return true
 
 func save_settings() -> bool:
-	var file := FileAccess.open(save_path, FileAccess.WRITE)
-	if file == null: return false
-	file.store_string(JSON.stringify(to_dictionary(), "\t"))
-	file.close()
-	return true
+	var saved := JSON_STORE.write_dictionary(save_path, to_dictionary(), [1, 2, SCHEMA_VERSION])
+	if not saved:
+		save_failed.emit(save_path)
+		push_warning("Settings could not be saved; previous save retained: " + save_path)
+	return saved
 
 func to_dictionary() -> Dictionary:
 	return {
@@ -116,6 +116,17 @@ func apply_all() -> void:
 	_set_bus_volume("Ambience", ambience_volume)
 
 func _apply_dictionary(values: Dictionary) -> void:
+	# Ignore malformed nested values instead of converting dictionaries to floats.
+	var valid := {}
+	var defaults := get_defaults()
+	for key in values:
+		if not defaults.has(key): continue
+		var value: Variant = values[key]
+		if defaults[key] is bool:
+			if value is bool: valid[key] = value
+		elif (value is int or value is float) and is_finite(float(value)):
+			valid[key] = value
+	values = valid
 	master_volume = clampf(float(values.get("master_volume", master_volume)), 0.0, 1.0)
 	music_volume = clampf(float(values.get("music_volume", music_volume)), 0.0, 1.0)
 	sfx_volume = clampf(float(values.get("sfx_volume", sfx_volume)), 0.0, 1.0)
@@ -147,7 +158,7 @@ func _set_bus_volume(bus_name: String, linear_value: float) -> void:
 	AudioServer.set_bus_volume_db(bus_index, -80.0 if linear_value <= 0.001 else linear_to_db(linear_value))
 
 func remove_test_save() -> void:
-	if FileAccess.file_exists(save_path): DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+	JSON_STORE.remove_files(save_path)
 
 func _exit_tree() -> void:
 	ProceduralAudioLibrary.clear_cache()

@@ -52,6 +52,19 @@ func run() -> void:
 	check(chunk.image.get_pixel(4,4).a == 0, "final absorption erases the pixel")
 	canvas.free()
 
+	var liquids := PixelLiquidSystem.new()
+	add_child(liquids)
+	liquids.add_liquid_pixel(Vector2(4,4), &"water", 200)
+	var old_chunk = liquids.chunks[Vector2i.ZERO]
+	old_chunk.queue_free()
+	liquids.add_liquid_pixel(Vector2(4,4), &"water", 200)
+	var replacement = liquids.chunks[Vector2i.ZERO]
+	check(replacement != old_chunk, "same-frame repaint replaces a retiring liquid chunk")
+	await get_tree().process_frame
+	liquids._flush_upload_queue()
+	check(is_instance_valid(replacement) and liquids.chunks[Vector2i.ZERO] == replacement, "stale queued uploads cannot free or erase fresh liquid")
+	liquids.free()
+
 	var mist := BloodMistBatch.new()
 	add_child(mist)
 	mist.emit_mist(Vector2(-100,-100),Vector2.RIGHT,2,Color.RED,0.8,0)

@@ -8,6 +8,14 @@ const DEFINITIONS := {
 	"blood_clock": "KILL -> SKILL COOLDOWN -0.35S",
 	"field_cycle": "SHOTGUN KILL -> LOAD 1 RESERVE",
 }
+const RAGE_DEFINITIONS := {
+	"harvest_step": "SIPHON -> 1S +10% MOVEMENT",
+	"reload_breach": "RELOAD -> NEXT RAGE SHOT PIERCES",
+	"hot_swap": "THROW -> NEXT RAGE SHOT +25% / 4S",
+	"last_word": "FINAL RAGE SECOND -> +35% DAMAGE",
+	"blood_clock": "RAGE DRAIN 12/S INSTEAD OF 14/S",
+	"field_cycle": "SHOTGUN KILL -> LOAD 1 RESERVE",
+}
 var learned: Array[String] = []
 var harvest_time := 0.0
 var swap_time := 0.0
