@@ -4,12 +4,11 @@ extends CharacterBody2D
 const MATERIAL_BURST := preload("res://scripts/effects/material_burst.gd")
 const PHYSICAL_DEBRIS := preload("res://scripts/props/physical_debris.gd")
 const ENVIRONMENT_HAZARD := preload("res://scripts/effects/environment_hazard.gd")
-const RESTORATION_ANCHOR := preload("res://scripts/props/prop_restoration_anchor.gd")
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
 
 signal solidity_changed(solid: bool)
 
-enum PropState { INTACT, DAMAGED, DESTROYED, RESTORED }
+enum PropState { INTACT, DAMAGED, DESTROYED }
 
 const MOVABLE_KINDS := ["plant", "tv", "speaker", "crate", "vending", "slot_machine", "table"]
 
@@ -33,12 +32,7 @@ var displaced := false
 var contact_shifted := false
 var home_navigation_released := false
 var displacement_reported := false
-var cleanup_ready := false
-var dragging_actor: Node2D
-var restoration_anchor: Node2D
-var snap_radius := 11.0
 var physics_active := false
-var restoration_locked := false
 var erosion: PixelErosionMask
 var erosion_shapes: Array[CollisionShape2D] = []
 var erosion_pending := false
@@ -69,20 +63,8 @@ func _ready() -> void:
 	simulated_rotation = rotation
 	set_physics_process(false)
 
-func _create_restoration_anchor() -> void:
-	if not is_inside_tree() or is_instance_valid(restoration_anchor) or not is_movable(): return
-	restoration_anchor = RESTORATION_ANCHOR.new() as Node2D
-	var parent := get_parent()
-	if not is_instance_valid(parent): return
-	parent.add_child(restoration_anchor)
-	restoration_anchor.global_position = home_global_position
-	restoration_anchor.global_rotation = home_rotation
-	restoration_anchor.setup(_get_size(), prop_kind, accent)
-	if displaced: restoration_anchor.mark_needed()
-	if cleanup_ready: restoration_anchor.set_cleanup_active(true)
-
 func take_damage(amount: int, source_position := Vector2.ZERO) -> void:
-	if state in [PropState.DESTROYED, PropState.RESTORED]: return
+	if state == PropState.DESTROYED: return
 	var direction := source_position.direction_to(global_position) if source_position != Vector2.ZERO else Vector2.RIGHT
 	_apply_impact(float(maxi(1, amount)), direction, global_position, "generic")
 
@@ -90,7 +72,7 @@ func receive_projectile_impact(projectile_velocity: Vector2, hit_position: Vecto
 	receive_projectile_impact_context(projectile_velocity, hit_position, "pistol", 1)
 
 func receive_projectile_impact_context(projectile_velocity: Vector2, hit_position: Vector2, weapon_id: String, damage: int) -> void:
-	if state in [PropState.DESTROYED, PropState.RESTORED]: return
+	if state == PropState.DESTROYED: return
 	if erosion == null:
 		erosion = PixelErosionMask.new()
 		erosion.configure(Rect2i(Vector2i(-_get_size() * 0.5), Vector2i(_get_size())))
@@ -111,7 +93,7 @@ func receive_projectile_impact_context(projectile_velocity: Vector2, hit_positio
 
 func _rebuild_eroded_collision() -> void:
 	erosion_pending = false
-	if erosion == null or state in [PropState.DESTROYED, PropState.RESTORED]: return
+	if erosion == null or state == PropState.DESTROYED: return
 	_collision.disabled = true
 	erosion.rebuild_collision(self, erosion_shapes)
 	if erosion.remaining() == 0:
@@ -142,7 +124,7 @@ func receive_corpse_impact(direction: Vector2, energy := 1.0) -> void:
 	_apply_impact(DestructionMaterial.energy_for_attack("corpse", energy), direction, global_position, "corpse")
 
 func _apply_impact(energy: float, direction: Vector2, world_hit_point: Vector2, attack_kind: String) -> void:
-	if state in [PropState.DESTROYED, PropState.RESTORED]: return
+	if state == PropState.DESTROYED: return
 	last_impact_direction = direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
 	impact_point = to_local(world_hit_point)
 	var effective_energy := energy / maxf(0.25, float(material_profile.get("resistance", 1.0)))
@@ -178,7 +160,6 @@ func _destroy(energy := 1.0, attack_kind := "generic") -> void:
 	state = PropState.DESTROYED
 	for shape in erosion_shapes: shape.set_deferred("disabled", true)
 	if is_instance_valid(_collision): _collision.set_deferred("disabled", true)
-	if cleanup_ready: add_to_group("resettable_furniture")
 	Events.prop_destroyed.emit(global_position, prop_kind)
 	Events.publish_combat_noise(global_position, float(material_profile.get("noise", 86.0)), "%s_break" % material_profile.material)
 	_spawn_physical_chunks(energy)
@@ -206,8 +187,7 @@ func receive_actor_push(intended_velocity: Vector2, _contact_position: Vector2) 
 	# Combat contact may shove loose dressing. Cleanup is a strict physics
 	# boundary: untouched scenery and anything already restored are kinematic
 	# fixtures, not objects the player can accidentally disturb again.
-	if cleanup_ready or restoration_locked or state == PropState.RESTORED: return
-	if not is_movable() or is_instance_valid(dragging_actor) or intended_velocity.length() < 24.0: return
+	if not is_movable() or intended_velocity.length() < 24.0: return
 	velocity = (velocity + intended_velocity * 0.20).limit_length(34.0)
 	spin_velocity = clampf(spin_velocity + intended_velocity.y * 0.012, -2.5, 2.5)
 	physics_active = true
@@ -217,10 +197,6 @@ func _mark_displaced() -> void:
 	if displaced: return
 	displaced = true
 	add_to_group("displaced_prop")
-	if cleanup_ready:
-		add_to_group("resettable_furniture")
-		CleanupRegistry.register_target(self)
-		if is_instance_valid(restoration_anchor): restoration_anchor.mark_needed()
 	_release_home_navigation()
 	if not displacement_reported:
 		displacement_reported = true
@@ -236,21 +212,7 @@ func _release_home_navigation() -> void:
 	home_navigation_released = true
 	solidity_changed.emit(false)
 
-func _mark_anchor_needed() -> void:
-	if is_instance_valid(restoration_anchor): restoration_anchor.mark_needed()
-
 func _physics_process(delta: float) -> void:
-	if is_instance_valid(dragging_actor):
-		var drag_direction := Vector2.RIGHT.rotated(dragging_actor.rotation)
-		var target := dragging_actor.global_position - drag_direction * 13.0
-		velocity = ((target - global_position) * 9.0).limit_length(84.0)
-		move_and_slide()
-		simulated_rotation = lerp_angle(simulated_rotation, drag_direction.angle(), 1.0 - exp(-6.0 * delta))
-		rotation = snappedf(simulated_rotation, PI / 8.0)
-		var object_at_slot := global_position.distance_to(home_global_position) <= snap_radius
-		var actor_guiding_slot := dragging_actor.global_position.distance_to(home_global_position) <= 8.0 and global_position.distance_to(home_global_position) <= 24.0
-		if cleanup_ready and (object_at_slot or actor_guiding_slot): _snap_home()
-		return
 	if not physics_active:
 		set_physics_process(false)
 		return
@@ -282,106 +244,8 @@ func _physics_process(delta: float) -> void:
 			simulated_rotation = home_rotation
 		set_physics_process(false)
 
-func enter_cleanup_restore_state() -> void:
-	cleanup_ready = true
-	# Compatibility for archived cleanup scenes. Rogue combat never creates the
-	# old restoration ghosts, drag targets, or registry entries in the first place.
-	if is_movable(): _create_restoration_anchor()
-	if displaced: CleanupRegistry.register_target(self)
-	velocity = Vector2.ZERO
-	spin_velocity = 0.0
-	physics_active = false
-	# Untouched props lock to their exact authored transform. Contact-shifted props
-	# freeze exactly where combat left them and never become restoration tasks.
-	if not displaced:
-		restoration_locked = true
-		if not contact_shifted:
-			global_position = home_global_position
-			rotation = home_rotation
-			simulated_rotation = home_rotation
-	if is_instance_valid(restoration_anchor): restoration_anchor.set_cleanup_active(true)
-	set_physics_process(is_instance_valid(dragging_actor))
-
-func begin_drag(actor: Node2D) -> bool:
-	if not cleanup_ready or not displaced or not is_instance_valid(actor): return false
-	if is_instance_valid(dragging_actor) and dragging_actor != actor: return false
-	dragging_actor = actor
-	velocity = Vector2.ZERO
-	set_physics_process(true)
-	return true
-
-func end_drag(actor: Node2D) -> void:
-	if dragging_actor != actor: return
-	dragging_actor = null
-	velocity = Vector2.ZERO
-	set_physics_process(physics_active)
-
-func is_being_dragged() -> bool:
-	return is_instance_valid(dragging_actor)
-
 func get_home_position() -> Vector2:
 	return home_global_position
-
-func get_restoration_anchor() -> Node2D:
-	return restoration_anchor
-
-func _snap_home() -> void:
-	var actor := dragging_actor
-	dragging_actor = null
-	global_position = home_global_position
-	rotation = home_rotation
-	simulated_rotation = home_rotation
-	velocity = Vector2.ZERO
-	spin_velocity = 0.0
-	physics_active = false
-	restoration_locked = true
-	displaced = false
-	contact_shifted = false
-	state = PropState.RESTORED
-	hp = 2
-	structural_stage = 0
-	impact_point = Vector2.ZERO
-	_restore_collision_shape()
-	remove_from_group("displaced_prop")
-	remove_from_group("resettable_furniture")
-	CleanupRegistry.unregister_target(self)
-	if is_instance_valid(restoration_anchor): restoration_anchor.mark_restored()
-	solidity_changed.emit(true)
-	home_navigation_released = false
-	if is_instance_valid(active_hazard): active_hazard.set_source_active(false)
-	if is_instance_valid(actor) and actor.has_method("clear_dragged_restoration_prop"):
-		actor.clear_dragged_restoration_prop(self)
-	Events.prop_restored.emit(global_position, prop_kind)
-	queue_redraw()
-	set_physics_process(false)
-
-func _restore_collision_shape() -> void:
-	if erosion != null:
-		erosion = null
-		remove_meta("erosion_mask")
-		for old_shape in erosion_shapes: old_shape.queue_free()
-		erosion_shapes.clear()
-	if not is_instance_valid(_collision): return
-	var shape := RectangleShape2D.new()
-	shape.size = _get_size() - Vector2(2, 2)
-	_collision.shape = shape
-	_collision.set_deferred("disabled", false)
-
-func interact() -> bool:
-	if displaced: return false
-	if state != PropState.DESTROYED: return false
-	state = PropState.RESTORED
-	restoration_locked = true
-	hp = 2
-	structural_stage = 0
-	rotation = 0.0
-	_restore_collision_shape()
-	solidity_changed.emit(true)
-	remove_from_group("resettable_furniture")
-	if is_instance_valid(active_hazard): active_hazard.set_source_active(false)
-	Events.prop_restored.emit(global_position, prop_kind)
-	queue_redraw()
-	return true
 
 func _spawn_burst(intensity: float) -> void:
 	var micro_material := "paper" if prop_kind in ["desk", "office_desk", "paper_stack"] else str(material_profile.get("material", "wood"))
@@ -412,15 +276,6 @@ func _spawn_hazard(intensity: float, _attack_kind: String) -> void:
 	active_hazard.global_position = global_position
 	active_hazard.setup(hazard_kind, clampf(intensity, 0.7, 1.6))
 	Events.hazard_spawned.emit(global_position, hazard_kind)
-
-func get_interaction_prompt() -> String:
-	if displaced: return "[ E ] DRAG %s TO OUTLINE" % prop_kind.to_upper().replace("_", " ")
-	return "[ E ] RESTORE %s" % prop_kind.to_upper().replace("_", " ") if state == PropState.DESTROYED else ""
-
-func get_cleanup_type() -> String: return "furniture"
-func get_cleanup_cost() -> int: return 8
-func get_cleanup_progress() -> float: return 0.0 if displaced else 1.0
-func clean_step() -> void: return
 
 func _get_size() -> Vector2:
 	if prop_kind in ["sofa", "bed", "table", "shelf", "console", "conveyor", "bar", "counter", "freezer", "evidence_cabinet"]: return Vector2(14, 8)

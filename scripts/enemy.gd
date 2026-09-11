@@ -223,6 +223,10 @@ func _ready() -> void:
 	queue_redraw()
 
 func _physics_process(delta: float) -> void:
+	# Dormant rooms own no patrol, perception, wound or navigation ticks.
+	if not room_combat_active and state not in [State.STAGGERED, State.KNOCKED_DOWN]:
+		velocity = Vector2.ZERO
+		return
 	shortcut_pending_time = maxf(0.0, shortcut_pending_time - delta)
 	shortcut_flank_time = maxf(0.0, shortcut_flank_time - delta)
 	if shortcut_pending_time <= 0.0: shortcut_cells.clear()
@@ -289,7 +293,7 @@ func _physics_process(delta: float) -> void:
 		player_in_sight = false
 		cached_visual_contact = false
 		visual_exposure = 0.0
-		_update_patrol(delta)
+		velocity = Vector2.ZERO
 		return
 	var to_player := player.global_position - global_position
 	var distance := to_player.length()
@@ -356,7 +360,7 @@ func _physics_process(delta: float) -> void:
 			state = State.CHASE
 			attack_windup_time = 0.0
 		if tactical_move_mode.is_empty(): chase_lost_time += delta
-		if chase_lost_time >= chase_memory_duration:
+		if chase_lost_time >= chase_memory_duration and not room_combat_active:
 			_clear_tactical_move()
 			_begin_search(investigation_target, last_seen_direction)
 	if _update_weapon_scavenge(delta): return
@@ -369,7 +373,9 @@ func _physics_process(delta: float) -> void:
 		rotation = lerp_angle(rotation, global_position.direction_to(investigation_target).angle(), 1.0 - exp(-12.0 * delta))
 		move_and_slide()
 		return
-	if state in [State.IDLE, State.INVESTIGATE, State.SEARCH, State.RETURN]: _scan_for_corpses(delta)
+	if room_combat_active and state in [State.IDLE, State.INVESTIGATE, State.SEARCH, State.RETURN]:
+		state = State.CHASE
+		investigation_target = player.global_position
 	if state == State.IDLE:
 		_update_patrol(delta)
 		return
@@ -672,8 +678,12 @@ func configure_fixed_sentry() -> void:
 func set_room_combat_active(active: bool) -> void:
 	if room_combat_active == active: return
 	room_combat_active = active
+	if is_instance_valid(gun): gun.set_process(active)
 	set_meta("rogue_room_active", active)
-	if active: return
+	if active:
+		if state not in [State.STAGGERED, State.KNOCKED_DOWN, State.ATTACK]: state = State.CHASE
+		if is_instance_valid(player): investigation_target = player.global_position
+		return
 	CombatDirector.release_fire_token(self)
 	_release_corpse_claim()
 	_clear_tactical_move()
@@ -874,72 +884,6 @@ func _update_visual_reaction(has_visual_contact: bool, delta: float) -> bool:
 		visual_exposure = 0.0
 		alertness = move_toward(alertness, 0.0, delta * 0.8)
 	return has_visual_contact and visual_exposure >= effective_reaction_time
-
-func _scan_for_corpses(delta: float) -> void:
-	if is_fixed_sentry or is_instance_valid(claimed_corpse): return
-	corpse_scan_time -= delta
-	if corpse_scan_time > 0.0: return
-	corpse_scan_time = corpse_scan_interval
-	for corpse_node in get_tree().get_nodes_in_group("corpse"):
-		if not is_instance_valid(corpse_node): continue
-		var corpse_id := corpse_node.get_instance_id()
-		if discovered_corpses.has(corpse_id): continue
-		if not EnemyPerception.can_see_position(self, corpse_node.global_position, detection_range * 0.8, vision_fov_degrees, 32): continue
-		if not corpse_node.has_method("try_claim_investigation") or not corpse_node.try_claim_investigation(self):
-			if corpse_node.has_method("is_investigation_complete") and corpse_node.is_investigation_complete():
-				discovered_corpses[corpse_id] = true
-			continue
-		discovered_corpses[corpse_id] = true
-		claimed_corpse = corpse_node
-		_raise_alert(AlertLevel.ALERT, alert_memory_duration)
-		_begin_investigation(corpse_node.global_position, 0.78, true)
-		# This guard reacts immediately, but the rest of the building only learns
-		# about the casualty after the body has actually been reached and verified.
-		pending_incident_report_position = corpse_node.global_position
-		pending_incident_report_direction = Vector2.RIGHT.rotated(corpse_node.rotation)
-		return
-	_scan_for_blood_clue()
-
-func _scan_for_blood_clue() -> void:
-	if state not in [State.IDLE, State.RETURN] or is_fixed_sentry: return
-	var nearest: Node2D
-	var nearest_distance := INF
-	var nearest_region := Vector2i.ZERO
-	var nearest_generation := 0
-	for clue_region in _get_blood_clue_regions():
-		var region_data: Dictionary = blood_clue_region_cache[clue_region]
-		var node_ref = region_data.get("node")
-		var node = node_ref.get_ref() if node_ref is WeakRef else null
-		var generation := int(region_data.get("generation", 0))
-		if not node is Node2D or not is_instance_valid(node): continue
-		if int(discovered_blood_clues.get(clue_region, -1)) >= generation: continue
-		if is_instance_valid(tile_world) and tile_world.has_method("is_navigation_position_walkable") and not tile_world.is_navigation_position_walkable(node.global_position): continue
-		var distance := global_position.distance_squared_to(node.global_position)
-		if distance >= nearest_distance or distance > detection_range * detection_range * 0.55: continue
-		if not EnemyPerception.can_see_position(self, node.global_position, detection_range * 0.74, vision_fov_degrees, 32): continue
-		nearest = node
-		nearest_distance = distance
-		nearest_region = clue_region
-		nearest_generation = generation
-	if not is_instance_valid(nearest): return
-	discovered_blood_clues[nearest_region] = nearest_generation
-	_begin_investigation(nearest.global_position, 0.56)
-	Events.publish_tactical_alert(nearest.global_position, Vector2.RIGHT.rotated(nearest.rotation), "blood_trail", self)
-
-func _get_blood_clue_regions() -> Dictionary:
-	# All enemies share one short-lived spatial snapshot. This changes the hot path
-	# from scanning hundreds of permanent footprints per enemy to one scan per 0.1 s.
-	var current_bucket := int(Time.get_ticks_msec() / 100)
-	if blood_clue_cache_bucket == current_bucket: return blood_clue_region_cache
-	blood_clue_cache_bucket = current_bucket
-	blood_clue_region_cache = {}
-	for clue in get_tree().get_nodes_in_group("blood_clue"):
-		if not clue is Node2D or not is_instance_valid(clue): continue
-		var region := Vector2i(floori(clue.global_position.x / 24.0), floori(clue.global_position.y / 24.0))
-		var generation := int(clue.get_instance_id())
-		if not blood_clue_region_cache.has(region) or generation > int((blood_clue_region_cache[region] as Dictionary).get("generation", 0)):
-			blood_clue_region_cache[region] = {"node": weakref(clue), "generation": generation}
-	return blood_clue_region_cache
 
 func _begin_investigation(target: Vector2, new_alertness: float, keep_corpse_claim := false) -> void:
 	_clear_tactical_move()

@@ -18,9 +18,9 @@ func _run() -> void:
 	Progression.save_path = TEST_SAVE_PATH
 	Progression.reset_progress(false)
 	var weapon_ids := WeaponPlatformCatalog.get_weapon_ids()
-	_expect(weapon_ids.size() == 64, "armory should contain 64 stable weapon platforms")
+	_expect(weapon_ids.size() == 24, "armory should contain 24 distinct weapon platforms")
 	for weapon_class in WeaponPlatformCatalog.CLASS_ORDER:
-		_expect(WeaponPlatformCatalog.get_class_weapon_ids(weapon_class).size() == 8, "%s should contain eight distinct platforms" % weapon_class)
+		_expect(WeaponPlatformCatalog.get_class_weapon_ids(weapon_class).size() == 3, "%s should contain three distinct platforms" % weapon_class)
 	_expect(WeaponPlatformCatalog.canonical_id("pistol") == "glock_17_gen5_mos", "legacy saves should migrate pistol aliases")
 	var m4_base := AttackCatalog.get_gun_data("colt_m4a1")
 	var m4_suppressed := AttackCatalog.get_gun_data("colt_m4a1", PackedStringArray(["surefire_socom556_rc2"]))
@@ -30,7 +30,7 @@ func _run() -> void:
 	_expect(m4_scoped.spread_degrees < m4_base.spread_degrees and m4_scoped.camera_look_ahead_multiplier > 1.4, "magnified optics should trade handling for precision and view reach")
 	var rejected := AttackCatalog.get_gun_data("colt_m4a1", PackedStringArray(["obsidian_45"]))
 	_expect(rejected.installed_attachments.is_empty() and is_equal_approx(rejected.hearing_radius, m4_base.hearing_radius), "incompatible calibre hardware must not alter the weapon")
-	_expect(AttachmentCatalog.get_attachment_ids_for_slot("muzzle", WeaponPlatformCatalog.get_platform("hk_mp5sd6")).is_empty(), "integrally suppressed MP5SD should reject additional muzzle devices")
+	_expect(WeaponPlatformCatalog.canonical_id("hk_mp5sd6") == "hk_mp5a5", "removed SMG definitions must merge into the retained class platform")
 	_expect(Progression.select_loadout_weapon("primary", "colt_m4a1"), "starter carbine should equip as primary")
 	_expect(not Progression.select_loadout_weapon("secondary", "colt_m4a1"), "a carbine must not fit the secondary slot")
 	_expect(Progression.select_loadout_weapon("secondary", "glock_17_gen5_mos"), "starter handgun should equip as secondary")

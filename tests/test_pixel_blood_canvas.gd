@@ -87,6 +87,10 @@ func _ready() -> void:
 	var retired_chunk = retired_canvas.chunks[Vector2i.ZERO]
 	var retired_id: int = retired_chunk.get_instance_id()
 	var drained: Dictionary = retired_canvas.absorb_circle(retired_position, 2.0, 255, 8, 1024)
+	_expect(retired_chunk.disposal_pending, "last-pixel absorption must schedule disposal after presentation")
+	# This pixel was never uploaded, so flushing its now-empty image needs no
+	# dissolve. Flush the chunk directly to retain its stale canvas queue entry.
+	retired_chunk.flush_texture()
 	_expect(int(drained.amount) == 100 and retired_chunk.is_queued_for_deletion(), "empty blood chunks must retire after the last siphoned pixel")
 	retired_canvas.add_blood_pixel(retired_position, 180)
 	_expect(retired_canvas.chunks[Vector2i.ZERO].get_instance_id() != retired_id, "a same-frame hit must allocate a live replacement instead of painting a retiring chunk")

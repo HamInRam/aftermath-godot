@@ -28,6 +28,7 @@ func capture(player: Node, blood: Node, focus: Dictionary) -> Dictionary:
 		"armor_protection": player.armor_protection, "armor_reduction": player.armor_damage_reduction,
 		"armor_head": player.armor_covers_head, "guard": player.blood_guard_points,
 		"blood": blood.reserve, "blood_capacity": blood.capacity,
+		"blood_rage": blood.is_raging(),
 		"blood_build": blood.build_id,
 		"combat_perks": blood.perks.capture(),
 		"skill_cooldowns": blood.skill_cooldowns.duplicate(true),
@@ -44,11 +45,12 @@ func restore(state: Dictionary, player: Node, blood: Node) -> bool:
 	player.armor_protection = float(state.get("armor_protection", 0.0))
 	player.armor_damage_reduction = float(state.get("armor_reduction", 0.0))
 	player.armor_covers_head = bool(state.get("armor_head", false))
-	player.blood_guard_points = 0 if blood.blood_ammo_mode else maxi(0, int(state.get("guard", 0)))
+	player.blood_guard_points = 0 if blood.blood_ammo_mode or blood.blood_rage_mode else maxi(0, int(state.get("guard", 0)))
 	blood.set_build(str(state.get("blood_build", "balanced")))
 	blood.perks.restore(state.get("combat_perks", {}))
 	blood.capacity = maxf(1.0, float(state.get("blood_capacity", 100.0)))
 	blood.reserve = clampf(float(state.get("blood", 0.0)), 0.0, blood.capacity)
+	if blood.blood_rage_mode: blood._set_rage(bool(state.get("blood_rage", false)) and blood.reserve > 0.0)
 	for key in blood.skill_cooldowns:
 		blood.skill_cooldowns[key] = maxf(0.0, float(state.get("skill_cooldowns", {}).get(key, 0.0)))
 	blood.set_stance_active(false)

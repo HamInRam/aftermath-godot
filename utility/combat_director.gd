@@ -13,59 +13,20 @@ const MAX_SIMULTANEOUS_SHOOTERS := 2
 const FIRE_TOKEN_SPACING_MSEC := 120
 
 func _ready() -> void:
-	Events.combat_noise.connect(_on_combat_noise)
-	Events.tactical_alert.connect(_on_tactical_alert)
-	Events.casualty_reported.connect(_on_casualty_reported)
+	# Keep fire scheduling / doorway coordination, not stealth incident listeners.
+	pass
 
-func _on_combat_noise(world_position: Vector2, radius: float, source_kind: String) -> void:
-	var now := Time.get_ticks_msec()
-	_prune_noise_incidents(now)
-	var incident_key := _noise_incident_key(world_position, source_kind)
-	if noise_incidents.has(incident_key):
-		var existing: Dictionary = noise_incidents[incident_key]
-		if now < int(existing.get("expires", 0)):
-			existing["last"] = now
-			noise_incidents[incident_key] = existing
-			return
-	var candidates: Array[Dictionary] = []
-	for enemy_node in get_tree().get_nodes_in_group("enemy"):
-		if not is_instance_valid(enemy_node) or not enemy_node.has_method("evaluate_noise_response"): continue
-		var response: Dictionary = enemy_node.evaluate_noise_response(world_position, radius, source_kind)
-		if bool(response.get("eligible", false)):
-			candidates.append({"enemy": enemy_node, "response": response})
-	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return float(a.response.priority) < float(b.response.priority)
-	)
-	var profile := _current_encounter_profile()
-	var roles := build_noise_role_plan(candidates, profile, source_kind)
-	var responders: Array[WeakRef] = []
-	for index in range(candidates.size()):
-		var candidate: Dictionary = candidates[index]
-		candidate.enemy.receive_combat_noise_result(world_position, radius, source_kind, roles[index], candidate.response)
-		if roles[index] in ["push", "sweep", "sweep_left", "sweep_right"]: responders.append(weakref(candidate.enemy))
-	var memory_seconds := float(profile.get("incident_memory", 4.5))
-	noise_incidents[incident_key] = {"last": now, "expires": now + roundi(memory_seconds * 1000.0), "responders": responders}
+func _on_combat_noise(_world_position: Vector2, _radius: float, _source_kind: String) -> void:
+	# Encounter activation belongs exclusively to room/contact logic.
+	return
 
-func _on_tactical_alert(world_position: Vector2, likely_direction: Vector2, source_kind: String, reporter: Node) -> void:
-	var candidates: Array[Dictionary] = []
-	for enemy_node in get_tree().get_nodes_in_group("enemy"):
-		if enemy_node == reporter or not is_instance_valid(enemy_node) or not enemy_node.has_method("evaluate_tactical_assignment"): continue
-		var response: Dictionary = enemy_node.evaluate_tactical_assignment(world_position, source_kind)
-		if bool(response.get("eligible", false)):
-			candidates.append({"enemy": enemy_node, "priority": float(response.get("priority", INF))})
-	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return float(a.priority) < float(b.priority)
-	)
-	var rooms := PackedStringArray()
-	for candidate in candidates: rooms.append(_candidate_room(candidate.enemy))
-	var roles := get_role_plan_for_event(source_kind, world_position, rooms, true)
-	for index in range(candidates.size()):
-		candidates[index].enemy.receive_tactical_assignment(world_position, likely_direction, source_kind, roles[index])
+func _on_tactical_alert(_world_position: Vector2, _likely_direction: Vector2, _source_kind: String, _reporter: Node) -> void:
+	# Encounter activation belongs exclusively to room/contact logic.
+	return
 
-func _on_casualty_reported(world_position: Vector2, likely_attack_direction: Vector2) -> void:
-	register_casualty(world_position, likely_attack_direction)
-	if is_kill_zone(world_position):
-		Events.publish_tactical_alert(world_position, likely_attack_direction, "ambush", null)
+func _on_casualty_reported(_world_position: Vector2, _likely_attack_direction: Vector2) -> void:
+	# Encounter activation belongs exclusively to room/contact logic.
+	return
 
 func register_casualty(world_position: Vector2, likely_attack_direction: Vector2, timestamp_msec := -1) -> int:
 	var now := Time.get_ticks_msec() if timestamp_msec < 0 else timestamp_msec

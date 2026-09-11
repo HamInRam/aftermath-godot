@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource path="res://scripts/props/swing_door.gd" type="Script" id="1_door"]
 [ext_resource path="res://scripts/props/pixel_door_frame.gd" type="Script" id="2_frame"]
@@ -12,15 +12,7 @@ size = Vector2(6, 3)
 [sub_resource type="RectangleShape2D" id="RectangleShape_hit"]
 size = Vector2(6, 26)
 
-[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_door"]
-friction = 0.65
-bounce = 0.22
-
 [node name="SwingDoor" type="Node2D"]
-
-[node name="Anchor" type="StaticBody2D" parent="."]
-collision_layer = 0
-collision_mask = 0
 
 [node name="Frame" type="StaticBody2D" parent="."]
 collision_layer = 36
@@ -45,16 +37,10 @@ visible = false
 polygon = PackedVector2Array(-3, 24, 3, 24, 3, 27, -3, 27)
 color = Color(0.18, 0.13, 0.2, 1)
 
-[node name="Door" type="RigidBody2D" parent="." groups=["swing_door"]]
+[node name="Door" type="AnimatableBody2D" parent="." groups=["swing_door"]]
 collision_layer = 36
 collision_mask = 19
-mass = 0.7
-freeze = true
-continuous_cd = 2
-physics_material_override = SubResource("PhysicsMaterial_door")
-gravity_scale = 0.0
-linear_damp = 5.0
-angular_damp = 2.6
+sync_to_physics = false
 script = ExtResource("1_door")
 
 [node name="PanelCollision" type="CollisionShape2D" parent="Door"]
@@ -91,9 +77,3 @@ default_color = Color(0.82, 0.48, 0.27, 1)
 visible = false
 polygon = PackedVector2Array(-1, 21, 1, 21, 1, 23, -1, 23)
 color = Color(0.95, 0.75, 0.3, 1)
-
-[node name="Hinge" type="PinJoint2D" parent="."]
-node_a = NodePath("../Anchor")
-node_b = NodePath("../Door")
-bias = 0.9
-softness = 0.12

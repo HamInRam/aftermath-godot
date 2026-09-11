@@ -42,8 +42,17 @@ var blood_budget_raw := 0
 var blood_stain_radius := -1.0
 var weapon_source: GunData
 var blood_gore_multiplier := 1.0
+var rage_visual := false
 var pool_release: Callable
 var retiring := false
+var managed := false
+var exception_rids: Array[RID] = []
+
+func _ignore_body(body: CollisionObject2D) -> void:
+	var rid := body.get_rid()
+	if rid in exception_rids: return
+	exception_rids.append(rid)
+	PhysicsServer2D.body_add_collision_exception(get_rid(), rid)
 
 func park() -> void:
 	set_physics_process(false)
@@ -51,8 +60,11 @@ func park() -> void:
 	collision_layer = 0
 	collision_mask = 0
 	remove_from_group("bullet")
-	for body in get_collision_exceptions():
-		if is_instance_valid(body): remove_collision_exception_with(body)
+	# Targets may already have been freed after a lethal penetrating hit.
+	# Clear server handles without resolving destroyed bodies into scene objects.
+	for rid in exception_rids:
+		PhysicsServer2D.body_remove_collision_exception(get_rid(), rid)
+	exception_rids.clear()
 	source_actor = null
 	weapon_source = null
 	velocity = Vector2.ZERO
@@ -69,10 +81,11 @@ func reset_for_reuse() -> void:
 	breach_round = false
 	blood_budget_raw = 0
 	blood_gore_multiplier = 1.0
+	rage_visual = false
 	collision_layer = 16
 	add_to_group("bullet")
 	show()
-	set_physics_process(true)
+	set_physics_process(not managed)
 
 func retire() -> void:
 	if retiring: return
@@ -110,9 +123,10 @@ func _ready() -> void:
 	_install_source_exception()
 
 func _install_source_exception() -> void:
-	if is_instance_valid(source_actor): add_collision_exception_with(source_actor)
+	if is_instance_valid(source_actor): _ignore_body(source_actor)
 
 func _physics_process(delta: float) -> void:
+	if retiring: return
 	if enemy_owned: delta *= combat_time_scale
 	travel_distance += velocity.length() * delta
 	var collision := move_and_collide(velocity * delta)
@@ -124,7 +138,7 @@ func _physics_process(delta: float) -> void:
 		if collider is Node and collider.is_in_group("environment_debris"):
 			if collider.has_method("receive_projectile_glance"):
 				collider.receive_projectile_glance(velocity, collision.get_position(), weapon_id, damage)
-			if collider is CollisionObject2D: add_collision_exception_with(collider)
+			if collider is CollisionObject2D: _ignore_body(collider)
 			global_position = collision.get_position() + direction * DEBRIS_CLEARANCE
 			velocity *= DEBRIS_PENETRATION_SPEED_RETENTION
 			speed = velocity.length()
@@ -136,7 +150,7 @@ func _physics_process(delta: float) -> void:
 			if blood_enhanced: blood_budget_raw = overkill_context.blood_budget_raw
 			collider.receive_projectile_overkill(direction, collision.get_position(), weapon_id, velocity.length())
 			passed_overkill_target = true
-			if collider is CollisionObject2D: add_collision_exception_with(collider)
+			if collider is CollisionObject2D: _ignore_body(collider)
 			global_position = collision.get_position() + direction * 3.0
 			velocity *= 0.68
 			speed = velocity.length()
@@ -205,7 +219,7 @@ func _physics_process(delta: float) -> void:
 				# power budget is consumed on every body, preventing infinite chains.
 				if context.lethal and penetration_power >= 1.45 and collider is CollisionObject2D:
 					penetration_power -= 0.85
-					add_collision_exception_with(collider)
+					_ignore_body(collider)
 					global_position = collision.get_position() + direction * 4.0
 					velocity *= 0.72
 					speed = velocity.length()
@@ -237,6 +251,10 @@ func _apply_blood_enhancement(context: DamageContext) -> void:
 	context.mist_scale *= 1.32
 	context.exit_wound_scale *= 1.28
 	context.external_blood_scale *= 1.18
+	if rage_visual:
+		context.external_blood_scale *= 1.35
+		context.exit_wound_scale *= 1.2
+		context.mist_scale *= 1.2
 	var violence := context.violence_profile.duplicate(true)
 	violence["drops"] = maxi(int(violence.get("drops", 8)), 18)
 	violence["gore"] = maxi(int(violence.get("gore", 3)), 8)
@@ -255,6 +273,16 @@ func _draw() -> void:
 	var tracer := NeonPalette.BLOOD_CRIMSON if blood_enhanced else Color("d8d8d8")
 	var ink := Color(0.055, 0.025, 0.055, 0.92)
 	var tail_end := -float(visual_tail_length)
+	if rage_visual:
+		tail_end = -minf(18.0,float(visual_tail_length)*1.8)
+		# Opaque scarlet stream with dark separation remains readable on blood.
+		PIXEL_PAINTER.line(self,Vector2(tail_end-1,-1),Vector2(2,-1),Color("161616"))
+		PIXEL_PAINTER.line(self,Vector2(tail_end-1,1),Vector2(2,1),Color("161616"))
+		PIXEL_PAINTER.line(self,Vector2(tail_end,0),Vector2(1,0),tracer)
+		PIXEL_PAINTER.line(self,Vector2(-3,-1),Vector2(0,-1),tracer)
+		PIXEL_PAINTER.line(self,Vector2(-3,1),Vector2(0,1),tracer)
+		PIXEL_PAINTER.pixel(self,Vector2(1,0),tracer)
+		return
 	# The silhouette stays built from one-world-pixel cells. A dark separator
 	# prevents bright floors, blood and muzzle flashes from swallowing the round.
 	PIXEL_PAINTER.line(self, Vector2(tail_end - 1.0, 0), Vector2(2, 0), ink)

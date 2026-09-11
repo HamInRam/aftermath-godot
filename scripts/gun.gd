@@ -15,6 +15,11 @@ var blood_fire_payment: Callable:
 		blood_fire_payment = value
 		if value.is_valid() and is_node_ready(): cancel_reload()
 var automatic := false
+var rage_fire_active: Callable
+var last_shot_rage := false
+
+func has_unlimited_ammo() -> bool:
+	return blood_fire_payment.is_valid() or (not enemy_owned and rage_fire_active.is_valid() and rage_fire_active.call())
 
 var fire_interval := 0.1
 var fire_interval_variance := 0.018
@@ -315,10 +320,10 @@ func _draw() -> void:
 		draw_set_transform_matrix(Transform2D.IDENTITY)
 
 func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
-	if blood_fire_payment.is_valid() and is_reloading: cancel_reload()
+	if has_unlimited_ammo() and is_reloading: cancel_reload()
 	if gun_data == null or is_reloading or direction.length_squared() < 0.001: return false
 	if cooldown > 0.0: return false
-	if ammo <= 0 and not blood_fire_payment.is_valid():
+	if ammo <= 0 and not has_unlimited_ammo():
 		play_dry_fire()
 		return false
 	var requested_angle := direction.angle()
@@ -339,7 +344,8 @@ func try_fire(direction: Vector2, accuracy_spread_multiplier := 1.0) -> bool:
 	# Preserve overshoot from the previous frame so a 750 RPM weapon does not
 	# quantize down to 600 RPM at 60 Hz. Idle time cannot bank catch-up bullets.
 	cooldown = maxf(0.001, maxf(0.035, fire_interval + randf_range(-fire_interval_variance, fire_interval_variance)) + minf(0.0, cooldown))
-	if not blood_fire_payment.is_valid(): ammo -= 1
+	last_shot_rage = not enemy_owned and rage_fire_active.is_valid() and rage_fire_active.call()
+	if not has_unlimited_ammo(): ammo -= 1
 	ammo_by_weapon[weapon_id] = ammo
 	recoil = 2.0
 	shot_age = 0.0
@@ -501,7 +507,7 @@ func is_muzzle_blocked() -> bool:
 	return _is_muzzle_obstructed()
 
 func reload() -> void:
-	if blood_fire_payment.is_valid(): return
+	if has_unlimited_ammo(): return
 	if gun_data == null or is_reloading or ammo >= max_ammo or reserve_ammo == 0: return
 	if not enemy_owned and ammo <= 0 and precision_primed:
 		_start_perfect_reload()
@@ -528,7 +534,7 @@ func cancel_reload(publish := true) -> void:
 		Events.publish_ammo(ammo, max_ammo, false)
 
 func _on_reload_timer_timeout() -> void:
-	if blood_fire_payment.is_valid():
+	if has_unlimited_ammo():
 		cancel_reload()
 		return
 	# A weapon switch/throw may cancel a timer on the same frame it expires.

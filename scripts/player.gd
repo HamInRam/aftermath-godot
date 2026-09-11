@@ -15,6 +15,22 @@ const AIM_CONTROLLER := preload("res://scripts/controllers/aim_controller.gd")
 const PIXEL_PAINTER := preload("res://utility/pixel_art_painter.gd")
 const PIXEL_ACTOR_FRAMES := preload("res://utility/pixel_actor_texture_factory.gd")
 var PLAYER_GUNS: Array[GunData] = []
+var blood_skin_material: ShaderMaterial
+var blood_skin_clock := 0.0
+var blood_skin_active := false
+
+func set_blood_rage_visual(active: bool, delta := 0.0) -> void:
+	active = active and not is_dead
+	if active and blood_skin_material == null:
+		blood_skin_material = ShaderMaterial.new()
+		blood_skin_material.shader = preload("res://shaders/blood_rage_skin.gdshader")
+	if blood_skin_active != active:
+		blood_skin_active = active
+		lifecycle_rig.material = blood_skin_material if active else null
+		legs_visual.material = blood_skin_material if active else null
+	if active:
+		blood_skin_clock += maxf(0.0, delta)
+		blood_skin_material.set_shader_parameter("flow_clock", blood_skin_clock)
 const MELEE_DATA := {
 	"fist": {"range": 12.0, "angle": 35.0, "windup": 0.03, "cooldown": 0.18, "duration": 0.06, "lethal": false, "color": Color("ffffff")},
 	"knife": {"range": 16.0, "angle": 45.0, "windup": 0.02, "cooldown": 0.22, "duration": 0.05, "lethal": true, "color": Color("ffffff")},
@@ -223,9 +239,9 @@ func _physics_process(delta: float) -> void:
 		if Input.is_action_just_pressed("interact"): blood_skill_requested.emit("e")
 		if Input.is_action_just_pressed("reload"): blood_skill_requested.emit("r")
 	if not blood_action_mode and Input.is_action_just_pressed("blood_heal"): blood_heal_requested.emit()
-	if not blood_action_mode and Input.is_action_just_pressed("reload") and not blood_stance_active: reload_input_buffer = INPUT_BUFFER_DURATION
-	if blood_action_mode: reload_input_buffer = 0.0
-	if not blood_action_mode and reload_input_buffer > 0.0 and equipped_mode == "gun" and not gun.is_reloading and gun.ammo < gun.max_ammo:
+	if Input.is_action_just_pressed("reload") and (blood_action_mode or not blood_stance_active): reload_input_buffer = INPUT_BUFFER_DURATION
+	if gun.has_unlimited_ammo(): reload_input_buffer = 0.0
+	if reload_input_buffer > 0.0 and equipped_mode == "gun" and not gun.is_reloading and gun.ammo < gun.max_ammo:
 		gun.reload()
 		if gun.is_reloading: reload_input_buffer = 0.0
 	if Input.is_action_just_pressed("throw_weapon") and (not blood_stance_active or blood_action_mode): throw_input_buffer = INPUT_BUFFER_DURATION
@@ -244,7 +260,7 @@ func _handle_primary_input(just_pressed: bool, held: bool) -> void:
 	if gun.gun_data == null: return
 	# Empty-magazine actions only consume a fresh trigger pull. Holding an
 	# automatic through its last round must not reload, click repeatedly or throw.
-	if gun.ammo <= 0 and not gun.blood_fire_payment.is_valid():
+	if gun.ammo <= 0 and not gun.has_unlimited_ammo():
 		fire_input_buffer = 0.0
 		if just_pressed and not gun.is_reloading:
 			if gun.reserve_ammo != 0: gun.reload()
@@ -340,7 +356,7 @@ func _update_targeting_mode() -> void:
 	queue_redraw()
 
 func set_blood_stance_movement_multiplier(value: float) -> void:
-	blood_stance_movement_multiplier = clampf(value, 0.35, 1.0)
+	blood_stance_movement_multiplier = clampf(value, 0.35, 1.25)
 
 func set_blood_siphon_visual(value: float) -> void:
 	blood_siphon_visual_amount = clampf(value, 0.0, 1.0)
@@ -348,7 +364,7 @@ func set_blood_siphon_visual(value: float) -> void:
 	var strength := blood_siphon_visual_amount * pulse
 	var tint := Color(1.0 + strength * 0.35, 1.0 - strength * 0.82, 1.0 - strength * 0.82, 1.0)
 	if is_roll_invulnerable(): tint = Color(1.6, 1.6, 1.6, 1.0)
-	if is_instance_valid(lifecycle_rig): lifecycle_rig.modulate = tint
+	if is_instance_valid(lifecycle_rig): lifecycle_rig.modulate = Color.WHITE if blood_skin_active else tint
 
 func perform_blood_dash(distance: float) -> void:
 	if is_dead: return

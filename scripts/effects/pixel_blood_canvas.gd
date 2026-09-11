@@ -112,6 +112,7 @@ class PixelBloodChunk extends Node2D:
 		var index := local_cell.y * PixelBloodCanvas.CHUNK_SIZE + local_cell.x
 		var before := int(blood[index])
 		var after := clampi(before + amount, 0, 255)
+		var was_polluted := pollution[index] > 0
 		var next_water := maxi(int(water[index]), clampi(new_water, 0, 255))
 		var next_age := mini(int(age[index]), clampi(new_age, 0, 255)) if before > 0 else clampi(new_age, 0, 255)
 		# Overlapping pellets frequently hit already saturated pixels. Preserve
@@ -125,7 +126,9 @@ class PixelBloodChunk extends Node2D:
 		blood_load += added
 		initial_load += float(maxi(0, added))
 		if after > 0 or water[index] > 0 or residue[index] > 0: _mark_active(index)
-		_mark_dirty(index)
+		# Density affects ammo, not the opaque crimson presentation.
+		if (before > 0) != (after > 0) or (was_polluted and pollution[index] == 0):
+			_mark_dirty(index)
 		return added
 
 	func clean_local_pixel(local_cell: Vector2i, removal: int, tool_name: String) -> int:
@@ -173,7 +176,7 @@ class PixelBloodChunk extends Node2D:
 		# Clearing the flag while its old index remained in active_pixels allowed
 		# repeated deposit/absorb cycles to append duplicates without bound.
 		_mark_active(index)
-		_mark_dirty(index)
+		if blood[index] == 0: _mark_dirty(index)
 		return removed
 
 	func apply_external_water(local_cell: Vector2i, amount: int) -> int:
@@ -377,7 +380,7 @@ var evidence_layer := "ground"
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	set_process(true)
+	set_process(not upload_queue.is_empty())
 
 func configure(layer_name: String, draw_order: int) -> void:
 	evidence_layer = layer_name
@@ -390,6 +393,7 @@ func request_chunk_upload(chunk: PixelBloodChunk) -> void:
 	if not is_instance_valid(chunk) or chunk.upload_queued: return
 	chunk.upload_queued = true
 	upload_queue.append(chunk)
+	set_process(true)
 
 func _flush_upload_queue() -> void:
 	var uploads := 0
@@ -406,6 +410,7 @@ func _flush_upload_queue() -> void:
 	# Compact once per batch, not once per upload (which repeatedly shifts every
 	# pending entry). Preserve ordering and any entries appended while flushing.
 	if consumed > 0: upload_queue = upload_queue.slice(consumed)
+	if upload_queue.is_empty(): set_process(false)
 
 func get_debug_pending_upload_count() -> int:
 	return upload_queue.size()
@@ -635,20 +640,6 @@ func start_pool(world_position: Vector2, intensity: float, direction: Vector2, s
 
 func settle_all_pools() -> void:
 	growing_pools.clear()
-
-func stamp_drag_smear(world_position: Vector2, direction: Vector2, strength := 0.65) -> void:
-	var forward := direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
-	_stamp_sparse_line(world_position - forward * 5.0, world_position + forward * 6.0, clampi(roundi(90.0 + strength * 110.0), 70, 200), 0.72)
-
-func stamp_footprint(world_position: Vector2, direction: Vector2, left_foot: bool, strength: float, surface_profile := {}, smudged := false) -> void:
-	var forward := direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
-	var side := forward.orthogonal() * (-1.0 if left_foot else 1.0)
-	var length := 4 if smudged else 3
-	var amount := clampi(roundi(70.0 + strength * 150.0), 48, 220)
-	for step in range(length):
-		var point := world_position + forward * float(step - 1) + side
-		add_blood_pixel(point, roundi(amount * (1.0 - float(step) * 0.15)))
-		if step < 2: add_blood_pixel(point + side, roundi(amount * 0.55))
 
 func clean_stroke(world_start: Vector2, world_end: Vector2, brush_radius: float, power: int, tool_name: String) -> bool:
 	var segment := world_end - world_start

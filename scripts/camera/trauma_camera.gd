@@ -43,7 +43,11 @@ var impact_frame := -1
 var frame_impact_peak := 0.0
 var frame_trauma_start := 0.0
 const PRESENTATION := preload("res://utility/weapon_presentation_profile.gd")
-const MAX_DIRECTIONAL_OFFSET := 2.6
+const MAX_DIRECTIONAL_OFFSET := 4.0
+var recoil_velocity := Vector2.ZERO
+var directional_frame := -1
+var directional_peak := 0.0
+var directional_axis := Vector2.RIGHT
 
 func _ready() -> void:
 	zoom = Vector2.ONE * exploration_zoom
@@ -84,9 +88,10 @@ func add_trauma(amount: float) -> void:
 	var headroom := 1.0 - frame_trauma_start * 0.72
 	trauma = clampf(frame_trauma_start + frame_impact_peak * headroom, 0.0, 1.0)
 
-func trigger_kill_effect(shake_power := 0.42, flash_type := "red") -> void:
+func trigger_kill_effect(shake_power := 0.42, flash_type := "red", impact_direction := Vector2.ZERO) -> void:
 	add_trauma(shake_power * 0.45)
-	add_directional_impulse(-last_player_shot_direction, clampf(shake_power, 0.3, 0.9))
+	var axis := impact_direction if impact_direction.length_squared() > 0.001 else last_player_shot_direction
+	add_directional_impulse(-axis, clampf(shake_power, 0.3, 0.9))
 	var flash_color := Color(0.82, 0.0, 0.1, 0.12) if flash_type == "red" else Color(1.0, 1.0, 1.0, 0.15)
 	impact_flash_requested.emit(flash_color)
 
@@ -97,11 +102,33 @@ func _on_presented_weapon_fire(_origin: Vector2, direction: Vector2, enemy_owned
 	last_player_shot_direction = direction.normalized()
 	var platform := WeaponPlatformCatalog.get_platform(weapon_id)
 	var profile := PRESENTATION.for_class(str(platform.get("class", "handgun")))
-	add_directional_impulse(-last_player_shot_direction, float(profile.camera))
+	var heavy := str(platform.get("class", "handgun")) in ["shotgun", "sniper"]
+	add_directional_impulse(-last_player_shot_direction, float(profile.camera) * (1.65 if heavy else 1.0))
 
 func add_directional_impulse(direction: Vector2, strength: float) -> void:
 	if direction.length_squared() < 0.001: return
-	directional_offset = (directional_offset * 0.35 + direction.normalized() * clampf(strength, 0.0, MAX_DIRECTIONAL_OFFSET)).limit_length(MAX_DIRECTIONAL_OFFSET)
+	var frame := Engine.get_physics_frames()
+	if frame != directional_frame:
+		directional_frame = frame
+		directional_peak = 0.0
+	if strength <= directional_peak: return
+	directional_peak = clampf(strength, 0.0, MAX_DIRECTIONAL_OFFSET)
+	directional_axis = direction.normalized()
+	directional_offset = directional_axis * directional_peak
+	recoil_velocity = Vector2.ZERO
+
+func update_recoil(delta: float) -> void:
+	# Analytic critically damped return: stable at 30/60/144 Hz, never accumulates
+	# shotgun pellets or oscillates the aim around its target.
+	var step := maxf(delta, 0.0)
+	var omega := 13.0
+	var c := recoil_velocity + directional_offset * omega
+	var decay := exp(-omega * step)
+	recoil_velocity = (recoil_velocity - c * omega * step) * decay
+	directional_offset = (directional_offset + c * step) * decay
+	if directional_offset.length_squared() < 0.0001:
+		directional_offset = Vector2.ZERO
+		recoil_velocity = Vector2.ZERO
 
 func get_follow_position(player_position: Vector2, mouse_position: Vector2) -> Vector2:
 	var weapon_multiplier := 1.0
@@ -138,8 +165,7 @@ func get_tilt_target(player_x: float) -> float:
 
 func _physics_process(delta: float) -> void:
 	drift_time += delta
-	directional_offset *= exp(-22.0 * delta)
-	if directional_offset.length_squared() < 0.0001: directional_offset = Vector2.ZERO
+	update_recoil(delta)
 	if not is_instance_valid(follow_target):
 		follow_target = get_tree().get_first_node_in_group("player") as Node2D
 	if is_instance_valid(follow_target):
@@ -163,7 +189,9 @@ func _physics_process(delta: float) -> void:
 		offset = (smooth_shake_offset + directional_offset * shake_strength).round() + Vector2(drift_pixel, tilt_pixel)
 		rotation = 0.0
 		return
-	smooth_shake_offset = Vector2(noise.get_noise_1d(noise_time), noise.get_noise_1d(noise_time + 71.7)) * minf(max_offset, 1.5) * shake * shake_strength
+	var axis_noise := noise.get_noise_1d(noise_time)
+	var side_noise := noise.get_noise_1d(noise_time + 71.7) * 0.25
+	smooth_shake_offset = (directional_axis * axis_noise + directional_axis.orthogonal() * side_noise) * minf(max_offset, 1.5) * shake * shake_strength
 	var tilt_pixel := roundi(rad_to_deg(smooth_tilt) * 1.8)
 	var drift_pixel := roundi(sin(drift_time * drift_speed)) if ambient_drift_enabled else 0
 	offset = (smooth_shake_offset + directional_offset * shake_strength).round() + Vector2(drift_pixel, tilt_pixel)

@@ -225,23 +225,8 @@ func _physics_process(delta: float) -> void:
 	rotation = snappedf(simulated_rotation, PI / 8.0)
 	spin = move_toward(spin, 0.0, 7.0 * delta)
 
-func try_claim_investigation(investigator: Node) -> bool:
-	return CorpseIncidentRegistry.try_claim(self, investigator)
-
-func complete_investigation(investigator: Node) -> void:
-	CorpseIncidentRegistry.complete(self, investigator)
-
-func release_investigation(investigator: Node) -> void:
-	CorpseIncidentRegistry.release(self, investigator)
-
-func has_active_investigator() -> bool:
-	return CorpseIncidentRegistry.has_active_investigator(self)
-
-func is_investigation_complete() -> bool:
-	return CorpseIncidentRegistry.is_complete(self)
-
 func can_receive_overkill() -> bool:
-	return overkill_window > 0.0 and overkill_hits < 3
+	return overkill_window > 0.0 and overkill_hits < 1
 
 func receive_projectile_overkill(direction: Vector2, hit_position: Vector2, weapon_id: String, impact_speed: float) -> bool:
 	if not can_receive_overkill(): return false
@@ -254,9 +239,6 @@ func receive_projectile_overkill(direction: Vector2, hit_position: Vector2, weap
 	spin += randf_range(-0.9, 0.9) * float(followup.spin_force)
 	queue_redraw()
 	return true
-
-func _exit_tree() -> void:
-	CorpseIncidentRegistry.unregister_corpse(self)
 
 func _draw_compact_pixel_corpse() -> void:
 	# Original prototype language: a tiny readable body assembled from a handful

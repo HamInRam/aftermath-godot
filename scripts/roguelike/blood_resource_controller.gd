@@ -3,6 +3,67 @@ extends Node2D
 
 signal resource_changed(current: float, maximum: float, stance_active: bool)
 signal skill_triggered(skill_id: String)
+signal rage_changed(active: bool)
+
+var blood_rage_mode := false
+var rage_active := false
+const RAGE_DRAIN := 14.0
+const RAGE_RECOVERY := 10.0
+const RAGE_RADIUS := 56.0
+var rage_visual_clock := 0.0
+
+func is_raging() -> bool:
+	return blood_rage_mode and rage_active
+
+func _set_rage(active: bool) -> void:
+	if rage_active == active: return
+	rage_active = active
+	overload_active = active
+	rage_changed.emit(active)
+	resource_changed.emit(reserve, capacity, stance_active)
+	queue_redraw()
+
+func _update_rage_system(delta: float, player: Node2D, blood_system: Node) -> void:
+	last_absorption_steps = 0
+	if not is_instance_valid(player) or not is_instance_valid(blood_system): return
+	if player.get("is_dead") == true:
+		reserve = 0.0
+		_set_rage(false)
+		return
+	if player.get("controls_enabled") == false: return
+	var dt := maxf(0.0, delta)
+	rage_visual_clock += dt
+	siphon_target_position = player.global_position
+	_update_particles(dt, player)
+	siphon_visual_amount = move_toward(siphon_visual_amount,0.0,dt*7.5)
+	if not rage_active and reserve >= capacity-0.001: _set_rage(true)
+	var ended := false
+	if rage_active:
+		reserve = maxf(0.0, reserve - RAGE_DRAIN * dt)
+		if reserve <= 0.0:
+			_set_rage(false)
+			ended = true
+	if not ended and (stance_active or rage_active):
+		absorption_clock = minf(ABSORB_INTERVAL*2.0, absorption_clock + dt)
+		while absorption_clock >= ABSORB_INTERVAL:
+			absorption_clock -= ABSORB_INTERVAL
+			last_absorption_steps += 1
+			var rate := RAGE_RECOVERY if rage_active else 60.0
+			var available := minf(capacity-reserve, rate*ABSORB_INTERVAL)
+			if available <= 0.0001: break
+			var budget := maxi(1,floori(available / (RAW_TO_RESOURCE * absorption_efficiency)))
+			siphon_direction = _resolve_siphon_direction(player)
+			var result: Dictionary = blood_system.absorb_siphon_sector(player.global_position,siphon_direction,RAGE_RADIUS if rage_active else SIPHON_REACH,PI if rage_active else absorption_half_angle,RAGE_RADIUS if rage_active else SIPHON_PROXIMITY,budget)
+			var removed := int(result.get("amount",0))
+			if removed <= 0: break
+			reserve = minf(capacity, reserve + removed * RAW_TO_RESOURCE * absorption_efficiency)
+			siphon_visual_amount = 1.0
+			_spawn_siphon_motes(result.get("positions",PackedVector2Array()))
+			if not rage_active and reserve >= capacity-0.001: _set_rage(true)
+	else:
+		absorption_clock = 0.0
+	_emit_if_changed()
+	if rage_active: queue_redraw()
 
 const BLOOD_RED := NeonPalette.BLOOD_CRIMSON
 const BLOOD_HOT := NeonPalette.BLOOD_CRIMSON
@@ -51,7 +112,7 @@ var perks = preload("res://scripts/roguelike/run_combat_perks.gd").new()
 func set_build(id: String) -> void:
 	if id not in ["balanced", "harvester", "heavy", "mobile"]: return
 	build_id = id
-	capacity = 70.0 if id == "harvester" else 100.0
+	capacity = 70.0 if id == "harvester" and not blood_rage_mode else 100.0
 	absorption_rate_per_second = (75.0 if id == "harvester" else 60.0) if blood_ammo_mode else (32.0 if id == "harvester" else 24.0)
 	stance_move_multiplier = 0.94 if id == "mobile" else 0.80
 	enhanced_round_cost = 5.0 if id == "heavy" else 3.5
@@ -115,6 +176,9 @@ func _ready() -> void:
 	resource_changed.emit(reserve, capacity, stance_active)
 
 func update_system(delta: float, player: Node2D, blood_system: Node) -> void:
+	if blood_rage_mode:
+		_update_rage_system(delta,player,blood_system)
+		return
 	last_absorption_steps = 0
 	pressure_retry = maxf(0.0,pressure_retry-delta)
 	update_overload(delta)
@@ -173,7 +237,7 @@ func _spawn_siphon_motes(sources: PackedVector2Array) -> void:
 		var source := sources[index * sources.size() / count]
 		var delay := float(index % 4) * 0.006
 		var curve := (4.0 + float(mote_serial % 6)) * (-1.0 if mote_serial % 2 == 0 else 1.0)
-		var duration := siphon_duration(source.distance_to(siphon_target_position)) if blood_ammo_mode else SIPHON_PARTICLE_LIFETIME
+		var duration := siphon_duration(source.distance_to(siphon_target_position)) if blood_ammo_mode or blood_rage_mode else SIPHON_PARTICLE_LIFETIME
 		var mote: Dictionary = recycled_motes.pop_back() if not recycled_motes.is_empty() else {}
 		mote.origin = source
 		mote.position = source
@@ -229,7 +293,7 @@ func consume_enhanced_round(shot_id := -1, last_round := false) -> Dictionary:
 	return enhanced_shot_cache
 
 func request_skill(skill_id: String) -> bool:
-	if blood_ammo_mode: return false
+	if blood_ammo_mode or blood_rage_mode: return false
 	var id := skill_id.to_lower()
 	if not skill_costs.has(id) or float(skill_cooldowns.get(id, 0.0)) > 0.0: return false
 	var cost := float(skill_costs[id])
@@ -242,7 +306,7 @@ func request_skill(skill_id: String) -> bool:
 	return true
 
 func consume_heal(player: Node) -> bool:
-	if blood_ammo_mode: return false
+	if blood_ammo_mode or blood_rage_mode: return false
 	if reserve + 0.001 < heal_cost or not is_instance_valid(player): return false
 	if int(player.get("hp")) >= int(player.get("max_hp")): return false
 	var healed := int(player.heal(heal_amount)) if player.has_method("heal") else 0
@@ -259,6 +323,7 @@ func get_cooldown_ratios() -> Dictionary:
 	return result
 
 func get_movement_multiplier() -> float:
+	if blood_rage_mode: return 1.25 if rage_active else 1.0
 	if blood_ammo_mode: return 1.0
 	if perks.harvest_time > 0.0: return 1.0
 	return stance_move_multiplier if stance_active else 1.0
@@ -326,7 +391,20 @@ func _emit_if_changed() -> void:
 	resource_changed.emit(reserve, capacity, stance_active)
 
 func _draw() -> void:
-	if overload_active:
+	if blood_rage_mode and rage_active:
+		# Persistent rotating pixel flames, not a one-frame activation ring.
+		# Entirely visual: no new nodes, collision queries or recoverable blood.
+		for i in 48:
+			var angle := float(i)*TAU/48.0 + rage_visual_clock*1.8
+			var radius := 10.0 + sin(rage_visual_clock*9.0 + i*0.8)*1.5
+			for tail in 3:
+				var a := angle-float(tail)*0.06
+				var r := radius+float(tail)*1.3
+				PIXELS.pixel(self,Vector2(cos(a),sin(a))*r,Color(BLOOD_RED,1.0-float(tail)*0.18))
+			if i%4 == 0:
+				var spark_radius := 14.0+fmod(rage_visual_clock*16.0+i,5.0)
+				PIXELS.pixel(self,Vector2(cos(angle),sin(angle))*spark_radius,BLOOD_RED)
+	if overload_active and not blood_rage_mode:
 		for side in [-1,1]:
 			for step in range(5):
 				PIXELS.pixel(self, Vector2(side*7,step-2), BLOOD_RED)

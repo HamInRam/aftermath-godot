@@ -150,10 +150,12 @@ func _ready() -> void:
 	if roguelike_mode:
 		blood_resource = BLOOD_RESOURCE_CONTROLLER.new() as Node2D
 		blood_resource.name = "BloodResource"
-		blood_resource.blood_ammo_mode = true
+		blood_resource.blood_rage_mode = true
+		blood_resource.reserve = 0.0
 		blood_resource.absorption_rate_per_second = 60.0
 		add_child(blood_resource)
 		blood_resource.resource_changed.connect(_on_blood_resource_changed)
+		blood_resource.rage_changed.connect(_on_blood_rage_changed)
 		blood_resource.skill_triggered.connect(_on_blood_skill_triggered)
 		room_run = ROOM_RUN_CONTROLLER.new() as Node
 		room_run.name = "RoomRun"
@@ -327,7 +329,9 @@ func _process(delta: float) -> void:
 			var audio_director := get_node_or_null("CombatAudioDirector")
 			if is_instance_valid(audio_director): audio_director.set_blood_level(blood_resource.reserve / maxf(1.0, blood_resource.capacity), player.controls_enabled and not player.is_dead, blood_resource.overload_active)
 			player.set_blood_stance_movement_multiplier(blood_resource.get_movement_multiplier())
-			player.set_blood_siphon_visual(blood_resource.get_siphon_visual_amount())
+			player.set_blood_rage_visual(blood_resource.is_raging(), delta)
+			player.set_blood_siphon_visual(maxf(blood_resource.get_siphon_visual_amount(), 0.85 if blood_resource.is_raging() else 0.0))
+			hud.set_blood_rage(blood_resource.is_raging())
 			if is_instance_valid(hud.reticle): hud.reticle.set_siphon_strength(blood_resource.get_siphon_visual_amount())
 		if roguelike_mode and is_instance_valid(room_run): room_run.update_room(player)
 		if route_anchor == Vector2.ZERO: route_anchor = player.global_position
@@ -616,13 +620,14 @@ func _on_ammo_updated(current: int, maximum: int, is_reloading: bool) -> void:
 	if phase == "cleanup": return
 	current_ammo = current
 	current_capacity = maximum
-	ammo_label.text = "RELOAD" if is_reloading else _format_ammo()
+	ammo_label.text = "INF" if is_instance_valid(blood_resource) and blood_resource.is_raging() else ("RELOAD" if is_reloading else _format_ammo())
 
 func _on_ammo_reserve_updated(reserve: int) -> void:
 	current_reserve = reserve
 	if phase != "cleanup" and is_instance_valid(ammo_label): ammo_label.text = _format_ammo()
 
 func _format_ammo() -> String:
+	if is_instance_valid(blood_resource) and blood_resource.is_raging(): return "INF"
 	return "%02d/%02d  +%s" % [current_ammo, current_capacity, "∞" if current_reserve < 0 else "%02d" % current_reserve]
 
 func _on_reload_started(_duration: float) -> void:
@@ -671,7 +676,6 @@ func _on_precision_reward(weapon_id: String, streak: int) -> void:
 	detail_label.text = "%s PRECISION x%d // EMPTY MAG RELOAD BOOST" % [weapon_id.to_upper(), streak]
 
 func _start_run() -> void:
-	CorpseIncidentRegistry.reset()
 	# Cleanup is retired from the active Roguelike, but legacy evidence-capable
 	# props still register for save compatibility. Clear their autoload history at
 	# every run boundary so repeated retries cannot accumulate stale WeakRefs.
@@ -730,8 +734,9 @@ func _start_run() -> void:
 	if roguelike_mode:
 		player.blood_action_mode = true
 		player.blood_terrain_canvas = blood_system.ground_canvas
-		player.gun.blood_fire_payment = blood_resource.pay_for_shot
+		player.gun.rage_fire_active = blood_resource.is_raging
 	player.health_changed.connect(hud.set_player_health)
+	player.hit_received.connect(_on_player_directional_hit)
 	player.armor_changed.connect(hud.set_player_armor)
 	player.configure_field_kit(LoadoutCatalog.get_kit(Progression.get_current_kit_id()))
 	if Progression.run_session.restore(entry_state, player, blood_resource):
@@ -1023,7 +1028,15 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 	if overload_round:
 		blood_round = true
 		blood_budget_per_projectile = floori(blood_resource.last_shot_blood_cost * 0.72 / blood_resource.RAW_TO_RESOURCE / maxi(1,data.pellet_count))
-	if roguelike_mode and not enemy_owned and is_instance_valid(blood_resource) and not blood_resource.blood_ammo_mode:
+	var rage_round: bool = not enemy_owned and is_instance_valid(blood_resource) and blood_resource.blood_rage_mode and player.gun.last_shot_rage
+	if rage_round:
+		blood_round = true
+		resolved_damage = maxi(1, roundi(float(damage) * 1.65))
+		resolved_penetration += 0.85
+		# Rage is bounded by its recovery rate, not the retired paid-shot ledger.
+		# Give the stronger spray headroom without multiplying a trigger's mass by pellets.
+		blood_budget_per_projectile = maxi(120000, roundi(data.blood_power * 240000.0)) / maxi(1, data.pellet_count)
+	if roguelike_mode and not enemy_owned and is_instance_valid(blood_resource) and not blood_resource.blood_ammo_mode and not blood_resource.blood_rage_mode:
 		var shot_id: int = int(player.gun.current_shot_id) if is_instance_valid(player) and is_instance_valid(player.gun) else -1
 		var enhancement: Dictionary = blood_resource.consume_enhanced_round(shot_id, is_instance_valid(player.gun) and player.gun.ammo == 0)
 		blood_round = bool(enhancement.enhanced)
@@ -1035,7 +1048,8 @@ func _on_projectile_requested(origin: Vector2, direction: Vector2, enemy_owned: 
 			blood_budget_per_projectile = floori(float(enhancement.raw_blood_budget) / float(maxi(1, data.pellet_count)))
 	bullet.setup(direction, enemy_owned, resolved_damage, weapon_id, origin, data.bullet_speed, shooter, resolved_penetration, data.property_damage, data.damage_falloff_start, data.damage_falloff_end, data.minimum_damage_ratio)
 	bullet.blood_stain_radius = data.blood_stain_radius
-	bullet.breach_round = overload_round
+	bullet.rage_visual = rage_round
+	bullet.breach_round = overload_round or rage_round
 	# Detach from the equipped resource: swapping/modifying a gun must not
 	# retroactively change an in-flight projectile's terrain signature.
 	bullet.weapon_source = data.duplicate(true) as GunData
@@ -1083,7 +1097,10 @@ func _on_enemy_died(pos: Vector2, facing: float, defeated_enemy: Node = null) ->
 	best_combo = maxi(best_combo, combo)
 	combo_timer = 2.2
 	_reward_combat_focus(pending_death_attack_id, pending_death_hit_zone, combo)
-	trauma_camera.trigger_kill_effect(0.72, "red")
+	trauma_camera.trigger_kill_effect(0.72, "red", pending_death_direction)
+	var room_finish := _is_last_room_target(defeated_enemy)
+	if room_finish or (combo >= 10 and combo % 10 == 0):
+		combat_feedback.trigger_finisher(room_finish, Settings.hit_stop_strength)
 	var corpse = CORPSE_SCENE.instantiate()
 	corpse.position = to_local(pos)
 	var rig_kind := "hound" if is_instance_valid(defeated_enemy) and str(defeated_enemy.actor_type) == "dog" else "human"
@@ -1224,6 +1241,16 @@ func _on_blood_heal_requested() -> void:
 		trauma_camera.add_trauma(0.08)
 	else:
 		hud.show_banner("BLOOD BAG UNAVAILABLE", Color("a8a8a8"))
+
+func _on_blood_rage_changed(active: bool) -> void:
+	if is_instance_valid(player) and is_instance_valid(player.gun):
+		player.set_blood_rage_visual(active)
+		if active: player.gun.cancel_reload()
+		Events.publish_ammo(player.gun.ammo, player.gun.max_ammo, false)
+		Events.publish_ammo_reserve(player.gun.reserve_ammo)
+	if is_instance_valid(hud):
+		hud.set_blood_rage(active)
+		hud.show_banner("BLOOD RAGE" if active else "RAGE ENDED", NeonPalette.BLOOD_CRIMSON)
 
 func _on_blood_resource_changed(current: float, maximum: float, active: bool) -> void:
 	if is_instance_valid(hud) and is_instance_valid(blood_resource): hud.set_blood_resource(current, maximum, active, blood_resource.get_cooldown_ratios())
@@ -1454,6 +1481,8 @@ func _on_damage_impact(context: DamageContext) -> void:
 	# player death and corpse overkill retain impact feedback without creating a
 	# self-recycling blood source under the player.
 	context.configure_blood_yield(is_instance_valid(blood_resource) and blood_resource.blood_ammo_mode, combo if combo_timer > 0.0 else 0)
+	if context.blood_enhanced and is_instance_valid(blood_resource) and blood_resource.blood_rage_mode:
+		context.blood_yield_multiplier = 2.0
 	if is_instance_valid(context.target) and context.target.is_in_group("enemy") and context.target is Actor and not context.target.is_dead and context.target.hp > 0 and context.damage > 0:
 		if context.target.get_meta("polluter", false):
 			# Lethal patch is stamped once in _on_enemy_died. Limit repeated
@@ -1539,10 +1568,24 @@ func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction:
 	_trigger_hit_stop(float(profile.hit_stop))
 	target.take_damage(maxi(1, target.hp), hit_position - direction * 2.0)
 
+func _is_last_room_target(target: Node) -> bool:
+	if not is_instance_valid(target) or not is_instance_valid(room_run): return remaining_enemies == 0
+	var room_id := str(target.get_meta("rogue_room_id", ""))
+	if room_id.is_empty() or not room_run.room_members.has(room_id): return remaining_enemies == 0
+	for member in room_run.room_members[room_id]:
+		if is_instance_valid(member) and member != target and not member.is_dead: return false
+	return true
+
+func _on_player_directional_hit(amount: int, source_position: Vector2) -> void:
+	if amount <= 0 or not is_instance_valid(player): return
+	trauma_camera.add_directional_impulse(player.global_position - source_position, 2.8)
+	trauma_camera.add_trauma(0.20)
+
 func _on_execution_impact(hit_position: Vector2, direction: Vector2, lethal: bool, execution_type: String) -> void:
 	var attack_id := execution_type if lethal else "fist"
 	blood_system.emit_hit(hit_position, direction, 1, attack_id, 0.0, lethal)
 	trauma_camera.add_trauma(0.42 if lethal else 0.2)
+	trauma_camera.add_directional_impulse(-direction, 4.0 if lethal else 1.0)
 	if lethal:
 		var profile := AttackCatalog.get_impact_profile(execution_type)
 		pending_death_direction = direction

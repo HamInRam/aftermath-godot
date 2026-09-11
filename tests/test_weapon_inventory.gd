@@ -52,7 +52,7 @@ func _run() -> void:
 	var shotgun_data := AttackCatalog.get_gun_data("mossberg_590a1")
 	_expect(player.gun.get_weapon_ammo("mossberg_590a1") == shotgun_data.ammo_capacity and player.gun.get_reserve_ammo("mossberg_590a1") == shotgun_data.ammo_capacity, "every secondary assault-kit weapon must be initialized with ammunition")
 	player.configure_field_kit(LoadoutCatalog.get_kit("stealth"))
-	_expect(player.owned_gun_indices.size() == 2 and player.gun.weapon_id == "hk_mp5sd6" and player.gun.field_noise_multiplier < 0.8, "ghost kit should issue two low-signature platforms")
+	_expect(player.owned_gun_indices.size() == 2 and player.gun.weapon_id == "hk_mp5a5" and player.gun.field_noise_multiplier < 0.8, "ghost kit should issue two retained low-signature platforms")
 	var stealth_data := AttackCatalog.get_gun_data("hk_mp5sd6")
 	_expect(player.gun.ammo == stealth_data.ammo_capacity and player.gun.reserve_ammo == stealth_data.ammo_capacity * 2, "switching briefing kits must reset the issued primary to a usable state")
 	# Fresh-trigger semantics on the real player input handler.

@@ -80,6 +80,7 @@ jobs:
             tests/test_wound_response.tscn \
             tests/test_roguelike_blood_loop.tscn \
             tests/test_blood_action_flow.tscn \
+            tests/test_blood_rage.tscn \
             tests/test_blood_terrain.tscn \
             tests/test_siphon_sector.tscn \
             tests/test_blood_juice.tscn \
@@ -95,9 +96,12 @@ jobs:
             tests/test_breach_awareness.tscn \
             tests/test_living_knockback.tscn \
             tests/test_critical_hit_stop.tscn \
+            tests/test_directional_finish_feedback.tscn \
             tests/test_blood_overload.tscn \
             tests/test_performance_hotpaths.tscn \
             tests/test_shotgun_burst_performance.tscn \
+            tests/test_core_subtraction.tscn \
+            tests/test_optimization_lifecycle.tscn \
             tests/test_blood_terrain_room.tscn \
             tests/test_roguelike_run_session.tscn \
             tests/test_roguelike_floor_flow.tscn \

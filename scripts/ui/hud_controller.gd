@@ -5,6 +5,8 @@ const UI_DEFAULTS := preload("res://utility/scripts/ui_defaults.gd")
 const PIXEL_ICONS := preload("res://utility/pixel_icon_factory.gd")
 const COMBAT_RETICLE := preload("res://scripts/ui/combat_reticle.gd")
 const COMPACT_PROGRESS := preload("res://scripts/ui/compact_progress_bar.gd")
+const CRIMSON_INSTRUMENT := preload("res://scripts/ui/crimson_instrument.gd")
+var blood_caption: Label
 
 var status_label: Label
 var detail_label: Label
@@ -68,20 +70,29 @@ func _ready() -> void:
 	# Typeset corner instruments: the centre is reserved for targets and blood.
 	# Layout is in native units; fonts rasterize independently at output scale.
 	tactical_backplate = _make_pixel_card(Rect2(252, 6, 62, 10), Color.WHITE)
-	resource_backplate = _make_pixel_card(Rect2(6, 6, 66, 24), Color.WHITE)
+	resource_backplate = _make_pixel_card(Rect2(6, 140, 100, 34), Color.WHITE)
 	status_backplate = _make_pixel_card(Rect2(87, 6, 146, 20), Color.WHITE)
-	vitality_backplate = _make_pixel_card(Rect2(6, 147, 64, 13), Color.WHITE)
-	focus_backplate = _make_pixel_card(Rect2(6, 163, 64, 10), Color.WHITE)
-	blood_backplate = _make_pixel_card(Rect2(254, 157, 60, 16), Color("d10b32"))
+	vitality_backplate = _make_pixel_card(Rect2(6, 122, 64, 13), Color.WHITE)
+	focus_backplate = _make_pixel_card(Rect2(6, 108, 64, 10), Color.WHITE)
+	blood_backplate = _make_pixel_card(Rect2(286, 99, 28, 75), Color("d10b32"))
+	# The ammo instrument is bounded by white brackets and a crimson witness mark.
+	for rect in [Rect2(0,0,16,1), Rect2(0,0,1,8), Rect2(99,26,1,8), Rect2(84,33,16,1)]:
+		var bracket := ColorRect.new()
+		bracket.position = rect.position
+		bracket.size = rect.size
+		bracket.color = Color.WHITE
+		bracket.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		resource_backplate.add_child(bracket)
 	context_backplate = _make_pixel_card(Rect2(109, 150, 102, 12), Color.WHITE)
 	context_backplate.visible = false
 
-	ammo_icon = _make_icon(Vector2(9, 10), "weapon", Color.WHITE)
-	ammo_label = _make_label(Vector2(22, 7), 7, Color.WHITE)
-	ammo_label.size = Vector2(47, 12)
-	ammo_meter = _make_meter(Vector2(22, 25), Vector2(26, 1), Color.WHITE)
-	ammo_caption = _make_label(Vector2(51, 22), 4, Color("a8a8a8"))
-	ammo_caption.text = "AMMO"
+	ammo_icon = _make_icon(Vector2(10, 147), "weapon", Color.WHITE)
+	ammo_icon.size = Vector2(16, 16)
+	ammo_label = _make_label(Vector2(30, 143), 11, Color.WHITE)
+	ammo_label.size = Vector2(72, 18)
+	ammo_meter = _make_instrument(Vector2(30, 166), Vector2(72, 5), false)
+	ammo_caption = _make_label(Vector2(30, 160), 4, Color("a8a8a8"))
+	ammo_caption.text = "MAG // RESERVE"
 
 	enemy_count_icon = _make_icon(Vector2(255, 7), "enemy", Color.WHITE)
 	enemy_count_label = _make_label(Vector2(264, 7), 5, Color.WHITE)
@@ -93,29 +104,33 @@ func _ready() -> void:
 	combo_label.size = Vector2(44, 14)
 	combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
-	health_icon = _make_icon(Vector2(9, 149), "health", Color.WHITE)
-	health_label = _make_label(Vector2(20, 148), 6, Color.WHITE)
+	health_icon = _make_icon(Vector2(9, 124), "health", Color.WHITE)
+	health_label = _make_label(Vector2(20, 123), 6, Color.WHITE)
 	health_label.size = Vector2(25, 9)
 	health_label.text = "115"
-	health_meter = _make_meter(Vector2(20, 158), Vector2(25, 1), Color.WHITE)
-	armor_icon = _make_icon(Vector2(49, 149), "armor", Color("929292"))
-	armor_meter = _make_meter(Vector2(58, 158), Vector2(9, 1), Color("b8b8b8"))
+	health_meter = _make_meter(Vector2(20, 133), Vector2(25, 1), Color.WHITE)
+	armor_icon = _make_icon(Vector2(49, 124), "armor", Color("929292"))
+	armor_meter = _make_meter(Vector2(58, 133), Vector2(9, 1), Color("b8b8b8"))
 	armor_meter.value = 0.0
 
-	focus_icon = _make_icon(Vector2(9, 164), "focus", Color.WHITE)
-	focus_count_label = _make_label(Vector2(20, 164), 5, Color.WHITE)
+	focus_icon = _make_icon(Vector2(9, 109), "focus", Color.WHITE)
+	focus_count_label = _make_label(Vector2(20, 109), 5, Color.WHITE)
 	focus_count_label.text = "x3"
 	focus_count_label.size = Vector2(16, 7)
-	focus_caption = _make_label(Vector2(40, 164), 4, Color("b8b8b8"))
+	focus_caption = _make_label(Vector2(40, 109), 4, Color("b8b8b8"))
 	focus_caption.text = "X FOCUS"
-	focus_meter = _make_meter(Vector2(20, 171), Vector2(47, 1), Color.WHITE)
-	blood_icon = _make_icon(Vector2(257, 160), "blood", Color("d10b32"))
-	blood_count_label = _make_label(Vector2(268, 158), 7, Color("d10b32"))
+	focus_meter = _make_meter(Vector2(20, 116), Vector2(47, 1), Color.WHITE)
+	blood_icon = _make_icon(Vector2(296, 101), "blood", Color("d10b32"))
+	blood_count_label = _make_label(Vector2(289, 158), 6, Color("d10b32"))
 	blood_count_label.text = "000"
 	blood_count_label.size = Vector2(22, 10)
-	blood_meter = _make_meter(Vector2(268, 170), Vector2(43, 1), Color("d10b32"))
+	blood_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	blood_meter = _make_instrument(Vector2(291, 112), Vector2(18, 44), true)
 	blood_meter.value = 0.0
-	_make_label(Vector2(294, 160), 4, Color("b8b8b8")).text = "RMB"
+	blood_caption = _make_label(Vector2(289, 168), 4, Color("b8b8b8"))
+	blood_caption.size = Vector2(22,6)
+	blood_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	blood_caption.text = "RMB"
 	blood_skill_label = _make_label(Vector2(166, 140), 5, Color("d10b32"))
 	blood_skill_label.size = Vector2(148, 9)
 	blood_skill_label.clip_text = true
@@ -156,8 +171,9 @@ func _ready() -> void:
 	interaction_icon.size = Vector2(6, 6)
 	interaction_icon.hide()
 	keycap_label.hide()
-	tutorial_label = _make_label(Vector2(77, 169), 5, Color("a8a8a8"))
-	tutorial_label.size = Vector2(166, 7)
+	tutorial_label = _make_label(Vector2(76, 34), 5, Color("a8a8a8"))
+	tutorial_label.size = Vector2(168, 16)
+	tutorial_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tutorial_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tutorial_label.text = "LMB FIRE  Q THROW  RMB BLOOD"
 	reticle = COMBAT_RETICLE.new() as CombatReticle
@@ -167,6 +183,16 @@ func _ready() -> void:
 	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_label.modulate.a = 0.0
 	status_backplate.hide()
+
+func _make_instrument(pos: Vector2, extent: Vector2, vertical: bool):
+	var instrument = CRIMSON_INSTRUMENT.new()
+	instrument.position = pos
+	instrument.size = extent
+	instrument.vertical = vertical
+	instrument.max_value = 1.0
+	instrument.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(instrument)
+	return instrument
 
 func _make_meter(pos: Vector2, extent: Vector2, color: Color):
 	var meter = COMPACT_PROGRESS.new()
@@ -230,7 +256,7 @@ func _process(delta: float) -> void:
 		_last_interaction_text = interaction_label.text
 	if ammo_label.text != _last_ammo_text:
 		var raw := ammo_label.text
-		ammo_icon.texture = PIXEL_ICONS.make(_icon_for_text(raw, "ammo"), Color("f4f4f4"))
+		ammo_icon.texture = PIXEL_ICONS.make("reload" if "RELOAD" in raw else "magazine", Color("f4f4f4"))
 		ammo_label.text = _compact_ammo(raw)
 		_update_ammo_meter(raw)
 		_last_ammo_text = ammo_label.text
@@ -283,13 +309,13 @@ func set_combat_focus(value: float, active: bool, charges := 0, max_charges := 3
 func set_roguelike_mode(enabled: bool) -> void:
 	if not enabled: return
 	_roguelike_mode = true
-	tutorial_label.text = "LMB BLOOD FIRE  RMB SIPHON  SPACE ROLL"
-	resource_backplate.visible = false
-	ammo_caption.visible = false
-	ammo_icon.visible = false
-	ammo_label.visible = false
-	ammo_meter.visible = false
-	focus_backplate.visible = false
+	tutorial_label.text = "LMB FIRE  R RELOAD  RMB SIPHON  SPACE ROLL"
+	resource_backplate.visible = true
+	ammo_caption.visible = true
+	ammo_icon.visible = true
+	ammo_label.visible = true
+	ammo_meter.visible = true
+	for node in [focus_backplate, focus_icon, focus_count_label, focus_meter, focus_caption]: node.visible = false
 	blood_backplate.visible = true
 	blood_icon.visible = true
 	blood_count_label.visible = true
@@ -298,7 +324,7 @@ func set_roguelike_mode(enabled: bool) -> void:
 	_set_card_accent(status_backplate, Color("f4f4f4"))
 	_set_card_accent(resource_backplate, Color("f4f4f4"))
 	_set_card_accent(vitality_backplate, Color("d10b32"))
-	ammo_icon.texture = PIXEL_ICONS.make("ammo", Color("f4f4f4"))
+	ammo_icon.texture = PIXEL_ICONS.make("magazine", Color("f4f4f4"))
 	ammo_label.modulate = Color("f4f4f4")
 	health_icon.texture = PIXEL_ICONS.make("health", Color("d10b32"))
 	enemy_count_icon.texture = PIXEL_ICONS.make("enemy", Color("d10b32"))
@@ -311,7 +337,7 @@ func set_blood_resource(current: float, maximum: float, active: bool, cooldowns 
 	blood_meter.visible = true
 	blood_count_label.text = "%03d" % roundi(current)
 	var color := Color("d10b32")
-	blood_meter.modulate = color
+	blood_meter.modulate = Color.WHITE
 	blood_count_label.modulate = color
 	blood_icon.texture = PIXEL_ICONS.make("blood", color)
 	_set_card_accent(blood_backplate, color)
@@ -322,6 +348,18 @@ func set_blood_resource(current: float, maximum: float, active: bool, cooldowns 
 		blood_skill_label.text = "%s STEP   %s PULSE   %s GUARD   B HEAL" % [q, e, r]
 		blood_skill_label.modulate = color if active else Color("a8a8a8")
 		blood_skill_label.visible = active and not _roguelike_mode
+
+func set_blood_rage(active: bool) -> void:
+	if not is_instance_valid(ammo_caption): return
+	ammo_caption.text = "BLOOD RAGE" if active else "MAG // RESERVE"
+	ammo_meter.raging = active
+	blood_meter.raging = active
+	blood_caption.text = "RAGE" if active else "RMB"
+	if active:
+		ammo_label.text = "INF"
+		ammo_label.modulate = NeonPalette.BLOOD_CRIMSON
+		ammo_meter.value = 1.0
+		_set_card_accent(resource_backplate, NeonPalette.BLOOD_CRIMSON)
 
 func set_blood_overload(current: float, maximum: float, overloaded: bool) -> void:
 	if not is_instance_valid(blood_count_label): return
@@ -358,7 +396,7 @@ func show_banner(text: String, color := Color("f4f4f4")) -> void:
 func set_phase(value: String) -> void:
 	if value != "combat": return
 	tactical_backplate.visible = true
-	resource_backplate.visible = not _roguelike_mode
+	resource_backplate.visible = true
 	vitality_backplate.visible = true
 	health_icon.visible = true
 	health_label.visible = true
@@ -373,9 +411,9 @@ func set_phase(value: String) -> void:
 	alarm_count_label.visible = true
 	objective_icon.visible = false
 	objective_label.visible = false
-	ammo_icon.visible = not _roguelike_mode
-	ammo_label.visible = not _roguelike_mode
-	ammo_meter.visible = not _roguelike_mode
+	ammo_icon.visible = true
+	ammo_label.visible = true
+	ammo_meter.visible = true
 	for node in [focus_backplate, focus_icon, focus_count_label, focus_meter, focus_caption]: node.visible = not _roguelike_mode
 	blood_backplate.visible = _roguelike_mode
 	blood_icon.visible = _roguelike_mode
@@ -446,8 +484,8 @@ func _compact_ammo(text: String) -> String:
 	# The magazine capacity is already represented by the thin meter. Reserve
 	# ammunition must not be truncated off the edge of the resource card.
 	var numbers := _extract_numbers(value)
-	if "/" in value and numbers.size() >= 3:
-		return "%02d +%d" % [numbers[0], numbers[2]]
+	if "/" in value and numbers.size() >= 2:
+		return "%02d +%s" % [numbers[0], str(numbers[2]) if numbers.size() >= 3 else "INF"]
 	value = value.replace("PRESSURE WASHER", "WASH").replace("EVIDENCE BAG", "BAG").replace("BODY BAG", "BODY")
 	return value.left(12)
 

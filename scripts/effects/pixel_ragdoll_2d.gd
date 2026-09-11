@@ -20,6 +20,7 @@ var impact_profile: Dictionary = {}
 var wound_state := "intact"
 var wound_variant := 0
 var visual_role := "gunner"
+var wall_query := PhysicsRayQueryParameters2D.new()
 
 func setup(impact_direction: Vector2, intensity: float, missing: PackedStringArray, corpse_variant := 0, new_rig_kind := "human", new_impact_profile := {}, initial_pose := {}) -> void:
 	missing_modules = missing.duplicate()
@@ -237,8 +238,10 @@ func _resolve_wall_collision(from_local: Vector2, to_local: Vector2) -> Vector2:
 	var from_world := to_global(from_local)
 	var to_world := to_global(to_local)
 	if from_world.distance_squared_to(to_world) < 0.0001: return to_local
-	var query := PhysicsRayQueryParameters2D.create(from_world, to_world, WALL_MASK)
-	var result := get_world_2d().direct_space_state.intersect_ray(query)
+	wall_query.from = from_world
+	wall_query.to = to_world
+	wall_query.collision_mask = WALL_MASK
+	var result := get_world_2d().direct_space_state.intersect_ray(wall_query)
 	if result.is_empty(): return to_local
 	var normal: Vector2 = result.normal
 	return to_local(result.position + normal * 1.2)

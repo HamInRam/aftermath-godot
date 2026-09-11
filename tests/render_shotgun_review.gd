@@ -52,6 +52,13 @@ func _run() -> void:
 	var data := AttackCatalog.get_gun_data("mossberg_590a1")
 	player.gun.set_gun_data(data, true)
 	player.gun.set_weapon_ammo(data.weapon_id, data.ammo_capacity)
+	var rage_review := "--rage-review" in OS.get_cmdline_user_args()
+	if rage_review:
+		level.blood_resource.reserve = 100.0
+		level.blood_resource._set_rage(true)
+		level.blood_resource.global_position = player.global_position
+		player.set_blood_siphon_visual(0.95)
+		level.hud.set_blood_rage(true)
 	target.global_position = pair[1]
 	target.rotation = 0.0
 	target.configure_combat("gunner")
@@ -69,6 +76,9 @@ func _run() -> void:
 		push_error("Production shotgun failed to fire in the clear QA lane")
 		failures += 1
 	for frame in range(5): await get_tree().physics_frame
+	if rage_review:
+		assert(player.gun.ammo == data.ammo_capacity and player.gun.last_shot_rage)
+		level.hud.set_blood_rage(true)
 	await _capture("impact")
 	await get_tree().create_timer(0.65).timeout
 	await _capture("aftermath")

@@ -2,8 +2,8 @@ class_name MicroDebrisField
 extends Node2D
 
 ## Cosmetic fragments never damage actors or enter the blood ledger.
-const LIMIT := 512
-const RAY_BUDGET := 64
+const LIMIT := 256
+const RAY_BUDGET := 32
 var fragments: Array[Dictionary] = []
 var replacement := 0
 var simulation_cursor := 0
@@ -14,6 +14,7 @@ var body_cursor := 0
 var erosion_audio: AudioStreamPlayer2D
 var last_erosion_ms := -1000
 var erosion_chain := 0
+var wall_query := PhysicsRayQueryParameters2D.new()
 
 func play_erosion_tick(point: Vector2) -> void:
 	var now := Time.get_ticks_msec()
@@ -43,10 +44,11 @@ static func for_scene(node: Node) -> MicroDebrisField:
 func _ready() -> void:
 	z_index = 3
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	set_physics_process(false)
 
 func emit_impact(point: Vector2, direction: Vector2, material_name: String, strength := 1.0) -> void:
 	set_physics_process(true)
-	var count := clampi(roundi(16 * strength), 8, 32)
+	var count := clampi(roundi(10 * strength), 6, 18)
 	for i in count:
 		var paper := material_name in ["paper", "fabric", "carpet"]
 		var metal := material_name in ["metal", "electronic", "electronics"]
@@ -111,12 +113,16 @@ func _physics_process(delta: float) -> void:
 		if f.v.length_squared() < 1: continue
 		if rays >= RAY_BUDGET: continue
 		var destination: Vector2 = f.p + f.v * delta
-		var query := PhysicsRayQueryParameters2D.create(f.p, destination, 4)
-		var hit := get_world_2d().direct_space_state.intersect_ray(query)
+		wall_query.from = f.p
+		wall_query.to = destination
+		wall_query.collision_mask = 4
+		var hit := get_world_2d().direct_space_state.intersect_ray(wall_query)
 		rays += 1
 		if not hit.is_empty():
-			f.p = hit.position + hit.normal
-			f.v = f.v.bounce(hit.normal) * 0.22
+			var normal: Vector2 = hit.normal
+			f.p = hit.position + normal
+			# An inside-surface ray has no meaningful reflection plane.
+			f.v = f.v.bounce(normal.normalized()) * 0.22 if normal.length_squared() > 0.0001 else Vector2.ZERO
 			# Stop magnetic attempts against a wall until RMB is released.
 			if pulling: f.collected = true
 		else: f.p = destination
@@ -135,8 +141,10 @@ func _physics_process(delta: float) -> void:
 			var body = bodies[body_cursor]
 			body_cursor += 1
 			if captures(body.global_position):
-				var query := PhysicsRayQueryParameters2D.create(body.global_position, magnet_actor.global_position, 4)
-				if get_world_2d().direct_space_state.intersect_ray(query).is_empty(): body.siphon_toward(magnet_actor.global_position)
+				wall_query.from = body.global_position
+				wall_query.to = magnet_actor.global_position
+				wall_query.collision_mask = 4
+				if get_world_2d().direct_space_state.intersect_ray(wall_query).is_empty(): body.siphon_toward(magnet_actor.global_position)
 	if changed: queue_redraw()
 	elif not magnet_enabled and not scuff_active: set_physics_process(false)
 

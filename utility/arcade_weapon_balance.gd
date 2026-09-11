@@ -21,10 +21,35 @@ const SHOTGUNS := {
 	"keltec_ksg": {"damage": 25, "pellets": 9, "pellet_spread": 7.5, "fire_interval": 0.56, "reload": 2.3, "trait": "SWEEPER // WIDE PATTERN, DEEP MAGAZINE"},
 }
 
+const DISTINCT_ROLES := {
+	"glock_17_gen5_mos": {"spread": 0.35, "trait": "DUELIST // MOBILE PRECISION"},
+	"colt_m1911a1": {"damage": 85, "fire_interval": 0.28, "knockback": 38.0, "trait": "HAMMER // HEAVY SINGLE SHOT"},
+	"fn_fiveseven_mrd": {"damage": 38, "penetration": 2.5, "fire_interval": 0.12, "trait": "NEEDLE // PIERCING SIDEARM"},
+	"hk_mp5k_pdw": {"move": 1.12, "trait": "SPRINTER // MOBILE CLOSE FIRE"},
+	"fn_p90": {"fire_interval": 0.055, "damage": 24, "trait": "HOSE // RAPID LOW-COST FIRE"},
+	"hk_mp7a2": {"penetration": 2.0, "damage": 32, "trait": "DRILL // ARMOR PRESSURE"},
+	"hk_mp5a5": {"spread": 0.6, "trait": "FLOW // STABLE STREAM"},
+	"hk_ump45": {"damage": 62, "fire_interval": 0.13, "knockback": 36.0, "trait": "THUMPER // SLOW HEAVY BURSTS"},
+	"kriss_vector_45": {"damage": 25, "fire_interval": 0.045, "trait": "TORRENT // EXTREME FIRE RATE"},
+	"colt_m4a1": {"trait": "ASSAULT // ALL-ROUND CONTROL"},
+	"akm": {"damage": 85, "fire_interval": 0.14, "property": 2.0, "trait": "DEMOLISHER // COVER BREAKER"},
+	"iwi_tavor_x95": {"move": 1.08, "damage": 48, "trait": "RAIDER // MOBILE ASSAULT"},
+	"fn_scar_17s": {"trait": "EXECUTION // HEAVY PRECISION"},
+	"ruger_mini14_tactical": {"damage": 64, "fire_interval": 0.16, "move": 1.05, "trait": "SKIRMISHER // FAST FOLLOW-UP"},
+	"dragunov_svd": {"damage": 125, "penetration": 3.0, "fire_interval": 0.42, "trait": "SKEWER // MULTI-TARGET PIERCE"},
+	"remington_700_police": {"trait": "MARKSMAN // PRECISE HEAVY SHOT"},
+	"barrett_m82a1": {"damage": 220, "penetration": 4.5, "property": 3.0, "fire_interval": 0.95, "trait": "BREAKER // ANTI-MATERIAL CANNON"},
+	"vss_vintorez": {"automatic": true, "damage": 70, "fire_interval": 0.20, "penetration": 1.8, "trait": "STITCH // AUTOMATIC PRECISION"},
+	"fn_m249_para": {"trait": "SIEGE // SUSTAINED SUPPRESSION"},
+	"ultimax_100_mk8": {"move": 1.02, "spread": 0.7, "damage": 40, "trait": "MARCH // MOBILE SUPPORT"},
+	"fn_m240b": {"damage": 76, "fire_interval": 0.14, "penetration": 2.5, "property": 2.4, "trait": "JUGGERNAUT // HEAVY LINE BREAKER"},
+}
+
 static func apply(values: Dictionary, weapon_id: String, weapon_class: String) -> Dictionary:
 	var result := values.duplicate(true)
 	result.merge(ROLES.get(weapon_class, {}), true)
 	result.merge(SHOTGUNS.get(weapon_id, {}), true)
+	result.merge(DISTINCT_ROLES.get(weapon_id, {}), true)
 	# Moving and flicking aim are encouraged. Keep inherent pattern and recoil,
 	# not the old tactical penalties that turn an aimed shot into a miss.
 	result.move_spread = minf(float(result.get("move_spread", 0.0)), 0.65)

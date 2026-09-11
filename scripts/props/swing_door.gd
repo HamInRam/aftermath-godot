@@ -1,5 +1,5 @@
 class_name SwingDoor
-extends RigidBody2D
+extends AnimatableBody2D
 
 const SPLINTER_SCENE := preload("res://scenes/effects/door_splinters.tscn")
 const PIXELS := preload("res://utility/pixel_art_painter.gd")
@@ -28,7 +28,9 @@ var threshold_rotation := 0.0
 
 func _ready() -> void:
 	add_to_group("tactical_door")
-	freeze = true
+	sync_to_physics = false
+	set_physics_process(false)
+	$HitArea.monitoring = false
 	threshold_rotation = global_rotation
 	simulated_rotation = rotation
 	$PanelCollision.disabled = false
@@ -113,7 +115,7 @@ func _physics_process(delta: float) -> void:
 	simulated_rotation = move_toward(simulated_rotation, target_rotation, eased_speed * delta)
 	rotation = snappedf(simulated_rotation, PI / 32.0)
 	var actual_speed := absf(angle_difference(previous_rotation, rotation)) / maxf(delta, 0.0001)
-	if is_dangerous and actual_speed >= knockdown_speed:
+	if is_dangerous and actual_speed >= knockdown_speed and $HitArea.monitoring:
 		for body in $HitArea.get_overlapping_bodies():
 			if body == door_pusher or hit_bodies.has(body.get_instance_id()): continue
 			hit_bodies[body.get_instance_id()] = true
@@ -136,6 +138,8 @@ func _physics_process(delta: float) -> void:
 	if absf(simulated_rotation - target_rotation) <= 0.01:
 		rotation = target_rotation
 		current_state = DoorState.OPEN
+		set_physics_process(false)
+		$HitArea.set_deferred("monitoring", false)
 		# Doors are one-way state machines and never close again. Re-enabling the
 		# full panel here made the visually open leaf an invisible route
 		# blocker in narrow authored rooms. The frame remains solid; the settled
@@ -150,6 +154,8 @@ func push_door_open(pusher_node: Node2D, pusher_velocity: Vector2) -> void:
 func _begin_open(pusher_node: Node2D, pusher_position: Vector2, pusher_velocity: Vector2) -> void:
 	if current_state != DoorState.CLOSED: return
 	current_state = DoorState.SLAM_OPENING
+	set_physics_process(true)
+	$HitArea.set_deferred("monitoring", true)
 	door_pusher = pusher_node
 	hit_bodies.clear()
 	$PanelCollision.set_deferred("disabled", true)

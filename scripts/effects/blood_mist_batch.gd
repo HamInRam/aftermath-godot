@@ -19,6 +19,8 @@ var emission_sequence := 0
 var particle_batch: MultiMeshInstance2D
 var draw_capacity := INITIAL_DRAW_CAPACITY
 var refresh_queued := false
+var emission_alive: Dictionary = {}
+var wall_query := PhysicsRayQueryParameters2D.new()
 
 func _ready() -> void:
 	particle_batch = MultiMeshInstance2D.new()
@@ -44,6 +46,7 @@ func emit_mist(world_position: Vector2, spray_direction: Vector2, intensity: flo
 	count = mini(count, available)
 	emission_sequence += 1
 	var emission_id := emission_sequence
+	emission_alive[emission_id] = count
 	# Zero is a supported visual-only emission. Empowered ammunition uses it so
 	# transient mist cannot settle as extra siphonable mass outside its ledger.
 	emission_remaining[emission_id] = clampi(deposit_count, 0, 24)
@@ -80,9 +83,10 @@ func emit_mist(world_position: Vector2, spray_direction: Vector2, intensity: flo
 		var record: Dictionary = buckets[bucket_id]
 		var ray_direction: Vector2 = record.direction
 		var ray_distance := float(record.distance)
-		var query := PhysicsRayQueryParameters2D.create(world_position, world_position + ray_direction * ray_distance, WALL_MASK)
-		query.collide_with_areas = false
-		var collision := space.intersect_ray(query)
+		wall_query.from = world_position
+		wall_query.to = world_position + ray_direction * ray_distance
+		wall_query.collision_mask = WALL_MASK
+		var collision := space.intersect_ray(wall_query)
 		bucket_hits[bucket_id] = world_position.distance_to(collision.position) - 1.0 if not collision.is_empty() else INF
 	for particle in pending:
 		particle.impact_distance = float(bucket_hits.get(int(particle.bucket), INF))
@@ -92,33 +96,36 @@ func emit_mist(world_position: Vector2, spray_direction: Vector2, intensity: flo
 
 func _process(delta: float) -> void:
 	var survivors: Array[Dictionary] = []
+	var frame_decay := exp(-DRAG * maxf(delta, 0.0))
 	for particle in particles:
 		var previous_life := float(particle.life)
 		# Match the analytic drag distance used by the one-time wall queries.
 		# Euler integration travelled too far at low frame rates, allowing impact
 		# droplets to settle on the far side of a thin wall.
-		var step := minf(maxf(delta, 0.0), maxf(previous_life, 0.0))
-		var decay := exp(-DRAG * step)
+		var decay := frame_decay if previous_life >= delta else exp(-DRAG * maxf(previous_life, 0.0))
 		var travel := (particle.velocity as Vector2) * ((1.0 - decay) / DRAG)
 		particle.position = (particle.position as Vector2) + travel
 		particle.travelled = float(particle.travelled) + travel.length()
 		particle.velocity = (particle.velocity as Vector2) * decay
 		particle.life = previous_life - delta
 		var emission_id := int(particle.emission)
-		var remaining := int(emission_remaining.get(emission_id, 0))
 		var impacted := float(particle.impact_distance) < INF and float(particle.travelled) >= float(particle.impact_distance)
 		if impacted:
+			var remaining := int(emission_remaining.get(emission_id, 0))
 			var origin: Vector2 = particle.origin
 			var direction := origin.direction_to(particle.position)
 			particle.position = origin + direction * maxf(0.0, float(particle.impact_distance))
 			if remaining > 0: _settle_particle(particle, emission_id, remaining)
+			_release_emission_particle(emission_id)
 			continue
 		if float(particle.life) > 0.0:
 			survivors.append(particle)
-		elif previous_life > 0.0 and remaining > 0 and randf() < 0.48:
-			_settle_particle(particle, emission_id, remaining)
+		else:
+			var remaining := int(emission_remaining.get(emission_id, 0))
+			if previous_life > 0.0 and remaining > 0 and randf() < 0.48:
+				_settle_particle(particle, emission_id, remaining)
+			_release_emission_particle(emission_id)
 	particles = survivors
-	_prune_emissions()
 	_queue_refresh()
 	if particles.is_empty(): set_process(false)
 
@@ -141,11 +148,13 @@ func _settle_particle(particle: Dictionary, emission_id: int, remaining: int) ->
 	if is_instance_valid(owner) and owner.has_method("spawn_micro_drop"):
 		owner.spawn_micro_drop(to_global(particle.position), clampf(float(particle.size) / 1.25, 0.25, 1.0), direction)
 
-func _prune_emissions() -> void:
-	var alive: Dictionary = {}
-	for particle in particles: alive[int(particle.emission)] = true
-	for emission_id in emission_remaining.keys():
-		if not alive.has(emission_id): emission_remaining.erase(emission_id)
+func _release_emission_particle(emission_id: int) -> void:
+	var remaining := int(emission_alive.get(emission_id, 1)) - 1
+	if remaining > 0:
+		emission_alive[emission_id] = remaining
+	else:
+		emission_alive.erase(emission_id)
+		emission_remaining.erase(emission_id)
 
 func _refresh_batch() -> void:
 	if not is_instance_valid(particle_batch): return

@@ -11,7 +11,7 @@ func run() -> void:
 	add_child(field)
 	field.set_physics_process(false)
 	for i in 100: field.emit_impact(Vector2(30, 0), Vector2.RIGHT, "paper", 1)
-	check(field.fragments.size() == 512, "micro fragments have bounded storage")
+	check(field.fragments.size() == 256, "micro fragments have bounded storage")
 	for f in field.fragments:
 		check(f.paper and f.color == Color("eeeeee"), "paper uses grayscale slow-fall profile")
 	field.fragments.clear()

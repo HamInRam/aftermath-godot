@@ -16,12 +16,25 @@ var audio_priority_until_msec := 0
 var next_hit_stop_msec := 0
 var stop_history: Array[Vector2i] = []
 var flash_tween: Tween
+var finish_edge: ColorRect
+var finish_tween: Tween
+var last_finisher_msec := -1000
 const MAX_HIT_STOP_SECONDS := 0.028
 const HIT_STOP_REFRACTORY_MSEC := 75
 
 func configure(flash_rect: ColorRect, intensity := 1.0) -> void:
 	flash = flash_rect
 	flash_intensity = clampf(intensity, 0.0, 1.0)
+	if is_instance_valid(flash) and not is_instance_valid(finish_edge):
+		finish_edge = ColorRect.new()
+		finish_edge.name = "NoirFinishEdge"
+		finish_edge.visible = false
+		finish_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var material := ShaderMaterial.new()
+		material.shader = preload("res://shaders/noir_finish_edge.gdshader")
+		finish_edge.material = material
+		flash.get_parent().add_child(finish_edge)
+		finish_edge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not is_instance_valid(focus_audio):
 		focus_audio = AudioStreamPlayer.new()
 		focus_audio.name = "FocusEnterAudio"
@@ -64,17 +77,48 @@ func trigger_critical_hit_stop(lethal: bool, headshot: bool, strength: float = 1
 	var seconds := 0.045 if lethal and headshot else (0.025 if lethal else 0.02)
 	trigger_hit_stop(seconds * clampf(strength,0.0,1.0), true)
 
-func trigger_hit_stop(duration: float, critical := false) -> void:
+func trigger_finisher(room_finish: bool, strength := 1.0) -> bool:
+	var now := Time.get_ticks_msec()
+	if not is_inside_tree() or now - last_finisher_msec < 1000: return false
+	last_finisher_msec = now
+	trigger_hit_stop((0.06 if room_finish else 0.05) * clampf(strength,0.0,1.0), true, true)
+	if is_instance_valid(finish_edge):
+		if is_instance_valid(finish_tween): finish_tween.kill()
+		_set_finish_pulse(1.0)
+		finish_tween = create_tween().set_ignore_time_scale(true)
+		finish_tween.tween_method(_set_finish_pulse, 1.0, 0.0, 0.18)
+	return true
+
+func _set_finish_pulse(value: float) -> void:
+	if not is_instance_valid(finish_edge): return
+	finish_edge.visible = value > 0.001 and flash_intensity > 0.0
+	finish_edge.material.set_shader_parameter("pulse",value)
+	finish_edge.material.set_shader_parameter("intensity",flash_intensity)
+
+func trigger_hit_stop(duration: float, critical := false, finisher := false) -> void:
 	# Detached test/preload controllers cannot own a global clock or recovery loop.
 	if duration <= 0.0 or not is_inside_tree(): return
 	var now := Time.get_ticks_msec()
 	# One compact impact beat per trigger encounter. Nine shotgun pellets or a
 	# stream of SMG hits must never extend the global stop into sustained sludge.
-	if hit_stop_active or now < next_hit_stop_msec: return
+	if hit_stop_active:
+		# Upgrade a same-impact beat; never append another pause after it.
+		if finisher and not stop_history.is_empty() and now - stop_history[-1].x <= 20:
+			var other_spent := 0
+			for i in range(stop_history.size()-1):
+				if stop_history[i].x > now-1000: other_spent += stop_history[i].y
+			var length := mini(roundi(minf(duration,0.06)*1000), maxi(0,100-other_spent))
+			if length > stop_history[-1].y:
+				stop_history[-1].y = length
+				hit_stop_deadline_msec = stop_history[-1].x + length
+				Engine.time_scale = 0.0
+		return
+	if now < next_hit_stop_msec: return
 	while not stop_history.is_empty() and stop_history[0].x <= now-1000: stop_history.pop_front()
 	var spent := 0
 	for entry in stop_history: spent += entry.y
-	var milliseconds := mini(roundi(minf(duration, 0.05 if critical else MAX_HIT_STOP_SECONDS)*1000.0), maxi(0,100-spent))
+	var limit := 0.06 if finisher else (0.05 if critical else MAX_HIT_STOP_SECONDS)
+	var milliseconds := mini(roundi(minf(duration, limit)*1000.0), maxi(0,100-spent))
 	if milliseconds < 8: return
 	stop_history.append(Vector2i(now,milliseconds))
 	hit_stop_deadline_msec = now + milliseconds
@@ -105,6 +149,9 @@ func show_flash(color: Color, duration: float) -> void:
 	flash_tween.tween_property(flash, "color", Color(adjusted.r, adjusted.g, adjusted.b, 0.0), duration)
 
 func reset() -> void:
+	last_finisher_msec = -1000
+	if is_instance_valid(finish_tween): finish_tween.kill()
+	_set_finish_pulse(0.0)
 	stop_history.clear()
 	hit_stop_generation += 1
 	hit_stop_active = false
@@ -123,3 +170,4 @@ func reset() -> void:
 
 func _exit_tree() -> void:
 	reset()
+	if is_instance_valid(finish_edge): finish_edge.queue_free()

@@ -1,8 +1,10 @@
 class_name ProgressionStore
 extends Node
 
-const SCHEMA_VERSION := 7
-const DEFAULT_SAVE_PATH := "user://aftermath_progress.json"
+const SCHEMA_VERSION := 8
+const DEFAULT_SAVE_PATH := "user://aftermath_run_v8.json"
+# The old career file is deliberately untouched; v8 does not import it.
+const PERSISTED_KEYS := ["schema_version", "credits", "current_kit_id", "run_mode", "mission_attempts", "current_modifier_id", "roguelike_run_serial", "roguelike_floor", "roguelike_previous_mission", "roguelike_records", "weapon_loadout", "weapon_builds"]
 const UPGRADE_ORDER := ["mop", "capacity", "scanner", "body_handling", "pressure_washer", "gunsmith"]
 const UPGRADE_DEFINITIONS := {
 	"mop": {"name": "MOP POWER", "description": "Stronger passes; level 3 unlocks a wider professional finish.", "base_cost": 120, "cost_step": 140},
@@ -71,67 +73,29 @@ func consume_mission_restart(scene_path: String) -> bool:
 	return is_matching_restart
 
 func load_progress() -> bool:
-	if not FileAccess.file_exists(save_path):
-		_reset_data()
-		return false
+	_reset_data()
+	if not FileAccess.file_exists(save_path): return false
 	var file := FileAccess.open(save_path, FileAccess.READ)
-	if file == null:
-		_reset_data()
-		return false
-	var parsed = JSON.parse_string(file.get_as_text())
-	if not parsed is Dictionary:
-		_reset_data()
-		return false
-	var source_version := int(parsed.get("schema_version", 1))
-	if source_version < 1 or source_version > SCHEMA_VERSION:
-		_reset_data()
-		return false
-	var completed = parsed.get("completed_missions", [])
-	var best_results = parsed.get("best_results", {})
-	if not completed is Array or not best_results is Dictionary:
-		_reset_data()
-		return false
-	data = {
-		"schema_version": SCHEMA_VERSION,
-		"completed_missions": completed.duplicate(),
-		"best_results": best_results.duplicate(true),
-		"credits": maxi(0, int(parsed.get("credits", 0))),
-		"upgrades": (parsed.get("upgrades", {}) as Dictionary).duplicate(true),
-		"cleaner_mode": str(parsed.get("cleaner_mode", "normal")),
-		"specialization_points": maxi(0, int(parsed.get("specialization_points", 0))),
-		"specializations": (parsed.get("specializations", {}) as Dictionary).duplicate(true),
-		"heat": clampi(int(parsed.get("heat", 0)), 0, 100),
-		"current_contract_id": str(parsed.get("current_contract_id", "standard")),
-		"current_kit_id": str(parsed.get("current_kit_id", "balanced")),
-		"run_mode": str(parsed.get("run_mode", "standard")),
-		"campaign_endings": (parsed.get("campaign_endings", []) as Array).duplicate(),
-		"mission_attempts": (parsed.get("mission_attempts", {}) as Dictionary).duplicate(true),
-		"mastery": (parsed.get("mastery", {}) as Dictionary).duplicate(true),
-		"current_modifier_id": str(parsed.get("current_modifier_id", "standard")),
-		"gauntlet_streak": maxi(0, int(parsed.get("gauntlet_streak", 0))),
-		"roguelike_run_serial": maxi(0, int(parsed.get("roguelike_run_serial", 0))),
-		"roguelike_floor": maxi(0, int(parsed.get("roguelike_floor", 0))),
-		"roguelike_previous_mission": str(parsed.get("roguelike_previous_mission", "")),
-		"roguelike_records": (parsed.get("roguelike_records", {}) as Dictionary).duplicate(true),
-		"career_stats": (parsed.get("career_stats", {}) as Dictionary).duplicate(true),
-		"challenge_records": (parsed.get("challenge_records", {}) as Dictionary).duplicate(true),
-		"weapon_loadout": (parsed.get("weapon_loadout", {"primary": "colt_m4a1", "secondary": "glock_17_gen5_mos"}) as Dictionary).duplicate(true),
-		"weapon_builds": (parsed.get("weapon_builds", {}) as Dictionary).duplicate(true),
-	}
-	for upgrade_id in UPGRADE_ORDER:
-		if not (data.upgrades as Dictionary).has(upgrade_id): data.upgrades[upgrade_id] = 0
-	data.upgrades.erase("cleaner")
-	for branch in ["executioner", "ghost", "cleaner"]:
-		if not (data.specializations as Dictionary).has(branch): data.specializations[branch] = 0
-	if str(data.run_mode) not in ["standard", "score_attack", "new_game_plus", "daily_challenge", "gauntlet"]: data.run_mode = "standard"
+	if file == null: return false
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if not parsed is Dictionary or int(parsed.get("schema_version", -1)) != SCHEMA_VERSION: return false
+	for key: String in PERSISTED_KEYS:
+		if key == "schema_version" or not parsed.has(key): continue
+		var value: Variant = parsed[key]
+		var expected: Variant = data[key]
+		if expected is int and (value is int or value is float):
+			data[key] = maxi(0, int(value))
+		elif typeof(value) == typeof(expected):
+			data[key] = value
 	_sanitize_weapon_configuration()
-	if source_version < SCHEMA_VERSION: save_progress()
 	return true
 
 func save_progress() -> bool:
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null: return false
-	file.store_string(JSON.stringify(data, "\t"))
+	var compact := {}
+	for key: String in PERSISTED_KEYS: compact[key] = data[key]
+	file.store_string(JSON.stringify(compact, "\t"))
 	file.close()
 	return true
 
