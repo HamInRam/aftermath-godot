@@ -16,9 +16,9 @@ func _run() -> void:
 	_expect(get_tree().get_nodes_in_group("restoration_anchor").is_empty(), "combat must not spawn furniture-return ghosts")
 	level.mission_tracker.record_alarm_trigger()
 	level._on_rogue_run_cleared(4)
-	_expect(level.run_over and level.final_grade == "A", "one alarm should lower a fast floor from S to A")
+	_expect(level.floor_cleared and not level.run_over and level.final_grade == "A", "one alarm should lower a fast floor from S to A")
 	_expect(level.phase == "combat" and level.final_score > 0, "combat completion must score without cleaning")
-	_expect(is_instance_valid(level.run_end_layer), "the floor action must remain visible instead of fading with HUD hints")
+	_expect(is_instance_valid(level.floor_exit) and level.player.controls_enabled, "intermediate floors must retain a walkable exit and player controls")
 	level.queue_free()
 	await get_tree().process_frame
 	await get_tree().process_frame

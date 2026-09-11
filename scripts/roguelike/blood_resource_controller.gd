@@ -39,7 +39,7 @@ func _update_rage_system(delta: float, player: Node2D, blood_system: Node) -> vo
 	if not rage_active and reserve >= capacity-0.001: _set_rage(true)
 	var ended := false
 	if rage_active:
-		reserve = maxf(0.0, reserve - RAGE_DRAIN * dt)
+		reserve = maxf(0.0, reserve - get_rage_drain() * dt)
 		if reserve <= 0.0:
 			_set_rage(false)
 			ended = true
@@ -56,6 +56,7 @@ func _update_rage_system(delta: float, player: Node2D, blood_system: Node) -> vo
 			var result: Dictionary = blood_system.absorb_siphon_sector(player.global_position,siphon_direction,RAGE_RADIUS if rage_active else SIPHON_REACH,PI if rage_active else absorption_half_angle,RAGE_RADIUS if rage_active else SIPHON_PROXIMITY,budget)
 			var removed := int(result.get("amount",0))
 			if removed <= 0: break
+			perks.on_siphon()
 			reserve = minf(capacity, reserve + removed * RAW_TO_RESOURCE * absorption_efficiency)
 			siphon_visual_amount = 1.0
 			_spawn_siphon_motes(result.get("positions",PackedVector2Array()))
@@ -176,13 +177,14 @@ func _ready() -> void:
 	resource_changed.emit(reserve, capacity, stance_active)
 
 func update_system(delta: float, player: Node2D, blood_system: Node) -> void:
+	if is_instance_valid(player) and player.get("controls_enabled") != false and player.get("is_dead") != true:
+		perks.update(maxf(0.0, delta))
 	if blood_rage_mode:
 		_update_rage_system(delta,player,blood_system)
 		return
 	last_absorption_steps = 0
 	pressure_retry = maxf(0.0,pressure_retry-delta)
 	update_overload(delta)
-	perks.update(delta)
 	for key in skill_cooldowns:
 		skill_cooldowns[key] = maxf(0.0, float(skill_cooldowns[key]) - delta)
 	absorption_lockout = maxf(0.0, absorption_lockout - delta)
@@ -270,6 +272,17 @@ func set_stance_active(active: bool, allow_release_grace := false) -> void:
 	resource_changed.emit(reserve, capacity, stance_active)
 	queue_redraw()
 
+func get_rage_drain() -> float:
+	# Even this upgrade drains faster than the 10/s maximum recovery.
+	return 12.0 if "blood_clock" in perks.learned else RAGE_DRAIN
+
+func resolve_rage_round(shot_id: int) -> Dictionary:
+	if shot_id >= 0 and shot_id == enhanced_shot_cache_id: return enhanced_shot_cache
+	enhanced_shot_cache_id = shot_id
+	enhanced_shot_cache = {"enhanced": true, "damage_multiplier": 1.65, "penetration_bonus": 0.85}
+	perks.enhance(enhanced_shot_cache, reserve <= get_rage_drain())
+	return enhanced_shot_cache
+
 func consume_enhanced_round(shot_id := -1, last_round := false) -> Dictionary:
 	if shot_id >= 0 and shot_id == enhanced_shot_cache_id: return enhanced_shot_cache
 	if not stance_active or reserve + 0.001 < enhanced_round_cost:
@@ -323,7 +336,7 @@ func get_cooldown_ratios() -> Dictionary:
 	return result
 
 func get_movement_multiplier() -> float:
-	if blood_rage_mode: return 1.25 if rage_active else 1.0
+	if blood_rage_mode: return (1.25 if rage_active else 1.0) * (1.10 if perks.harvest_time > 0.0 else 1.0)
 	if blood_ammo_mode: return 1.0
 	if perks.harvest_time > 0.0: return 1.0
 	return stance_move_multiplier if stance_active else 1.0

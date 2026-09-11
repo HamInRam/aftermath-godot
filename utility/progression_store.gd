@@ -1,6 +1,9 @@
 class_name ProgressionStore
 extends Node
 
+signal save_failed(path: String)
+const JSON_STORE := preload("res://utility/atomic_json_store.gd")
+
 const SCHEMA_VERSION := 8
 const DEFAULT_SAVE_PATH := "user://aftermath_run_v8.json"
 # The old career file is deliberately untouched; v8 does not import it.
@@ -74,30 +77,39 @@ func consume_mission_restart(scene_path: String) -> bool:
 
 func load_progress() -> bool:
 	_reset_data()
-	if not FileAccess.file_exists(save_path): return false
-	var file := FileAccess.open(save_path, FileAccess.READ)
-	if file == null: return false
-	var parsed: Variant = JSON.parse_string(file.get_as_text())
-	if not parsed is Dictionary or int(parsed.get("schema_version", -1)) != SCHEMA_VERSION: return false
+	var parsed := JSON_STORE.read_dictionary(save_path, [SCHEMA_VERSION])
+	if parsed.is_empty(): return false
 	for key: String in PERSISTED_KEYS:
 		if key == "schema_version" or not parsed.has(key): continue
 		var value: Variant = parsed[key]
 		var expected: Variant = data[key]
-		if expected is int and (value is int or value is float):
+		if expected is int and (value is int or value is float) and is_finite(float(value)):
 			data[key] = maxi(0, int(value))
 		elif typeof(value) == typeof(expected):
 			data[key] = value
+	_sanitize_loaded_records()
 	_sanitize_weapon_configuration()
 	return true
 
+func _sanitize_loaded_records() -> void:
+	for key in ["mission_attempts", "roguelike_records"]:
+		var sanitized := {}
+		for id in data[key]:
+			var value: Variant = data[key][id]
+			if id is String and (value is int or value is float) and is_finite(float(value)):
+				sanitized[id] = maxi(0, int(value))
+		data[key] = sanitized
+	for id in ["best_rooms", "best_score", "victories"]:
+		if not data.roguelike_records.has(id): data.roguelike_records[id] = 0
+
 func save_progress() -> bool:
-	var file := FileAccess.open(save_path, FileAccess.WRITE)
-	if file == null: return false
 	var compact := {}
 	for key: String in PERSISTED_KEYS: compact[key] = data[key]
-	file.store_string(JSON.stringify(compact, "\t"))
-	file.close()
-	return true
+	var saved := JSON_STORE.write_dictionary(save_path, compact, [SCHEMA_VERSION])
+	if not saved:
+		save_failed.emit(save_path)
+		push_warning("Progress could not be saved; previous save retained: " + save_path)
+	return saved
 
 func begin_mission(mission_id: String) -> bool:
 	var profile := MissionCatalog.get_mission(mission_id)
@@ -361,7 +373,10 @@ func _sanitize_weapon_configuration() -> void:
 		var sanitized := PackedStringArray()
 		var platform := WeaponPlatformCatalog.get_platform(canonical_weapon_id)
 		var used_slots := {}
-		for attachment_id in PackedStringArray(data.weapon_builds[weapon_id]):
+		if not data.weapon_builds[weapon_id] is Array: continue
+		for raw_id in data.weapon_builds[weapon_id]:
+			if not raw_id is String: continue
+			var attachment_id: String = raw_id
 			var attachment := AttachmentCatalog.get_attachment(attachment_id)
 			var slot := str(attachment.get("slot", ""))
 			if attachment.is_empty() or used_slots.has(slot) or not AttachmentCatalog.is_compatible(attachment, platform): continue
@@ -519,5 +534,4 @@ func toggle_cleaner_mode() -> String:
 
 func reset_progress(delete_save := false) -> void:
 	_reset_data()
-	if delete_save and FileAccess.file_exists(save_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+	if delete_save: JSON_STORE.remove_files(save_path)

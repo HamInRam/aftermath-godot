@@ -260,8 +260,9 @@ func request_chunk_upload(chunk: PixelLiquidChunk) -> void:
 func _flush_upload_queue() -> void:
 	var uploads := 0
 	while uploads < MAX_CHUNK_UPLOADS_PER_FRAME and not upload_queue.is_empty():
-		var chunk := upload_queue.pop_front() as PixelLiquidChunk
-		if not is_instance_valid(chunk): continue
+		var pending: Variant = upload_queue.pop_front()
+		if not is_instance_valid(pending) or pending.is_queued_for_deletion(): continue
+		var chunk := pending as PixelLiquidChunk
 		chunk.flush_texture()
 		uploads += 1
 
@@ -690,11 +691,13 @@ func _local_cell(cell: Vector2i) -> Vector2i:
 	return Vector2i(posmod(cell.x, CHUNK_SIZE), posmod(cell.y, CHUNK_SIZE))
 
 func _find_chunk_for_cell(cell: Vector2i) -> PixelLiquidChunk:
-	return chunks.get(_chunk_coordinate(cell)) as PixelLiquidChunk
+	var value: Variant = chunks.get(_chunk_coordinate(cell))
+	return value as PixelLiquidChunk if is_instance_valid(value) and not value.is_queued_for_deletion() else null
 
 func _get_or_create_chunk(coordinate: Vector2i) -> PixelLiquidChunk:
-	var chunk := chunks.get(coordinate) as PixelLiquidChunk
-	if is_instance_valid(chunk): return chunk
+	var value: Variant = chunks.get(coordinate)
+	if is_instance_valid(value) and not value.is_queued_for_deletion(): return value as PixelLiquidChunk
+	var chunk: PixelLiquidChunk
 	chunk = PixelLiquidChunk.new()
 	chunks[coordinate] = chunk
 	add_child(chunk)

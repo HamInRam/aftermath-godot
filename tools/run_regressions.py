@@ -12,14 +12,20 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--godot", default="godot")
 parser.add_argument("--timeout", type=int, default=120)
 parser.add_argument("--skip-import", action="store_true")
+parser.add_argument("--output", type=Path, help="Directory for logs and summary.json")
 parser.add_argument("scenes", nargs="*")
 args = parser.parse_args()
 project = Path(__file__).resolve().parents[1]
-log_root = Path(tempfile.mkdtemp(prefix="aftermath-regression-"))
-scenes = args.scenes or list(dict.fromkeys(re.findall(
-    r"tests/test_[a-z0-9_]+\.tscn",
-    (project / ".github/workflows/godot-tests.yml").read_text(),
-)))
+log_root = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="aftermath-regression-"))
+log_root.mkdir(parents=True, exist_ok=True)
+scenes = args.scenes or [line.strip() for line in
+    (project / "tests/regressions.txt").read_text().splitlines()
+    if line.strip() and not line.lstrip().startswith("#")]
+if not scenes or len(scenes) != len(set(scenes)):
+    parser.error("Regression manifest must contain a nonempty unique scene list")
+for scene in scenes:
+    if not (project / scene).is_file():
+        parser.error(f"Missing regression scene: {scene}")
 jobs = ([] if args.skip_import else ["IMPORT"]) + scenes
 results = []
 print(f"Logs: {log_root}", flush=True)
@@ -28,17 +34,36 @@ for job in jobs:
     command = [args.godot, "--headless", "--path", str(project), "--log-file", str(log)]
     command += ["--editor", "--quit"] if job == "IMPORT" else [job]
     started = time.monotonic()
-    try:
-        process = subprocess.run(command, capture_output=True, text=True, timeout=args.timeout)
-        output = process.stdout + process.stderr
-        code = process.returncode
-    except subprocess.TimeoutExpired as error:
-        output = f"TIMEOUT after {args.timeout}s\n{error}"
-        code = 124
-    # Godot can return zero even after a renderer/engine error. Retain stderr
-    # and fail those errors too; known shutdown diagnostics remain explicit.
     combined_log = log.with_suffix(".output.log")
-    combined_log.write_text(output)
+    reason = ""
+    with combined_log.open("w") as capture:
+        process = subprocess.Popen(command, stdout=capture, stderr=subprocess.STDOUT, text=True)
+        try:
+            while process.poll() is None:
+                time.sleep(0.1)
+                output = combined_log.read_text(errors="replace")
+                if re.search(r"SCRIPT ERROR:|Parse Error:|Compile Error:|Failed to load script", output):
+                    reason = "Script failed; scene terminated instead of waiting on a stopped coroutine"
+                    break
+                if time.monotonic() - started >= args.timeout:
+                    reason = f"TIMEOUT after {args.timeout}s"
+                    break
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+    output = combined_log.read_text(errors="replace")
+    code = process.returncode
+    if reason:
+        code = 124 if reason.startswith("TIMEOUT") else 1
+        output += "\n" + reason + "\n"
+        combined_log.write_text(output)
+    # Engine errors fail even when Godot exits zero. Teardown diagnostics are
+    # tracked separately so they cannot be mistaken for a clean leak audit.
     unexpected_error = any(
         re.search(r"^(?:SCRIPT )?ERROR:", line) and "resources still in use at exit" not in line
         for line in output.splitlines()
@@ -49,6 +74,7 @@ for job in jobs:
               "seconds": round(time.monotonic() - started, 2), "shutdown_warnings": diagnostics,
               "log": str(log), "combined_log": str(combined_log)}
     results.append(result)
+    (log_root / "summary.json").write_text(json.dumps(results, indent=2) + "\n")
     print(f"{'FAIL' if failed else 'PASS'} {job} ({result['seconds']}s)" +
           (" [shutdown warning]" if diagnostics else ""), flush=True)
     if failed:

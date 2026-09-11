@@ -74,7 +74,7 @@ func _run() -> void:
 	table.setup("table")
 	table.receive_projectile_impact_context(Vector2.RIGHT * 650.0, table.global_position, "pistol", 32)
 	await get_tree().process_frame
-	_expect(not is_instance_valid(table.restoration_anchor), "rogue destruction must not allocate legacy restoration ghosts")
+	_expect(not "restoration_anchor" in table, "rogue destruction must not allocate legacy restoration ghosts")
 
 	for frame in 110: await get_tree().physics_frame
 	_expect(limb.global_position.x <= 27.6, "fast severed anatomy must stop on the near side of a thin wall")

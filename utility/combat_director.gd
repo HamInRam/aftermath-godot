@@ -13,20 +13,47 @@ const MAX_SIMULTANEOUS_SHOOTERS := 2
 const FIRE_TOKEN_SPACING_MSEC := 120
 
 func _ready() -> void:
-	# Keep fire scheduling / doorway coordination, not stealth incident listeners.
-	pass
+	Events.combat_noise.connect(_on_combat_noise)
+	Events.tactical_alert.connect(_on_tactical_alert)
+	Events.casualty_reported.connect(_on_casualty_reported)
 
-func _on_combat_noise(_world_position: Vector2, _radius: float, _source_kind: String) -> void:
-	# Encounter activation belongs exclusively to room/contact logic.
-	return
+func _on_combat_noise(world_position: Vector2, radius: float, source_kind: String) -> void:
+	var now := Time.get_ticks_msec()
+	_prune_noise_incidents(now)
+	var key := _noise_incident_key(world_position, source_kind)
+	if noise_incidents.has(key): return
+	var candidates: Array[Dictionary] = []
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if not enemy.has_method("evaluate_noise_response"): continue
+		# The actor rejects dormant rooms before any ray/navigation work.
+		var response: Dictionary = enemy.evaluate_noise_response(world_position, radius, source_kind)
+		if bool(response.get("eligible", false)): candidates.append({"enemy": enemy, "response": response})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.response.priority) < float(b.response.priority))
+	var profile := _current_encounter_profile()
+	noise_incidents[key] = {"expires": now + roundi(float(profile.get("incident_memory", 4.5)) * 1000.0)}
+	var roles := build_noise_role_plan(candidates, profile, source_kind)
+	if is_kill_zone(world_position) and not source_kind.begins_with("enemy_gunshot"):
+		var rooms := PackedStringArray()
+		for candidate in candidates: rooms.append(_candidate_room(candidate.enemy))
+		roles = get_role_plan_for_event(source_kind, world_position, rooms, false)
+	for index in candidates.size():
+		var candidate := candidates[index]
+		candidate.enemy.receive_combat_noise_result(world_position, radius, source_kind, roles[index], candidate.response)
 
-func _on_tactical_alert(_world_position: Vector2, _likely_direction: Vector2, _source_kind: String, _reporter: Node) -> void:
-	# Encounter activation belongs exclusively to room/contact logic.
-	return
+func _on_tactical_alert(world_position: Vector2, likely_direction: Vector2, source_kind: String, reporter: Node) -> void:
+	var candidates: Array[Dictionary] = []
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if enemy == reporter or not enemy.has_method("evaluate_tactical_assignment"): continue
+		var response: Dictionary = enemy.evaluate_tactical_assignment(world_position, source_kind)
+		if bool(response.get("eligible", false)): candidates.append({"enemy": enemy, "response": response})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.response.priority) < float(b.response.priority))
+	var rooms := PackedStringArray()
+	for candidate in candidates: rooms.append(_candidate_room(candidate.enemy))
+	var roles := get_role_plan_for_event(source_kind, world_position, rooms, true)
+	for index in candidates.size(): candidates[index].enemy.receive_tactical_assignment(world_position, likely_direction, source_kind, roles[index])
 
-func _on_casualty_reported(_world_position: Vector2, _likely_attack_direction: Vector2) -> void:
-	# Encounter activation belongs exclusively to room/contact logic.
-	return
+func _on_casualty_reported(world_position: Vector2, likely_attack_direction: Vector2) -> void:
+	register_casualty(world_position, likely_attack_direction)
 
 func register_casualty(world_position: Vector2, likely_attack_direction: Vector2, timestamp_msec := -1) -> int:
 	var now := Time.get_ticks_msec() if timestamp_msec < 0 else timestamp_msec

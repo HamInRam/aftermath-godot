@@ -1,59 +1,37 @@
-# AFTERMATH: current room-shooter contract
+# Current runtime rules
 
-## Playable loop
+## Floors and resources
 
-New run → choose the first loadout → clear 4–5 occupied rooms → floor report → next venue → six-floor victory. A run draws six distinct venues from twelve shells. The room catalog contains 48 authored formations, transformed without scaling characters or props.
+Start new run → confirm the first entry loadout → clear occupied chambers → walk to the entry exit → next venue → six-floor victory. Twelve venue shells contain four or five combat rooms; the 100-composition deck and SwarmLayout supply 18–24 enemies per floor.
 
-The first entry bench is required. Subsequent floors inherit exact equipment and resources. Death **R** retries the same floor and its entry checkpoint; it does not count a second reward, reshuffle that room or grant a fresh kit. Retries remain an explicit accessibility/practice concession and appear in the run summary. This is not a strict permadeath mode.
+A new scene entry, including death retry, changes the formation nonce. Explicit preview seeds remain deterministic. Retry restores that floor's entry resources rather than granting a fresh kit; floor completion and rewards are credited once. Six venues are distinct within one run.
 
-Entering a chamber or hitting one of its hostiles engages that chamber. Other engaged chambers continue fighting; untouched chambers keep patrolling. Hit reactions investigate the actual attack source using normal perception, not an immediate through-wall firing lock. Each chamber and floor can complete only once.
+Run sessions are in memory. Permanent weapon builds and score/victory records are saved separately. The application does not claim to resume a world after quitting. Checkpoints carry exact loadout, ammunition, health, armor, blood and perk state; inactive legacy snapshot fields remain compatible.
 
-## Art and space
+## Enemy knowledge
 
-- Standard building: 768×448 native world pixels; 8px navigation/authoring cells; 24px functional doors. Continuous floor artwork is not an 8px checkerboard. Actor and prop silhouettes remain native size. These are this project's measured specifications, not purported extracted OTXO asset dimensions.
-- Neutral black/white/gray world and anatomy; crimson blood and blood-powered violence. No generated replacement illustrations or enlarged mixed-resolution character sheets.
-- Structural walls define stable traversal boundaries and shed impact chips/dust. Doors, movable props and corpses react physically; treating the entire architecture as loose ragdolls would invalidate room navigation and is deliberately not done.
-- Native-resolution world graphics and independently rasterized UI remain sharp at the configured 1920×1080 output. UI does not inherit camera rotation. Long help content scrolls with its action outside the scrolling body.
+Untouched rooms patrol without perception or gun updates. Room entry opens normal perception; direct harm also activates the victim's room and communicates the attack source to its companions while preserving hitstun. Other untouched rooms are not awakened by global noise or radio dispatch.
 
-## Controls and feedback
+Within engaged rooms, visible contact acquires the player after reaction time. Lost sight expires chase memory into search. Heard sources assign bounded investigation/sweep/guard roles; repeated gunshots share an incident. Enemy gunfire does not recruit another attack wave. Search timers start on arrival, with navigation recovery for unreachable points.
 
-| Input | Normal combat | Blood stance (hold RMB) |
-| --- | --- | --- |
-| LMB | Shoot; a fresh empty-magazine click reloads | Shoot a paid enhanced round when enough blood is stored |
-| Q | Throw current weapon | Blood step |
-| E | Take a nearby visible weapon / context interaction | Blood pulse |
-| R | Reload | Blood guard |
-| B | Spend stored blood to heal | Spend stored blood to heal |
-| X | Timed hostile-local Focus | Timed hostile-local Focus |
-| Shift | Extend camera look-ahead | Extend camera look-ahead |
+## Blood Rage and rewards
 
-Ammo sits upper-left; health/armor and Focus are lower-left; blood is lower-right.
-Resource bars never share a text label or screen rectangle. Context prompts appear
-only for an available action. Long names elide instead of expanding the HUD.
-The reticle has one high-contrast cross, a transient on-hit marker, and optional
-reload/low-ammo feedback. Mouse pointing is immediate; reload and recoil are
-visual layers rather than forced delays in the ballistic carrier.
+Normal fire consumes magazines; R reloads, Q throws and E interacts. RMB only siphons. B and X and the old RMB+Q/E/R blood skills do not activate in the current mode.
 
-## Resource invariants
+A full meter starts Rage; normal ammunition remains intact until it ends. Base drain is 14/s, automatic real-blood recovery is at most 10/s. The Blood Clock perk lowers drain to 12/s, still strictly above recovery. Rage projectiles share a finite spray budget across pellets; the retired paid-shot return formula is only a compatibility path.
 
-`RoguelikeRunSession` is runtime-only. Persistent score/victory records live in `ProgressionStore`; loading the application never claims to resume an unsaved world.
+After every third cleared room, one optional F1–F3 choice can be taken per floor after a quiet second, with no engaged rooms. Entering a fight or pausing blocks selection. The first unlearned rewards are offered. Current effects and labels are specified in `run_combat_perks.gd` and [BLOOD_RAGE.md](BLOOD_RAGE.md). One trigger transaction applies one-shot rewards consistently to every pellet. Timers continue in the current blood update path and freeze when controls are disabled.
 
-The carry snapshot includes both owned weapons, exact magazines/reserves, installed parts, selected/unarmed state, movement/noise kit factors, health/max health, armor, blood guard, blood/capacity, skill cooldowns and Focus charges/recharge. New floors cancel transient reload/attack animations but do not create ammunition.
+## Presentation and engineering boundaries
 
-Only living enemies generate usable hit blood. Settled corpses and detached limbs do not regenerate blood. Blood-enhanced trigger pulls share one capped return ledger, including shotgun pellets and penetration chains. Maximum usable return stays below its paid blood cost.
+Standard buildings occupy 768×448 native world-pixel space with 8px cells and 24px doors. The 320×180 UI uses independent cards: ammunition and health at lower left, blood at lower right. The help page scrolls while Back remains fixed. Palette and postprocessing remain centralized.
 
-Thrown guns and anatomically meaningful limbs are persistent gameplay objects. Cosmetic particle/debris limits cannot delete inventory or remove the missing arm from a corpse. Ragdoll and limb collisions are bounded; increased violence comes from shape and spray, not unbounded root impulse.
+CombatLevel (Main) owns scene lifetime and signal adapters. FloorFlowController owns deployment, checkpoints, exits and completion; CombatEventController owns trigger records and hit/death dispatch. RunSnapshot, LoadoutSnapshot, PerkSnapshot, FloorReport and typed shot events define the new internal data boundaries. See [ARCHITECTURE.md](ARCHITECTURE.md). ProjectileSpawner handles projectile construction and modifiers, EnemyVisualController handles actor presentation, and WorldAcoustics handles portal propagation. Legacy authoring and save interfaces remain available without enabling retired cleaning/restoration gameplay.
+
+AtomicJsonStore stages complete JSON before replacing the primary and preserves a previous-valid backup. Corrupt primary files fall back to that backup, malformed values are sanitized, and failed writes emit store failure signals plus a warning. Resetting a test/save removes associated backup and staging files too.
 
 ## Verification
 
-Run `python3 tools/run_regressions.py --godot /path/to/Godot`. It reads the same scene list as CI, retains engine and combined stdout/stderr logs, and times out stalled tests. The current list has 51 scenes, including regression guards against reactivating the retired cleanup phase.
+`python3 tools/run_regressions.py --godot /path/to/Godot --output build/regressions` runs the exact manifest used by CI. Summary JSON and per-scene output are retained, including failures and shutdown warnings. See [LATEST_VERIFICATION.md](LATEST_VERIFICATION.md) for the latest measured results.
 
-`test_roguelike_floor_flow` instantiates real floors, confirms the actual entry overlay, kills the player, sends the real R action, reloads the scene, clears through RoomRunController and instantiates the next floor. Resource values and attachments are compared at every boundary.
-
-`tests/render_run_review.tscn` is an optional real-renderer check that saves this game's viewport to `/tmp/aftermath-render-review`; it does not capture the desktop. Headless tests cannot establish final visual quality or real GPU framerate.
-
-Passing regressions is not a claim of zero bugs or commercial-release readiness. Shipping still requires prolonged player balancing, target-device frame-time profiling, controller-only playthroughs, localization/layout checks and distribution/export testing. Old campaign/save utilities remain as compatibility modules; the current runtime no longer enters cleanup, restoration or three-choice upgrade screens.
-
-## Reference boundary
-
-OTXO's developer/publisher description supports the combination of Focus, aggressive room combat and randomized authored spaces: https://store.steampowered.com/app/1608640/OTXO/ . AFTERMATH retains its own art, blood-resource system and implementation; it does not use extracted OTXO assets or claim identical hidden numerical tuning.
+`test_rage_perk_integration` claims a real room reward, completes a reload and fires a real shotgun before comparing all pellets, timer expiry and checkpoint state. `test_room_run_visibility` measures actual dormant movement and local hit responses. `test_atomic_saves` exercises corrupt files, interrupted writes and nested malformed data. Real renderer captures supplement these checks; a sustained human playthrough and target-device profiling are separate release work.

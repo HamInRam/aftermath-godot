@@ -21,7 +21,7 @@ func _run() -> void:
 		var image := texture.get_image()
 		_expect(not image.is_empty() and _opaque_pixel_count(image) >= 24, "%s preview should contain a readable silhouette" % weapon_id)
 		weapon_hashes[image.get_data().hex_encode().hash()] = true
-	_expect(weapon_hashes.size() >= 56, "the 64 firearm platforms should not collapse into interchangeable silhouettes")
+	_expect(weapon_hashes.size() >= ceili(WeaponPlatformCatalog.get_weapon_ids().size() * 0.875), "at least 87.5% of enabled firearms must retain distinct silhouettes")
 	for attachment_id in AttachmentCatalog.ATTACHMENTS:
 		var texture := ICONS.attachment_icon(str(attachment_id))
 		_expect(texture != null and texture.get_size() == Vector2(16, 16), "%s needs a strict 16x16 part icon" % attachment_id)
@@ -60,7 +60,7 @@ func _run() -> void:
 			_expect(button.icon == null and not button.text.is_empty(), "weapon category filters should use readable names instead of pictures")
 	_expect(visible_categories >= 7, "primary weapons should be separated into visible category filters")
 	overlay.call("_select_category", "carbine")
-	_expect(overlay.call("_available_weapons").size() == 8, "each firearm category should expose eight platforms, including visible locked requisitions")
+	_expect(overlay.call("_available_weapons").size() == WeaponPlatformCatalog.get_class_weapon_ids("carbine").size(), "each category must expose the complete enabled roster, including locked requisitions")
 	for button in overlay.attachment_buttons:
 		_expect(button.icon != null and button.text.is_empty(), "each attachment hardpoint should use a pixel icon rather than a text button")
 	overlay.call("_open_mod_interface", overlay.primary_id)

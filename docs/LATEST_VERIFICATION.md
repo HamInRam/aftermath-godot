@@ -1,85 +1,36 @@
-# The Descent / shotgun repair verification — 2026-09-07
+# Architecture refactor verification — 1.3.2 / 2026-09-11
 
-## Final consolidated run
+Godot 4.7.1.stable.official.a13da4feb on macOS / Apple M1, with isolated engine data.
 
-Godot 4.7.1, macOS: **54/54 regression scenes passed**, plus successful import
-validation (**55/55 runner jobs**). `git diff --check` passed.
+**85/85 active regression scenes passed, plus checked resource import: 86/86 jobs.**
 
-Report: `/var/folders/gx/j44c8k411wb4x99rnkgg3bgh0000gn/T/aftermath-regression-561exd2c/summary.json`.
+```sh
+python3 tools/run_regressions.py --godot /path/to/Godot --timeout 120 --output build/regressions
+```
 
-Includes room-local AI, six-floor resource transfer and actual death/retry,
-weapon inventory/reload/throw, cadence and aim, door/projectile collisions,
-ragdoll wall safety, finite blood recovery, source-pixel artwork, settings,
-interface sizing and retired-cleanup boundaries.
+The shared manifest is `tests/regressions.txt`. Existing AI, inventory, ballistics, blood economy, destruction, budgets, floor-flow and save tests passed. The new architecture scene verifies nested snapshot isolation, JSON round trips, malformed input, mixed pellet outcomes, state notifications and idempotence, dead-actor rejection, duplicate completion, awaited transition rollback and controller teardown.
 
-## Shotgun repair coverage
-
-- Production Gun/Bullet/Enemy trials at 20/45/70/110px, three target facings,
-  canonical/legacy weapon IDs, 11/14/17px contact, eight world-space contact
-  directions, torso armour and a wall inside the barrel. The close-contact
-  before case emitted nine pellets with zero hits; after repair all nine hit.
-  No baseline damage increase was needed: the Mossberg remains 9×18.
-- 64 actor/trajectory centre-line combinations, off-centre head/limb contacts,
-  preserved world-space entry blood position and weapon-specific joint impulse.
-- Nine enhanced pellets through two targets each, using production Main budget
-  division and lethal transfer. Cost 3.5, raw budget 4581, nine 509-unit shares,
-  actual recovered resource 2.51955 (71.987%); second-target budgets all zero.
-  Expired enhanced mist creates no extra absorbable pixels. Peak 1935 unit-quad
-  particles remains within the existing room-wide batch limit.
-- Drained chunk queued for upload, deferred deletion, and immediate same-frame
-  repaint at the same coordinate: no freed-object cast and no lost fresh blood.
-- The first new corpse test observed only 200 frames (~3.33s), shorter than the
-  existing enemy articulation deadline (~3.43s). Corrected the test to assert
-  a maximum four-second deadline and observe 4.1s; physics was not shortened
-  merely to satisfy the test. The final consolidated run then passed.
-
-## Expanded coverage
-
-- 12 venue shells, 576 seeded world layouts and 48 base formations: navigation,
-  door apertures, source grayscale and broken-window paint invalidation.
-- 48 live actor directions and 30 corpse missing-module combinations: shared
-  artwork, role continuity, integer pixels, grayscale anatomy and continuous aim.
-- 64 weapon platforms across 8 class silhouettes: independent reload/recoil
-  presentation, conserved ammunition, pickup visibility, cadence and muzzle color.
-- Native menu layout, disjoint resource corners, long gun names, execution
-  keycaps, precision messages and reticle redraw quantization.
-- Ragdoll fixture corrected an endpoint-only measurement: one failing sample
-  moved 4.175px during the observation window but finished 1.126px from its start.
-  The same hand/pelvis reference, 18-frame window and 2px threshold now measure
-  peak excursion; no physics, seed or spawn was changed. Ten independent random
-  repeats then passed, followed by the final consolidated run.
+`git diff --check` passed. Fixed non-wildcard resource paths had no missing targets. Enemy has one runtime backing-state write, inside `transition_to`.
 
 ## Actual renderer
 
-`tests/render_run_review.tscn` completed without script/renderer errors at
-1920×1080. Viewed title, help, combat, controlled impact/death aftermath and
-floor completion captures under `/tmp/aftermath-render-review`.
-Final log: `/tmp/aftermath-noir-render.log`.
+`tests/render_run_review.tscn` completed with `RENDER_REVIEW_OK` and no script/renderer errors, using OpenGL Compatibility on Apple M1 at 1920×1080. Combat, retry-menu and floor-clear captures were visually inspected.
 
-The captures confirm replacement artwork, gray anatomy against crimson blood,
-readable text and removal of the unrelated rectangular corpse shadow. This is
-controlled engine-rendered QA, not a claim of a prolonged human playthrough.
+## Shutdown diagnostics and limits
 
-`tests/render_shotgun_review.tscn` additionally fired the real equipped Mossberg
-through the complete production kill path at 1920×1080. Inspected its before,
-impact and aftermath images under `/tmp/aftermath-shotgun-review`; the normal
-alerted target died and left the articulated corpse. Log:
-`/tmp/aftermath-shotgun-render.log`.
+Shutdown ObjectDB/resource warnings occurred in:
 
-`tests/test_shotgun_blood_feedback.tscn` also passed with the real renderer,
-including every submitted mist transform's unit scale/integer pixel edges.
-The headless dummy server cannot report those GPU transforms, so CI checks
-quad geometry/palette/economy while the renderer run checks transforms too.
-Log: `/tmp/aftermath-shotgun-feedback-gpu.log`.
+- `test_weapon_throw`
+- `test_feedback_hierarchy`
+- `test_blood_action_flow`
+- `test_blood_rage`
+- `test_floor_exit`
+- `test_blood_terrain_room`
+- `test_vertical_slice`
+- `test_mission_result_flow`
+- `test_rage_perk_integration`
+- `test_architecture_contracts`
 
-## Remaining limitations
+These remain separate from functional pass/fail; their root causes were not resolved by this refactor. The new controller-lifetime check verifies both scene children are freed, not the absence of all leaks.
 
-- The final run still records shutdown resource/ObjectDB diagnostics in
-  `test_weapon_throw`, `test_entry_loadout_flow` and `test_vertical_slice`. These are not represented as
-  a clean memory-leak audit. Other short-fixture teardown warnings have also
-  occurred in earlier runs.
-- Headless stress checks are not a sustained GPU frame-rate guarantee.
-- Long-run balancing, target-device profiling, controller-only playthroughs,
-  localization and distribution/export verification remain before release.
-- OTXO's complete boss, narrative and bartender-upgrade catalog is not included.
-  No zero-bug or commercial-completeness claim is made.
+No sustained GPU/memory profile, full manual six-floor playthrough or Windows/Linux export verification was performed. Catalog/authoring dictionaries remain outside this typed-data conversion. See [ARCHITECTURE.md](ARCHITECTURE.md) for ownership and compatibility boundaries.

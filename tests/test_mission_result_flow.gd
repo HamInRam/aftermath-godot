@@ -22,7 +22,7 @@ func _run() -> void:
 	add_child(level)
 	for enemy in level.get_node("Enemies").get_children(): enemy.set_physics_process(false)
 	level._on_rogue_run_cleared(4)
-	_expect(not level.player.controls_enabled and level.player.velocity == Vector2.ZERO, "mission completion must lock player controls and movement")
+	_expect(level.player.controls_enabled and is_instance_valid(level.floor_exit), "intermediate floor completion must let the player walk to the exit")
 	_expect(Progression.is_mission_completed("after_hours"), "real level completion should reach the progression store")
 	_expect(Progression.last_result.mission_id == "after_hours", "result should be attributed to the level mission profile")
 	_expect(int(Progression.last_result.score) == level.final_score and Progression.last_result.grade == level.final_grade, "action report should preserve the level's authoritative score and grade")

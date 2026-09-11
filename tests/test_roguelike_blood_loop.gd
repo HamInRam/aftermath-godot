@@ -52,9 +52,14 @@ func _ready() -> void:
 	add_child(dense_blood)
 	rate_resource.reserve = 0.0
 	rate_resource.set_stance_active(true)
-	rate_resource.update_system(1.0, siphon_player, dense_blood)
+	for tick in 25: rate_resource.update_system(0.04, siphon_player, dense_blood)
 	_expect(dense_blood.removed_raw >= 180000, "one second of aimed siphoning should visibly drain dense ground blood at high speed")
 	_expect(rate_resource.reserve >= 23.0 and rate_resource.reserve <= 24.1, "one second of dense siphoning must respect the faster finite budget")
+	var raw_before_hitch: int = dense_blood.removed_raw
+	var reserve_before_hitch: float = rate_resource.reserve
+	rate_resource.update_system(1.0, siphon_player, dense_blood)
+	_expect(rate_resource.last_absorption_steps <= 2 and dense_blood.removed_raw - raw_before_hitch <= 16000, "a stalled frame may perform at most two absorption slices")
+	_expect(rate_resource.reserve - reserve_before_hitch <= 1.921, "hitches cannot bank one second of resource recovery")
 	var full_resource = BLOOD_RESOURCE.new()
 	var overflow_blood := DenseBloodSource.new()
 	add_child(full_resource)

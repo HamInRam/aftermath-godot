@@ -1,11 +1,10 @@
 # Combat-only subtraction pass
 
 ## Removed from live execution
-- Dormant enemies return before animation/perception/navigation work; their gun
-  presentation process is disabled. Activation selects Chase. Attacking,
-  staggering and knockdown remain essential combat substates. Distant gunshots
-  and corpse incidents no longer fan out through the old CombatDirector
-  investigation listeners. Room/contact activation and firing fairness remain.
+- Dormant enemies retain authored patrol and visual cadence, while perception and
+  gun simulation stay disabled. Activation enables normal evidence-based AI;
+  search, investigation and return states remain valid. CombatDirector dispatches
+  only to eligible already-active rooms, with incident and shooter budgets.
 - Removed corpse/blood-clue scan functions and the corpse incident autoload.
 - Removed furniture restoration/drag methods and anchor creation, the unused
   footprint emitter, and footprint/smear stamping entry points. Furniture still
@@ -36,10 +35,9 @@ vignette and grading; chromatic displacement is already disabled for crisp
 native pixels. No redundant replacement postprocess was added.
 
 ## Verification scope
-Focused regressions cover new v8 persistence/rejection, dormant immobility,
+Focused regressions cover new v8 persistence/rejection, dormant patrol with combat isolation,
 roster count, prop erosion, weapon configuration, blood ledger, corpse combat,
 floor progression, breach awareness, hit reaction and cosmetic storage caps.
 Old restoration-only tests were retired; corpse-investigation and career tests
-now test the replacement contract. Full historical CI still needs an audit of
-tests whose expected behavior explicitly describes retired patrol/stealth or
-career features. No blanket bug-free/FPS claim is warranted.
+now test the replacement contract. The active regression manifest is shared by local and CI runs; retired restoration
+assertions are replaced by combat-only persistence/navigation checks. No blanket bug-free/FPS claim is warranted.
