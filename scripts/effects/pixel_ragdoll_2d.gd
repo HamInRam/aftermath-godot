@@ -21,9 +21,11 @@ var wound_state := "intact"
 var wound_variant := 0
 var visual_role := "gunner"
 var wall_query := PhysicsRayQueryParameters2D.new()
+var local_injuries: Dictionary = {}
 
 func setup(impact_direction: Vector2, intensity: float, missing: PackedStringArray, corpse_variant := 0, new_rig_kind := "human", new_impact_profile := {}, initial_pose := {}) -> void:
 	missing_modules = missing.duplicate()
+	local_injuries = (initial_pose.get("_local_injuries", {}) as Dictionary).duplicate()
 	rig_kind = "hound" if new_rig_kind == "hound" or new_rig_kind == "dog" else "human"
 	# Appearance rides beside the existing joint snapshot, never in place of a
 	# joint. Old callers without a snapshot still receive a neutral enemy outfit.
@@ -363,7 +365,7 @@ func get_art_pixels() -> Dictionary:
 		ACTOR_ART._put(cells, cut, colors.i, "cut")
 		ACTOR_ART._put(cells, cut + Vector2(1, 0), colors.n, "cut")
 	_art_wound(cells, colors)
-	_art_pixels_cache = ACTOR_ART.rotate_pixels(cells, global_rotation)
+	_art_pixels_cache = ACTOR_ART.rotate_pixels(LocalInjury.apply(cells, local_injuries), global_rotation)
 	return _art_pixels_cache
 
 func _art_bone(cells: Dictionary, start_name: String, end_name: String, color: Color, width: int, part: String) -> void:

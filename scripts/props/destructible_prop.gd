@@ -36,6 +36,7 @@ var physics_active := false
 var erosion: PixelErosionMask
 var erosion_shapes: Array[CollisionShape2D] = []
 var erosion_pending := false
+var launch_remaining := 0.0
 
 func setup(kind: String, tint := Color("777777")) -> void:
 	prop_kind = kind
@@ -174,6 +175,8 @@ func is_displaced() -> bool:
 	return displaced
 
 func _launch_movable(direction: Vector2, energy: float, attack_kind: String) -> void:
+	if state == PropState.DESTROYED: return
+	launch_remaining = 40.0
 	var impulse_scale := float({"projectile": 1.0, "shotgun": 1.35, "bat": 1.18, "door": 1.12, "thrown": 0.9, "corpse": 0.82, "generic": 0.75}.get(attack_kind, 0.88))
 	var mass_scale := float({"table": 0.48, "vending": 0.35, "slot_machine": 0.42, "crate": 0.78, "plant": 1.0, "tv": 0.94, "speaker": 0.88}.get(prop_kind, 0.75))
 	var launch_speed := clampf((24.0 + energy * 38.0) * impulse_scale * mass_scale, 14.0, 118.0)
@@ -217,19 +220,23 @@ func _physics_process(delta: float) -> void:
 		set_physics_process(false)
 		return
 	var impact_speed := velocity.length()
-	var collision := move_and_collide(velocity * delta)
+	var start := global_position
+	var motion := velocity * minf(delta, 0.05)
+	if displaced: motion = motion.limit_length(maxf(0.0, launch_remaining))
+	var collision := move_and_collide(motion)
+	launch_remaining -= start.distance_to(global_position)
 	if collision != null:
-		var collider := collision.get_collider()
 		var normal := collision.get_normal()
-		if impact_speed >= 42.0 and collider is Node:
-			if collider.is_in_group("enemy") and collider.has_method("take_door_hit"):
-				collider.take_door_hit(velocity.normalized(), "knockdown")
-			elif collider.is_in_group("destructible_prop") and collider != self and collider.has_method("receive_thrown_impact"):
-				collider.receive_thrown_impact(velocity.normalized(), clampf(impact_speed / 75.0, 0.45, 1.35))
+		# Scenery still stops/bounces against actors, but is not a weapon.
+		# Explicitly held/thrown improvised weapons own their separate hit path.
+		if impact_speed >= 28.0:
 			Events.publish_combat_noise(global_position, clampf(impact_speed * 1.1, 34.0, 92.0), "%s_prop_slide" % prop_kind)
-		velocity = velocity.bounce(normal) * float(material_profile.get("bounce", 0.18))
+		velocity = velocity.bounce(normal.normalized()) * float(material_profile.get("bounce", 0.18)) if normal.length_squared() > 0.001 else Vector2.ZERO
 		spin_velocity *= -0.42
 	velocity = velocity.move_toward(Vector2.ZERO, 78.0 * delta)
+	if launch_remaining <= 0.0 and displaced:
+		velocity = Vector2.ZERO
+		spin_velocity = 0.0
 	simulated_rotation += spin_velocity * delta
 	rotation = snappedf(simulated_rotation, PI / 8.0)
 	spin_velocity = move_toward(spin_velocity, 0.0, 5.5 * delta)

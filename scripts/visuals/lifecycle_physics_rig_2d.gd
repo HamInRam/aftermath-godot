@@ -236,11 +236,18 @@ func _update_facing_sector() -> void:
 		facing_sector = wrapi(roundi(angle / DIRECTION_STEP), 0, 8)
 	facing_direction = Vector2.RIGHT.rotated(angle)
 
+var local_injuries: Dictionary = {}
+
+func record_local_injury(zone: String, world_direction: Vector2, severity: float) -> void:
+	LocalInjury.record(local_injuries, zone, world_direction.rotated(-global_rotation), severity)
+	queue_redraw()
+
 func get_pose_snapshot() -> Dictionary:
 	var snapshot := {}
 	for name in points:
 		snapshot[name] = (points[name].position as Vector2)
 	snapshot["_visual_role"] = visual_role
+	snapshot["_local_injuries"] = local_injuries.duplicate()
 	return snapshot
 
 func _build_rig() -> void:
@@ -365,12 +372,12 @@ func _draw() -> void:
 
 func get_live_art_pixels() -> Dictionary:
 	if rig_kind == "hound":
-		return ACTOR_ART.hound_pixels(global_rotation, _four_frame_step() * movement_ratio)
+		return ACTOR_ART.rotate_pixels(LocalInjury.apply(ACTOR_ART.hound_pixels(0.0, _four_frame_step() * movement_ratio), local_injuries), global_rotation)
 	var hands := _standing_hand_positions(Vector2.ZERO, Vector2.RIGHT, Vector2.DOWN, 0.0)
 	var offsets := {}
 	for joint in ["head", "hand_a", "hand_b"]:
 		offsets[joint] = _joint_visual_offset(joint, 1.25 if mode == Mode.HIT_REACT else 0.4).rotated(-global_rotation)
-	return ACTOR_ART.human_pixels(visual_role, global_rotation + upper_rotation, hands, offsets)
+	return ACTOR_ART.rotate_pixels(LocalInjury.apply(ACTOR_ART.human_pixels(visual_role, 0.0, hands, offsets), local_injuries), global_rotation + upper_rotation)
 
 func _draw_human_standing(collapse := 0.0) -> void:
 	var body_ground := _joint_visual_offset("chest", 1.6 if mode == Mode.HIT_REACT else 0.7)

@@ -6,6 +6,8 @@ signal execution_impact(world_position: Vector2, direction: Vector2, lethal: boo
 signal melee_impact(target: CharacterBody2D, world_position: Vector2, direction: Vector2, melee_type: String, lethal: bool)
 signal weapon_throw_requested(origin: Vector2, direction: Vector2, weapon_id: String, rounds: int, attachment_ids: PackedStringArray)
 signal world_interaction_requested
+signal improvised_impact(target: Node2D, source: Vector2, direction: Vector2, amount: int)
+signal improvised_loadout_changed
 signal blood_stance_changed(active: bool)
 signal blood_skill_requested(skill_id: String)
 signal blood_heal_requested
@@ -18,6 +20,7 @@ var PLAYER_GUNS: Array[GunData] = []
 var blood_skin_material: ShaderMaterial
 var blood_skin_clock := 0.0
 var blood_skin_active := false
+var improvised_weapon: ImprovisedWeapon
 
 func set_blood_rage_visual(active: bool, delta := 0.0) -> void:
 	active = active and not is_dead
@@ -218,7 +221,7 @@ func _physics_process(delta: float) -> void:
 		if attempt_ground_execution(): execution_input_buffer = 0.0
 		if is_executing: return
 	if Input.is_action_just_pressed("interact") and (not blood_stance_active or blood_action_mode):
-		if not attempt_weapon_pickup(): world_interaction_requested.emit()
+		if not attempt_weapon_pickup() and not attempt_improvised_pickup(): world_interaction_requested.emit()
 	var input_direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	refresh_blood_terrain()
 	var executioner_mobility := 1.0 + Progression.get_specialization_level("executioner") * 0.03
@@ -252,6 +255,9 @@ func _handle_primary_input(just_pressed: bool, held: bool) -> void:
 	if not controls_enabled or predeployment_mode or is_dead or is_executing: return
 	if not held: primary_requires_release = false
 	if primary_requires_release: return
+	if is_instance_valid(improvised_weapon):
+		if held: improvised_weapon.strike()
+		return
 	if equipped_mode != "gun":
 		if just_pressed:
 			if is_melee_attacking or melee_cooldown > 0.0: melee_input_buffer = INPUT_BUFFER_DURATION
@@ -480,6 +486,11 @@ func _update_procedural_motion(delta: float) -> void:
 			lifecycle_action = "reload"
 			lifecycle_amount = 1.0 - gun.reload_timer.time_left / maxf(gun.active_reload_duration, 0.01)
 	lifecycle_rig.set_weapon_stance(visual_stance)
+	if is_instance_valid(improvised_weapon):
+		lifecycle_rig.set_weapon_stance("melee")
+		if improvised_weapon.swing_time > 0.0:
+			lifecycle_action = "attack"
+			lifecycle_amount = sin(improvised_weapon.swing_time / 0.16 * PI)
 	lifecycle_rig.set_weapon_presentation(gun.visual_offset, gun.visual_angle, gun.magazine_offset)
 	# UpperBody is now the rig's real parent, therefore only the local carrier
 	# offset is forwarded. Passing the container transform again would apply bob
@@ -592,6 +603,7 @@ func restore_run_loadout(snapshot: Dictionary) -> void:
 	queue_redraw()
 
 func _equip_weapon(mode: String) -> void:
+	if is_instance_valid(improvised_weapon): improvised_weapon.release(false)
 	if mode == "gun" and owned_gun_indices.is_empty(): return
 	_reset_primary_input()
 	if mode != "gun": gun.cancel_reload()
@@ -603,6 +615,7 @@ func _equip_weapon(mode: String) -> void:
 	queue_redraw()
 
 func _cycle_gun() -> void:
+	if is_instance_valid(improvised_weapon): improvised_weapon.release(false)
 	if owned_gun_indices.is_empty(): return
 	_reset_primary_input()
 	var owned_position := owned_gun_indices.find(gun_index)
@@ -614,6 +627,7 @@ func acquire_gun(weapon_id: String, rounds: int, attachment_ids := PackedStringA
 	weapon_id = WeaponPlatformCatalog.canonical_id(weapon_id)
 	var found_index := _find_weapon_slot(weapon_id)
 	if found_index < 0: return false
+	if is_instance_valid(improvised_weapon): improvised_weapon.release(false)
 	# An empty build is meaningful: a stock world gun must not silently inherit
 	# attachments from an older gun of the same model or the armory loadout.
 	weapon_build_overrides[weapon_id] = Array(attachment_ids)
@@ -661,6 +675,7 @@ func get_nearby_weapon_pickup() -> Node2D:
 	return nearest
 
 func get_equipped_weapon_name() -> String:
+	if is_instance_valid(improvised_weapon): return improvised_weapon.kind.to_upper()
 	return str(gun.gun_data.display_name) if equipped_mode == "gun" and gun.gun_data != null else current_melee_type.to_upper()
 
 func get_equipped_movement_multiplier() -> float:
@@ -677,6 +692,9 @@ func add_reserve_ammo(weapon_id: String, rounds: int) -> bool:
 	return true
 
 func throw_equipped_gun(direction: Vector2) -> bool:
+	if is_instance_valid(improvised_weapon) and controls_enabled and not predeployment_mode and not is_dead and not is_executing:
+		improvised_weapon.release(true)
+		return true
 	if not controls_enabled or predeployment_mode or is_dead or is_executing or equipped_mode != "gun" or gun.gun_data == null or direction.length_squared() < 0.001: return false
 	var thrown_weapon_id: String = gun.weapon_id
 	var thrown_rounds: int = gun.ammo
@@ -703,6 +721,27 @@ func throw_equipped_gun(direction: Vector2) -> bool:
 		gun.set_gun_data(_weapon_data_for_slot(gun_index), false)
 	queue_redraw()
 	return true
+
+func attempt_improvised_pickup() -> bool:
+	if is_dead or is_executing: return false
+	var nearest := get_nearby_improvised_pickup()
+	return nearest.collect(self) if is_instance_valid(nearest) else false
+
+func get_nearby_improvised_pickup() -> ImprovisedWeapon:
+	var nearest: ImprovisedWeapon
+	var best := 24.0
+	var forward := Vector2.RIGHT.rotated(actual_aim_angle)
+	for item in get_tree().get_nodes_in_group("improvised_pickup"):
+		if not item is ImprovisedWeapon or item.broken or item.is_queued_for_deletion(): continue
+		var offset: Vector2 = item.global_position - global_position
+		var score := offset.length() + (1.0 - forward.dot(offset.normalized())) * 4.0
+		if score >= best: continue
+		var ray := PhysicsRayQueryParameters2D.create(global_position, item.global_position, 4)
+		ray.exclude = [item.get_rid()]
+		if not get_world_2d().direct_space_state.intersect_ray(ray).is_empty(): continue
+		nearest = item
+		best = score
+	return nearest
 
 func set_controls_enabled(enabled: bool) -> void:
 	controls_enabled = enabled

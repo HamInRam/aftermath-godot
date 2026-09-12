@@ -1280,6 +1280,8 @@ func is_actively_engaging_player() -> bool:
 
 func apply_ballistic_hit(result: Dictionary, source_position := Vector2.ZERO) -> void:
 	if is_dead: return
+	if is_instance_valid(lifecycle_rig) and int(result.get("health_damage", 0)) > 0:
+		lifecycle_rig.record_local_injury(str(result.get("hit_zone", "torso")), source_position.direction_to(global_position), float(result.get("damage_ratio", 0.3)))
 	ballistic_feedback_frame = Engine.get_physics_frames()
 	if is_instance_valid(lifecycle_rig) and not bool(result.get("lethal", false)):
 		lifecycle_rig.trigger_damage_feedback(HIT_FEEDBACK_PROFILE.from_ballistic_result(result, str(result.get("hit_zone", "torso"))))

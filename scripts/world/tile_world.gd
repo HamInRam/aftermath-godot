@@ -1347,6 +1347,7 @@ func _build_object_shadows() -> void:
 		object_shadow_layer.set_cell(cell, 0, object_layer.get_cell_atlas_coords(cell), 0)
 
 func _materialize_destructible_objects() -> void:
+	call_deferred("_place_improvised_weapons")
 	var kind_by_tile := {
 		Tile.SOFA: "sofa", Tile.TABLE: "table", Tile.TOILET: "toilet",
 		Tile.SINK: "sink", Tile.BED: "bed", Tile.TV: "tv",
@@ -1376,6 +1377,27 @@ func _materialize_destructible_objects() -> void:
 func _on_prop_solidity_changed(solid: bool, cell: Vector2i) -> void:
 	if path_grid.region.size == Vector2i.ZERO: return
 	if path_grid.is_in_boundsv(cell): path_grid.set_point_solid(cell, solid)
+
+func _place_improvised_weapons() -> void:
+	if not is_inside_tree() or is_queued_for_deletion(): return
+	var placed := 0
+	for prop in get_children():
+		if not prop is DestructibleProp or prop.prop_kind not in ["table", "sofa", "bed", "tv"]: continue
+		if placed >= 12: break
+		for offset in [Vector2(0, 13), Vector2(0, -13), Vector2(16, 0), Vector2(-16, 0)]:
+			var location: Vector2 = prop.global_position + offset
+			var query := PhysicsPointQueryParameters2D.new()
+			query.position = location
+			query.collision_mask = 4
+			if not get_world_2d().direct_space_state.intersect_point(query).is_empty(): continue
+			var cell: Vector2i = floor_layer.local_to_map(floor_layer.to_local(location))
+			if not path_grid.is_in_boundsv(cell) or path_grid.is_point_solid(cell): continue
+			var item := ImprovisedWeapon.new()
+			item.configure(["bottle", "chair", "club"][placed % 3])
+			add_child(item)
+			item.global_position = location.round()
+			placed += 1
+			break
 
 func set_dynamic_obstacle(world_position: Vector2, solid: bool) -> void:
 	var cell := floor_layer.local_to_map(floor_layer.to_local(world_position))

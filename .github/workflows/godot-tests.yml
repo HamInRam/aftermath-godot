@@ -54,6 +54,7 @@ jobs:
             tests/test_security_camera.tscn \
             tests/test_weapon_inventory.tscn \
             tests/test_weapon_throw.tscn \
+            tests/test_improvised_combat.tscn \
             tests/test_pixel_blood_canvas.tscn \
             tests/test_pixel_environment.tscn \
             tests/test_character_animation.tscn \

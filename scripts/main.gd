@@ -508,6 +508,9 @@ func _update_interaction_prompt() -> void:
 				var lure := _get_nearby_noise_lure()
 				if is_instance_valid(lure): interaction_label.text = lure.get_interaction_prompt()
 				else: interaction_label.text = ""
+	if interaction_label.text.is_empty():
+		var loose = player.get_nearby_improvised_pickup()
+		if is_instance_valid(loose): interaction_label.text = "[ E ] TAKE %s" % loose.kind.to_upper()
 	_update_world_context_marker()
 
 func _update_world_context_marker() -> void:
@@ -525,6 +528,9 @@ func _update_world_context_marker() -> void:
 			target = _get_nearby_security_device()
 			if is_instance_valid(target): kind = "target"; color = Color("82d8ff")
 			else: target = _get_nearby_noise_lure()
+	if not is_instance_valid(target):
+		target = player.get_nearby_improvised_pickup()
+		if is_instance_valid(target): kind = "weapon"; color = Color.WHITE
 	if is_instance_valid(target): world_context_marker.show_target(target.global_position, kind, color, progress)
 	else: world_context_marker.hide_target()
 
@@ -620,6 +626,9 @@ func _on_ammo_updated(current: int, maximum: int, is_reloading: bool) -> void:
 	if phase == "cleanup": return
 	current_ammo = current
 	current_capacity = maximum
+	if is_instance_valid(player) and is_instance_valid(player.improvised_weapon):
+		_on_improvised_loadout_changed()
+		return
 	ammo_label.text = "INF" if is_instance_valid(blood_resource) and blood_resource.is_raging() else ("RELOAD" if is_reloading else _format_ammo())
 
 func _on_ammo_reserve_updated(reserve: int) -> void:
@@ -627,6 +636,7 @@ func _on_ammo_reserve_updated(reserve: int) -> void:
 	if phase != "cleanup" and is_instance_valid(ammo_label): ammo_label.text = _format_ammo()
 
 func _format_ammo() -> String:
+	if is_instance_valid(player) and is_instance_valid(player.improvised_weapon): return "%d USES" % player.improvised_weapon.durability
 	if is_instance_valid(blood_resource) and blood_resource.is_raging(): return "INF"
 	return "%02d/%02d  +%s" % [current_ammo, current_capacity, "∞" if current_reserve < 0 else "%02d" % current_reserve]
 
@@ -724,6 +734,8 @@ func _start_run() -> void:
 	player.died.connect(_on_player_died)
 	player.execution_impact.connect(_on_execution_impact)
 	player.melee_impact.connect(_on_melee_impact)
+	player.improvised_impact.connect(_on_improvised_impact)
+	player.improvised_loadout_changed.connect(_on_improvised_loadout_changed)
 	player.weapon_throw_requested.connect(_on_weapon_throw_requested)
 	player.world_interaction_requested.connect(_on_world_interaction_requested)
 	if roguelike_mode:
@@ -1546,6 +1558,31 @@ func _on_damage_impact(context: DamageContext) -> void:
 	elif is_instance_valid(context.target) and context.target != player:
 		# Body-hit pellets use local stagger/flash, leaving the global beat for kills/headshots.
 		combat_feedback.trigger_critical_hit_stop(false, context.hit_zone == "head", Settings.hit_stop_strength)
+
+func _on_improvised_loadout_changed() -> void:
+	if not is_instance_valid(hud): return
+	if is_instance_valid(player.improvised_weapon):
+		hud.ammo_caption.text = "%s // Q THROW" % player.improvised_weapon.kind.to_upper()
+		ammo_label.text = "%d USES" % player.improvised_weapon.durability
+	else:
+		hud.ammo_caption.text = "BLOOD RAGE" if blood_resource.is_raging() else "MAG // RESERVE"
+		ammo_label.text = _format_ammo()
+
+func _on_improvised_impact(target: Node2D, source: Vector2, direction: Vector2, amount: int) -> void:
+	if not is_instance_valid(target) or target.is_dead: return
+	pending_death_direction = direction
+	pending_death_knockback = 24.0
+	pending_death_blood_power = 0.8
+	pending_death_style = "blunt"
+	pending_death_hit_zone = "torso"
+	pending_death_attack_id = "bat"
+	pending_death_hit_position = target.global_position
+	pending_death_travel_distance = source.distance_to(target.global_position)
+	blood_system.emit_hit(target.global_position, direction, amount, "bat", 0.0, target.hp <= amount)
+	hud.show_hit_confirmation("flesh", target.hp <= amount)
+	combat_feedback.trigger_hit_confirmation("flesh", target.hp <= amount)
+	trauma_camera.add_trauma(0.14)
+	_trigger_hit_stop(0.025)
 
 func _on_melee_impact(target: CharacterBody2D, hit_position: Vector2, direction: Vector2, melee_type: String, lethal: bool) -> void:
 	if not is_instance_valid(target) or target.is_dead: return
